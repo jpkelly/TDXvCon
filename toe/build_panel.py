@@ -336,8 +336,11 @@ def build():
         except Exception as exc:
             say(f"  (fill paint: {exc})")
         try:
-            # width EXPRESSION drives the fill: Progress 0..1 -> 0..620
-            fill.par.w.expr = "op.vcon.par.Progress * 620"
+            # No width expression: the panel tick (onFrame) drives this
+            # width directly with BATCH progress (item N of M) — the
+            # expression form would only track the current file's 0-1.
+            # Seeded at 0.
+            fill.par.w.val = 0
             # Z-ORDER (probe 8): same x/y and equal layer=0 means TD draws
             # same-layer siblings by NAME — 'prog_fill' before
             # 'prog_track' — so the gray track covered the green fill.

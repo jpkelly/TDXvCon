@@ -585,6 +585,35 @@ def _scan_movies(folder, recursive=True):
     return out
 
 
+#: Half-block chars for the in-cell row bar: 8 sub-steps per char cell.
+_BAR_FULL = "\u2588"
+_BAR_EMPTY = "\u2591"
+
+
+def _bar_text(frac, width=10):
+    """A block-character progress bar for a queue row's status cell."""
+    frac = 0.0 if frac is None else min(1.0, max(0.0, float(frac)))
+    full = int(frac * width)
+    return _BAR_FULL * full + _BAR_EMPTY * (width - full)
+
+
+def _batch_progress():
+    """(done_count, total_count) across the queue — the PANEL bar shows
+    this for the whole batch (JP), not the current file's 0-1."""
+    if not _queue:
+        return 0.0
+    done = sum(1 for it in _queue if it["status"] == "done")
+    running = next((it for it in _queue if it["status"] == "running"),
+                   None)
+    if running is not None:
+        try:
+            frac = float(op.vcon.par.Progress.eval())
+        except Exception:
+            frac = 0.0
+        return (done + frac) / len(_queue)
+    return done / len(_queue)
+
+
 def _refresh_queue():
     """Redraw the batch queue table (the lister widget's source DAT).
 
@@ -594,14 +623,26 @@ def _refresh_queue():
     builder sets Refreshoninputchange=OFF — writes never trigger it —
     and this function finishes with ONE explicit Refresh pulse, so the
     lister only ever redraws on a complete, valid table.
+
+    The RUNNING row's status is a block-character bar that fills as
+    the encode progresses (JP: 'progress bar fills up for each item')
+    — the lister is a text table, so the bar is rendered in-cell.
     """
     t = panel().op("queue_table")
     if t is None:
         return
+    # current encode progress, if a job is running
+    try:
+        prog = float(op.vcon.par.Progress.eval())
+    except Exception:
+        prog = 0.0
     rows = [["#", "file", "status"]]
     for i, item in enumerate(_queue, 1):
+        status = item["status"]
+        if status == "running":
+            status = _bar_text(prog)
         rows.append([str(i), os.path.basename(item["input"]),
-                     item["status"]])
+                     status])
     try:
         t.setSize(len(rows), 3)
     except Exception:
@@ -652,12 +693,28 @@ def onFrame():
     When the controller goes idle and queue rows remain queued, submit the
     next job. When a running row's output file exists and the controller
     is idle, the job finished — mark done, then next.
+
+    The PANEL bar shows BATCH progress (item N of M — JP), not the
+    current file's 0-1; the tick computes it and writes the fill width
+    directly (no expression needed). The LISTER row shows the current
+    file's own progress as a block bar.
     """
     try:
         e = ext()
     except Exception:
         return
+
+    # 1) drive the panel bar with batch progress, every frame
+    try:
+        fill = panel().op("prog_fill")
+        if fill is not None:
+            fill.par.w.val = _batch_progress() * 620
+    except Exception:
+        pass
+
+    # 2) feed the loop when idle
     if e.is_busy:
+        _refresh_queue()     # keeps the running row's bar moving
         return
     # finished detection: a running row whose output now exists
     for item in list(_queue):
