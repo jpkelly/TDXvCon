@@ -693,6 +693,36 @@ def build():
     except Exception:
         pass
 
+    # ---- the LISTER as its own drop target (JP: drop onto the queue) -----
+    # Docs (Palette:lister + Drag-and-Drop): the lister accepts drops via
+    # the same Drag/Drop callback system — onHoverStartGetAccept /
+    # onDropGetResults in a callbacks DAT, Drophighlight for the row
+    # highlight. The lister's 'drop' par defaults to 'inherit' (use
+    # parent's settings) — but our PANEL callbacks live on the panel
+    # COMP, and the lister sits INSIDE it, so inheritance may stop at
+    # the first ancestor with explicit callbacks. Wire the lister
+    # EXPLICITLY to the same callbacks DAT, and enable row highlight.
+    q_ = widgets.get("queue")
+    if q_ is not None:
+        try:
+            qdrop_menu = list(q_.par.drop.menuNames or [])
+        except Exception:
+            qdrop_menu = []
+        if qdrop_menu:
+            inherit = next((m for m in qdrop_menu
+                            if "inherit" in m.lower() or "parent" in m.lower()),
+                           None)
+            if inherit is not None:
+                q_.par.drop = inherit
+                say(f"  lister drop mode -> {inherit!r} (inherit panel)")
+        if _link_op(q_, "dragdropcallbacks", dnd_cb):
+            say("  lister dragdropcallbacks linked (drops -> queue)")
+        try:
+            # row highlight while a file hovers (docs: Drophighlight)
+            q_.par.Drophighlight = "Row"
+        except Exception:
+            pass
+
     # ---- panel Execute DAT: batch tick --------------------------------------
     # VERIFIED pattern from build_network.py's controller tick: the Execute
     # DAT requires the COMPLETE function set (onFrameStart, onFrameEnd,
