@@ -24,6 +24,21 @@ Layout (y measured up from the panel bottom):
 
 import os
 
+#: td-module op types (find_type resolves td first, globals second —
+#: same pattern as build_network.py).
+def find_type(*names):
+    try:
+        import td as _td
+    except ImportError:
+        _td = None
+    for n in names:
+        if _td is not None and hasattr(_td, n):
+            return getattr(_td, n)
+        if n in globals():
+            return globals()[n]
+    raise RuntimeError(f"op type {names} unavailable — run in the textport")
+
+
 #: Widget tox roots: most Basic Widgets live in the Basic Widgets folder,
 #: but the lister (batch queue) sits at the UI palette ROOT (live-checked).
 _TOX_DIR = ("/Applications/TouchDesigner.app/Contents/Resources/tfs/"
@@ -277,34 +292,38 @@ def build():
         widgets[outer_name] = wcomp
     say(f"loaded {len(widgets)}/{len(_WIDGETS)} widgets (flat at panel root)")
 
-    # ---- progress bar: track + fill, width-driven from Progress par ----
+    # ---- progress bar: track + fill, painted with Constant TOPs ----
+    # A bare containerCOMP has NO Look page (no bgcolorr/g/b — those
+    # raised/were skipped every round). Panels paint via a Background
+    # TOP (Look page 'top' on palette widgets; on bare Containers we
+    # point par.top at a Constant TOP we create inside).
     if "prog_track" in widgets and "prog_fill" in widgets:
         track = widgets["prog_track"]
         fill = widgets["prog_fill"]
-        # track: gray background strip. LIVE-GOTCHAs: bgcolor as an
-        # attribute raised tdAttributeError, and so does bgcolora — the
-        # Container's Look page has bgcolorr/g/b (RGB) plus a SEPARATE
-        # bgalpha par. Order matters: bgalpha first so a color-par miss
-        # can't skip it.
         try:
-            track.par.bgalpha = 1.0
-            track.par.bgcolorr = 0.5
-            track.par.bgcolorg = 0.5
-            track.par.bgcolorb = 0.5
-            track.par.alignallow = "none"      # keep absolute placement
+            ttop = track.create(find_type("constantTOP"), "paint")
+            ttop.par.colorr = 0.5
+            ttop.par.colorg = 0.5
+            ttop.par.colorb = 0.5
+            ttop.par.alpha = 1.0
+            ttop.par.resolution = (620, 16)
+            track.par.top = ttop
+            say("  track painted gray via Constant TOP")
         except Exception as exc:
-            say(f"  (track look: {exc})")
-        # fill: green progress, width EXPRESSION maps Progress 0..1 to 0..620
+            say(f"  (track paint: {exc})")
         try:
-            fill.par.bgalpha = 1.0
-            fill.par.bgcolorr = 0.2
-            fill.par.bgcolorg = 0.8
-            fill.par.bgcolorb = 0.2
-            fill.par.alignallow = "none"
+            ftop = fill.create(find_type("constantTOP"), "paint")
+            ftop.par.colorr = 0.2
+            ftop.par.colorg = 0.8
+            ftop.par.colorb = 0.2
+            ftop.par.alpha = 1.0
+            ftop.par.resolution = (620, 16)
+            fill.par.top = ftop
+            # width EXPRESSION drives the fill: Progress 0..1 -> 0..620
             fill.par.w.expr = "op.vcon.par.Progress * 620"
-            say("  progress bar: gray track, green fill, width <- Progress par")
+            say("  progress bar: gray track + green fill (Constant TOPs), width <- Progress par")
         except Exception as exc:
-            say(f"  (fill bind: {exc})")
+            say(f"  (fill paint: {exc})")
 
     mod = cb.module
 
