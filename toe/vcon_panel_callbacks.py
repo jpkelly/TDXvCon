@@ -1358,6 +1358,14 @@ def onFrame():
     for item in list(_queue):
         if item["status"] == "running" and os.path.exists(item["output"]):
             item["status"] = "done"
+    # close the batch gate + reset the bar when everything is done
+    global _batch_started
+    if _queue and all(it["status"] == "done" for it in _queue):
+        _batch_started = False
+        try:
+            op.vcon.par.Progress.val = 0.0
+        except Exception:
+            pass
     _run_next()
     _refresh_queue()
 
