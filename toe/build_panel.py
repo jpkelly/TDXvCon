@@ -160,10 +160,18 @@ def set_menu(inner, names, labels, default):
 
 
 def _grey_out_b(inner, grey=True):
-    """Builder-side grey-out (mirrors the callbacks' _grey_out)."""
+    """Builder-side grey-out — STRING MENU tokens ('off'/'on'), not
+    booleans (integer writes select menu INDEX 0, which can be 'on')."""
     for cand in ("enable", "Enable"):
+        par = getattr(inner.par, cand, None)
+        if par is None:
+            continue
         try:
-            getattr(inner.par, cand).val = 0 if grey else 1
+            menus = list(getattr(par, "menuNames", None) or [])
+            if menus:
+                getattr(inner.par, cand).val = "off" if grey else "on"
+            else:
+                getattr(inner.par, cand).val = 0 if grey else 1
             return True
         except Exception:
             continue
@@ -272,17 +280,20 @@ def build():
     for name, lw in _LABEL_W.items():
         if name in widgets:
             if lw == 0:
-                # hide the title label instead of an empty strip
+                # hide the title label — STRING MENU token, not a boolean
+                # (integer 0 = menu index 0, which may BE 'on')
                 try:
-                    setp(widgets[name], "Labeldisplay", 0)
+                    setp(widgets[name], "Labeldisplay", "off")
                 except Exception:
                     pass
             else:
                 setp(widgets[name], "Labelwidth", lw)
-    # PROGRESS slider: hide the numeric readout — par LIVE-DUMPED from
-    # JP's build: Numericfielddisplay (the '0.000' box beside the slider).
+    # PROGRESS slider: hide the numeric readout. The display pars are
+    # STRING MENUS (probe 3 dump: menus=['off','on']), not booleans —
+    # writing int 0 selects MENU INDEX 0 which can be 'on' (why "turning
+    # it off didn't turn it off"). Write the token 'off' directly.
     if "prog_s" in widgets:
-        setp(widgets["prog_s"], "Numericfielddisplay", 0)
+        setp(widgets["prog_s"], "Numericfielddisplay", "off")
     # (PROGRESS title only — other titles come from the module-level
     # _TITLES dict, which the earlier loop applies.)
     _LOCAL_TITLES = {"prog_s": "PROGRESS"}
@@ -341,7 +352,8 @@ def build():
     # for codecs with no ladder.
     if "quality_s" in widgets:
         setp(widgets["quality_s"], "Value0", 0.862)      # optimal
-        setp(widgets["quality_s"], "Numericfielddisplay", 1)   # show value
+        # String-menu tokens, not booleans (see prog_s note above)
+        setp(widgets["quality_s"], "Numericfielddisplay", "on")
         setp(widgets["quality_s"], "Sliderlabelnames",
              "'0.0 Good' '0.285 Very Good' '0.575 Excellent' "
              "'0.862 Optimal' '1.0 Best'")

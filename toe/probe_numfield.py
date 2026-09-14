@@ -15,12 +15,8 @@ w = p.op('prog_s')
 if w is None:
     raise RuntimeError('prog_s not found')
 
-inner = None
-for c in w.children:
-    if c.name == w.name or c.isPanel:
-        inner = c
-        break
-target = inner if inner is not None else w
+# TOP-LEVEL only (JP rule) — the widget COMP is the panel child
+target = w
 print(f'[probe] target: {target.path}')
 
 # 1. current state of every candidate
@@ -37,9 +33,9 @@ for name in ('Numericfielddisplay', 'Numericfieldwidth',
             print(f'[probe] {name} = (eval failed: {exc})')
 
 # 2. flip candidates one at a time — watch the panel after each print
-for name, val in [('Numericfielddisplay', 0),
+for name, val in [('Numericfielddisplay', 'off'),
                   ('Numericfieldwidth', 0),
-                  ('Sliderlabeldisplay', 0)]:
+                  ('Sliderlabeldisplay', 'off')]:
     par = getattr(target.par, name, None)
     if par is None:
         continue

@@ -276,14 +276,25 @@ def UpdateSubtypes():
 
 
 def _grey_out(inner, grey):
-    """Disable a widget's interaction (greyed like MvO's empty menus)."""
-    try:
-        inner.par.enable.val = 0 if grey else 1
-    except Exception:
+    """Disable a widget's interaction (greyed like MvO's empty menus).
+
+    Display/enable pars on these widgets are STRING MENUS
+    (['off','on']) — integer writes select menu INDEX 0, which can be
+    'on'. Write tokens; fall back to ints only if no menu exists.
+    """
+    for cand in ("enable", "Enable"):
+        par = getattr(inner.par, cand, None)
+        if par is None:
+            continue
         try:
-            inner.par.Enable.val = 0 if grey else 1
+            menus = list(getattr(par, "menuNames", None) or [])
+            if menus:
+                par.val = "off" if grey else "on"
+            else:
+                par.val = 0 if grey else 1
+            return
         except Exception:
-            pass
+            continue
 
 
 def OnQualityChanged():
@@ -350,12 +361,16 @@ def _update_res_fields():
     outer = panel().op("scale_dd") if panel() is not None else None
     if outer is not None:
         try:
-            outer.par.display = 1 if scaled else 0
+            # display is a STRING MENU par — tokens, not booleans
+            outer.par.display.val = "on" if scaled else "off"
         except Exception:
             try:
-                outer.par.x = 270 if scaled else 1200
-            except Exception as exc:
-                note(f"display toggle failed: {exc}")
+                outer.par.display = 1 if scaled else 0
+            except Exception:
+                try:
+                    outer.par.x = 270 if scaled else 1200
+                except Exception as exc:
+                    note(f"display toggle failed: {exc}")
 
 
 def _res_value():
