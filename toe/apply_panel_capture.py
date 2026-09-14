@@ -147,6 +147,15 @@ def _apply_entry(name, entry):
             w.nodeX, w.nodeY = nl
         except Exception as exc:
             print(f"[capture] ( {name} nodelayout: {exc} )")
+    # NODE COLOR (the colorize palette): the OP's color property —
+    # not a par, applied directly
+    nc = entry.get('nodecolor')
+    if nc and len(nc) in (3, 4):
+        try:
+            w.color = tuple(nc)
+            print(f"[capture] {name}: node color applied")
+        except Exception as exc:
+            print(f"[capture] ( {name} nodecolor: {exc} )")
     missed = 0
     exprs = entry.get('expressions') or {}
     binds = entry.get('binds') or {}
@@ -277,23 +286,38 @@ if CAPTURED:
             print("[capture] res-field visibility refreshed")
         except Exception:
             pass
-        # VCON-LEVEL NODE LAYOUT: also restored by build_network.py at
-        # its save step, but the PANEL build doesn't run that — apply
-        # here too so either runner honors JP's vcon arrangement
+        # VCON-LEVEL NODE LAYOUT + COLORS: also restored by
+        # build_network.py at its save step, but the PANEL build
+        # doesn't run that — apply here too so either runner honors
+        # JP's vcon arrangement. Entries: (name, (x, y)) or
+        # (name, (x, y), color) — 2-tuples from older captures work.
         _vlay = CAPTURED.get('vconnodelayout')
         if _vlay:
-            _applied = 0
-            for _name, (_nx, _ny) in _vlay:
+            _applied = _ncol = 0
+            for _item in _vlay:
+                if not _item:
+                    continue
+                _name = _item[0]
+                _xy = _item[1] if len(_item) > 1 else None
+                _col = _item[2] if len(_item) > 2 else None
                 _op_ = _panel_comp.parent().op(_name)
-                if _op_ is not None:
-                    try:
-                        _op_.nodeX = _nx
-                        _op_.nodeY = _ny
+                if _op_ is None:
+                    continue
+                try:
+                    if _xy and len(_xy) == 2:
+                        _op_.nodeX, _op_.nodeY = _xy
                         _applied += 1
+                except Exception:
+                    pass
+                if _col and len(_col) in (3, 4):
+                    try:
+                        _op_.color = tuple(_col)
+                        _ncol += 1
                     except Exception:
                         pass
             print(f"[capture] vcon node layout applied to "
-                  f"{_applied}/{len(_vlay)} ops")
+                  f"{_applied}/{len(_vlay)} ops"
+                  + (f", {_ncol} colors" if _ncol else ''))
         # one clean refresh on the settled state
         _q = _panel_comp.op('queue')
         if _q is not None:

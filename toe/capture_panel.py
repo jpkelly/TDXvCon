@@ -288,8 +288,21 @@ def _node_layout(comp):
         return None
 
 
+def _node_color(comp):
+    """The OP's network-editor color — TD's colorize palette writes
+    the OP's `color` PROPERTY, which is NOT a parameter (why the pars
+    diff never sees it). Returns (r, g, b, a) or None."""
+    try:
+        c = comp.color
+        if c is None:
+            return None
+        return tuple(float(v) for v in c)
+    except Exception:
+        return None
+
+
 def _capture(name, comp, stock):
-    """One entry: geometry + node layout + pars/exprs/binds."""
+    """One entry: geometry + node layout/color + pars/exprs/binds."""
     geom = _builtin_geom(comp)
     mine_v, mine_e, mine_b = _snapshots(comp)
     if stock is not None:
@@ -305,6 +318,14 @@ def _capture(name, comp, stock):
     nl = _node_layout(comp)
     if nl is not None:
         entry["nodelayout"] = nl
+    # NODE COLOR (JP 2026-09-14: the colorize palette): the OP's color
+    # property — diffed vs stock like everything else (a stock-colored
+    # widget regenerates its default from the tox)
+    nc = _node_color(comp)
+    if nc is not None:
+        sc = _node_color(stock) if stock is not None else None
+        if nc != sc:
+            entry["nodecolor"] = nc
     if exprs:
         entry["expressions"] = exprs
     if binds:
@@ -317,6 +338,8 @@ def _emit(name, entry):
     lines.append(f'        "geometry": {entry["geometry"]!r},')
     if entry.get("nodelayout"):
         lines.append(f'        "nodelayout": {entry["nodelayout"]!r},')
+    if entry.get("nodecolor"):
+        lines.append(f'        "nodecolor": {entry["nodecolor"]!r},')
     if entry.get("widgettox"):
         lines.append(f'        "widgettox": {entry["widgettox"]!r},')
     lines.append(f'        "pars": {entry["pars"]!r},')
@@ -333,6 +356,8 @@ def _emit(name, entry):
     extra = ''
     if entry.get("nodelayout"):
         extra += ', node layout'
+    if entry.get("nodecolor"):
+        extra += ', node color'
     if entry.get("widgettox"):
         extra += f', tox={entry["widgettox"]!r}'
     if entry.get("expressions"):
@@ -396,21 +421,28 @@ _emit("panel", _capture("panel", p, _stock_container()))
 
 # ---- VCON-LEVEL NODE LAYOUT (JP 2026-09-14) ---------------------------
 # The ops INSIDE the vcon base (moviein/fit/movieout/info/tcpip/DATs/
-# the panel COMP itself) — their network-editor arrangement is JP's
-# too, and build_network.py reshuffles it every rebuild. Recorded as
-# 'vconnodelayout' {name: (nodeX, nodeY)}; build_network applies it
-# AFTER its own positioning (capture wins).
+# the panel COMP itself) — their network-editor arrangement AND node
+# colors (the colorize palette) are JP's too; build_network.py
+# reshuffles positions every rebuild. Recorded as 'vconnodelayout'
+# [(name, (nodeX, nodeY), color)]; build_network + the bake apply it
+# AFTER their own positioning (capture wins).
 _vcon_parent = p.parent()
-_vcon_layout = {}
+_vcon_layout = []
 if _vcon_parent is not None:
     for ch in _vcon_parent.children:
         try:
-            _vcon_layout[ch.name] = (ch.nodeX, ch.nodeY)
+            item = [ch.name, (ch.nodeX, ch.nodeY)]
+            nc = _node_color(ch)
+            if nc is not None:
+                item.append(nc)
+            _vcon_layout.append(tuple(item))
         except Exception:
             continue
 if _vcon_layout:
+    _ncol = sum(1 for it in _vcon_layout if len(it) > 2)
     print(f"[capture] vcon-level node layout: "
-          f"{len(_vcon_layout)} ops recorded")
+          f"{len(_vcon_layout)} ops recorded "
+          f"({_ncol} with custom colors)")
 
 # ---- MEMBERSHIP accumulators (v4) --------------------------------------
 # added:   hand-added widgets (in the panel, unknown to the builder map)
@@ -522,7 +554,7 @@ if added:
 if removed:
     lines.append(f'    "removed": {sorted(removed)!r},')
 if _vcon_layout:
-    lines.append(f'    "vconnodelayout": {sorted(_vcon_layout.items())!r},')
+    lines.append(f'    "vconnodelayout": {sorted(_vcon_layout)!r},')
 lines.append('}')
 text = '\n'.join(lines)
 print()

@@ -606,11 +606,13 @@ def build():
         say(f"  ext.Vcon: not available ({e})")
 
     # ---- JP's captured vcon-level node layout (capture v4) ---------------
-    # capture_panel.py records the network-editor positions of every op
-    # inside the vcon base ('vconnodelayout' in the dump). build_network
-    # reshuffles them every rebuild — apply the capture AFTER our own
-    # positioning so JP's arrangement wins. Soft-fail: no capture (or a
-    # pre-v4 dump) keeps the built layout, exactly as before.
+    # capture_panel.py records the network-editor positions AND node
+    # colors (the colorize palette) of every op inside the vcon base
+    # ('vconnodelayout' in the dump). build_network reshuffles them
+    # every rebuild — apply the capture AFTER our own positioning so
+    # JP's arrangement wins. Entries: (name, (x, y)) or
+    # (name, (x, y), color); 2-element entries from older captures
+    # work. Soft-fail: no capture keeps the built layout, as before.
     try:
         _cap_path = os.path.join(
             os.path.abspath(os.path.join(REPO_TOE_DIR, "..")),
@@ -622,13 +624,24 @@ def build():
             _layout = (_ns.get("CAPTURED_PANEL") or {}).get("vconnodelayout")
             _applied = 0
             if _layout:
-                for _name, (_nx, _ny) in _layout:
+                for _item in _layout:
+                    if not _item:
+                        continue
+                    _name = _item[0]
+                    _xy = _item[1] if len(_item) > 1 else None
+                    _col = _item[2] if len(_item) > 2 else None
                     _op_ = vcon.op(_name)
-                    if _op_ is not None:
-                        try:
-                            _op_.nodeX = _nx
-                            _op_.nodeY = _ny
+                    if _op_ is None:
+                        continue
+                    try:
+                        if _xy and len(_xy) == 2:
+                            _op_.nodeX, _op_.nodeY = _xy
                             _applied += 1
+                    except Exception:
+                        pass
+                    if _col and len(_col) in (3, 4):
+                        try:
+                            _op_.color = tuple(_col)
                         except Exception:
                             pass
                 say(f"captured vcon node layout applied to {_applied} ops")
