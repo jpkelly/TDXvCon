@@ -107,6 +107,8 @@ def inner_of(wrapper):
 
 
 def place(outer, x, y, w, h):
+    """Panel layout of the wrapper. The lister's wrapper lacks Layout
+    pars (different structure from Basic Widgets) — skip gracefully."""
     try:
         outer.par.x = x
         outer.par.y = y
@@ -114,6 +116,16 @@ def place(outer, x, y, w, h):
         outer.par.h = h
     except Exception as exc:
         say(f"  (place {outer.name}: {exc})")
+    # The inner widget may carry the actual panel layout instead.
+    try:
+        inner = inner_of(outer)
+        if inner is not None:
+            inner.par.x = x
+            inner.par.y = y
+            inner.par.w = w
+            inner.par.h = h
+    except Exception:
+        pass
 
 
 def setp(inner, par_name, value):
@@ -244,10 +256,10 @@ def build():
                     say(f"  slider readout hidden via '{cand}'")
                 except Exception:
                     pass
-    _TITLES = {
-        "prog_s": "PROGRESS",
-    }
-    for name, title in _TITLES.items():
+    # (PROGRESS title only — other titles come from the module-level
+    # _TITLES dict, which the earlier loop applies.)
+    _LOCAL_TITLES = {"prog_s": "PROGRESS"}
+    for name, title in _LOCAL_TITLES.items():
         if name in widgets:
             setp(widgets[name], "Widgetlabel", title)
     # Buttons: face text only (title label hidden above).
