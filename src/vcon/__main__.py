@@ -55,7 +55,7 @@ def _build_specs(p: ParsedArgs) -> list[JobSpec]:
         if out.get("no_alpha"):
             alpha = False
         resolution = out.get("resolution", "auto")
-        fit = out.get("fit", "stretch")
+        fit = out.get("fit", "fitbest")
 
         output = Path(out["output"])
 

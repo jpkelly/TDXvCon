@@ -286,7 +286,8 @@ output options (apply to the output that follows — like ffmpeg):
   -q,  -quality QUALITY    quality level (notchlc: good|very-good|excellent|optimal|best)
   -f,  -fps FPS            output frame rate ("auto" follows the source)
   -s,  -resolution WxH     output resolution ("auto" keeps the source size)
-  -fit MODE                how to rescale: stretch|fitwidth|fitheight|cover
+  -fit MODE                rescale mode (default fitbest): fill|fithorz|fitvert|fitbest|fitoutside
+                            (aliases: stretch, fitwidth, fitheight, best, cover)
   -no-alpha                force alpha off even if the source has it
 
 global options:

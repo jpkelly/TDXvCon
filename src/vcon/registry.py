@@ -134,7 +134,7 @@ class CodecSpec:
         fps: str = "auto",
         alpha: bool | None = None,
         resolution: str = "auto",
-        fit: str = "stretch",
+        fit: str = "fitbest",
     ) -> dict[str, Any]:
         """Build the Movie File Out TOP parameter payload for one job.
 
@@ -187,7 +187,10 @@ class CodecSpec:
         # straight to movieout), so existing jobs change zero behavior.
         if resolution and resolution != "auto":
             params["resolution"] = resolution
-            params["fit"] = fit or "stretch"
+            # Normalize aliases to TD's live Fit TOP menu tokens
+            # (fill|fithorz|fitvert|fitbest|fitoutside).
+            from vcon.models import normalize_fit
+            params["fit"] = normalize_fit(fit or "fitbest")
         return params
 
     def output_name(self, input_path_name: str, out_ext: str | None = None) -> str:

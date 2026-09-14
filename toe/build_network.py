@@ -280,12 +280,14 @@ def build():
     # ---- fit TOP (custom resolution path) ------------------------------
     # Created always, wired in the data path only when a job asks for a
     # custom -s resolution: the controller bypasses it (moviein → movieout)
-    # for "auto" jobs. Menu token 'stretch' verified against Fit TOP docs.
+    # for "auto" jobs. Menu tokens LIVE-VERIFIED (docs labels differ):
+    #   fill | fithorz | fitvert | fitbest | fitoutside | nativeres
     say("creating fit TOP (custom resolution path)")
     fit = vcon.create(find_type("fitTOP"), "fit")
     fit.nodeX = -150
     fit.nodeY = -240
-    menu_set(fit.par.fit, ["stretch", "fitwidth", "fitheight", "cover"],
+    menu_set(fit.par.fit, ["fill", "fithorz", "fitvert", "fitbest",
+                           "fitoutside", "nativeres"],
              "fit.fit")
     menu_set(fit.par.outputresolution, ["customresolution", "custom"],
              "fit.outputresolution")

@@ -672,6 +672,11 @@ class VconExt:
                 except (TypeError, ValueError) as exc:
                     debug(f"could not set fps={p['fps']!r}: {exc}")
 
+    #: How a custom resolution rescales — TD's Fit TOP menu tokens
+    #: (live-verified: fill|fithorz|fitvert|fitbest|fitoutside).
+    #: Kept as a module constant so a future panel can list the modes.
+    FIT_MODES = ("fill", "fithorz", "fitvert", "fitbest", "fitoutside")
+
     def _apply_resolution(self, resolution, fit_mode):
         """Configure the Fit TOP for a custom resolution (or bypass it).
 
@@ -705,10 +710,12 @@ class VconExt:
             raise ValueError(f"bad resolution {resolution!r} (W and H >= 1)")
 
         menu = list(getattr(f.par.fit, "menuNames", None) or [])
-        mode = (fit_mode or "stretch").lower()
+        # TD's LIVE Fit TOP menu (builder-verified): fill|fithorz|fitvert|
+        # fitbest|fitoutside|nativeres. The front-end normalizes aliases
+        # (stretch→fill, cover→fitoutside) BEFORE anything reaches here —
+        # a raw unknown token would silently fall back to menu index 0.
+        mode = (fit_mode or "fitbest").lower()
         if menu and mode not in menu:
-            # Menu tokens are TD's, not ours — a wrong token silently falls
-            # back to index 0. Report instead of mis-encoding.
             raise ValueError(
                 f"fit mode {mode!r} not in Fit TOP menu {menu}"
             )

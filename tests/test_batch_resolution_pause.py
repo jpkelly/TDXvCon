@@ -14,7 +14,7 @@ from vcon.batch import (
     is_movie,
     scan_folder,
 )
-from vcon.models import JobSpec
+from vcon.models import FIT_ALIASES, FIT_MODES, JobSpec, normalize_fit
 from vcon.protocol import Cancel, Pause, Resume, Submit, decode_msg, encode_msg
 from vcon.registry import Registry
 
@@ -101,7 +101,7 @@ def test_batch_item_roundtrip():
 
 def test_spec_resolution_validation():
     spec = JobSpec(input=Path("/i.mov"), output=Path("/o.mov"),
-                   resolution="1280x720", fit="cover")
+                   resolution="1280x720", fit="fitoutside")
     spec.validate_resolution()   # ok
 
     bad_res = JobSpec(input=Path("/i.mov"), output=Path("/o.mov"),
@@ -110,29 +110,50 @@ def test_spec_resolution_validation():
         bad_res.validate_resolution()
 
     bad_nums = JobSpec(input=Path("/i.mov"), output=Path("/o.mov"),
-                       resolution="0x1080")
+                      resolution="0x1080")
     with pytest.raises(Exception, match="positive"):
         bad_nums.validate_resolution()
 
     bad_fit = JobSpec(input=Path("/i.mov"), output=Path("/o.mov"),
                       resolution="1280x720", fit="squash")
-    with pytest.raises(Exception, match="fit mode"):
+    with pytest.raises(Exception, match="invalid fit"):
         bad_fit.validate_resolution()
 
 
+def test_fit_modes_match_td_live_menu():
+    """FIT_MODES must be TD's LIVE Fit TOP menu, builder-verified."""
+    assert FIT_MODES == ("fill", "fithorz", "fitvert", "fitbest", "fitoutside")
+
+
+def test_normalize_fit_aliases():
+    # tokens pass through
+    assert normalize_fit("fitbest") == "fitbest"
+    assert normalize_fit(None) == "fitbest"        # default
+    assert normalize_fit("") == "fitbest"
+    # aliases normalize to live tokens
+    assert normalize_fit("stretch") == "fill"
+    assert normalize_fit("fitwidth") == "fithorz"
+    assert normalize_fit("fitheight") == "fitvert"
+    assert normalize_fit("best") == "fitbest"
+    assert normalize_fit("cover") == "fitoutside"
+    # unknown rejected with the valid list (never silently wrong)
+    with pytest.raises(Exception, match="fill|fithorz"):
+        normalize_fit("squash")
+    # every alias maps to a live token
+    assert set(FIT_ALIASES.values()) <= set(FIT_MODES)
 def test_spec_serialization_roundtrips_resolution():
     spec = JobSpec(input=Path("/i.mov"), output=Path("/o.mov"),
-                   resolution="1920x1080", fit="fitwidth")
+                   resolution="1920x1080", fit="fithorz")
     d = spec.as_dict()
     assert d["resolution"] == "1920x1080"
-    assert d["fit"] == "fitwidth"
+    assert d["fit"] == "fithorz"
     back = JobSpec.from_dict(d)
     assert back.resolution == "1920x1080"
-    assert back.fit == "fitwidth"
+    assert back.fit == "fithorz"
     # defaults survive a dict that omits the new fields (older state files)
     legacy = JobSpec.from_dict({"input": "/i.mov", "output": "/o.mov"})
     assert legacy.resolution == "auto"
-    assert legacy.fit == "stretch"
+    assert legacy.fit == "fitbest"
 
 
 def test_td_params_auto_resolution_sends_nothing():
@@ -146,7 +167,11 @@ def test_td_params_custom_resolution():
     reg = Registry()
     params = reg.get("notchlc").td_params(resolution="1280x720", fit="cover")
     assert params["resolution"] == "1280x720"
-    assert params["fit"] == "cover"
+    # alias 'cover' normalized to the live TD menu token 'fitoutside'
+    assert params["fit"] == "fitoutside"
+    # a raw token passes through untouched
+    params = reg.get("notchlc").td_params(resolution="1280x720", fit="fithorz")
+    assert params["fit"] == "fithorz"
 
 
 # ----------------------------------------------------------------------

@@ -29,6 +29,42 @@ class JobStatus:
     ALL = (QUEUED, RUNNING, DONE, FAILED, CANCELLED)
 
 
+#: Fit TOP's ACTUAL menu tokens — live-verified by build_network.py on
+#: JP's TD (the docs' labels 'stretch'/'fit width' etc. do NOT exist):
+#:   ['fill', 'fithorz', 'fitvert', 'fitbest', 'fitoutside', 'nativeres']
+FIT_MODES = ("fill", "fithorz", "fitvert", "fitbest", "fitoutside")
+
+#: Friendlier spellings accepted on the CLI and normalized to TD tokens.
+FIT_ALIASES = {
+    "stretch": "fill",
+    "fitwidth": "fithorz",
+    "width": "fithorz",
+    "fitheight": "fitvert",
+    "height": "fitvert",
+    "best": "fitbest",
+    "cover": "fitoutside",
+    "crop": "fitoutside",
+}
+
+
+def normalize_fit(value: str | None) -> str:
+    """Resolve a fit-mode spelling to TD's Fit TOP menu token.
+
+    Raises InputError listing the valid modes for anything unknown —
+    a bad token on the toe would silently fall back to menu entry 0.
+    """
+    v = (value or "fitbest").strip().lower()
+    if v in FIT_MODES:
+        return v
+    if v in FIT_ALIASES:
+        return FIT_ALIASES[v]
+    raise InputError(
+        f"invalid fit mode {value!r} — one of "
+        f"{', '.join(FIT_MODES)} (or aliases: "
+        f"{', '.join(sorted(FIT_ALIASES))})"
+    )
+
+
 def _default_output_for(input_path: Path, codec: str) -> Path:
     """``video.mov`` + notchlc → ``video.nlc.mov`` (sibling of the input)."""
     stem = input_path.stem
@@ -53,9 +89,12 @@ class JobSpec:
     #: "auto" keeps the source resolution; "1920x1080" sets a custom one.
     #: Applied by the toe via a Fit TOP between moviein and movieout.
     resolution: str = "auto"
-    #: How a custom resolution rescales the image — Fit TOP's `fit` menu
-    #: tokens: "stretch" | "fitwidth" | "fitheight" | "cover".
-    fit: str = "stretch"
+    #: How a custom resolution rescales — TD's Fit TOP menu tokens
+    #: (LIVE-VERIFIED by the builder, not the docs' labels):
+    #: fill | fithorz | fitvert | fitbest | fitoutside. Default fitbest is
+    #: the non-destructive choice (aspect preserved, letterboxed); aliases
+    #: like stretch/cover/best are normalized by normalize_fit().
+    fit: str = "fitbest"
     extra: dict[str, Any] = field(default_factory=dict)  # per-codec baggage
 
     def resolved_quality(self, default_quality: str | None) -> str:
@@ -95,11 +134,10 @@ class JobSpec:
                 f"invalid resolution {r!r} — width and height must be "
                 f"positive integers (e.g. 1280x720)"
             )
-        if self.fit not in ("stretch", "fitwidth", "fitheight", "cover"):
-            raise InputError(
-                f"invalid fit mode {self.fit!r} — one of stretch, "
-                f"fitwidth, fitheight, cover"
-            )
+        # Normalizes aliases (stretch→fill, cover→fitoutside) and rejects
+        # junk with the full valid list — never let an unknown token reach
+        # the toe, where it would silently fall back to menu entry 0.
+        self.fit = normalize_fit(self.fit)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -126,7 +164,7 @@ class JobSpec:
             fps=d.get("fps", "auto"),
             alpha=d.get("alpha"),
             resolution=d.get("resolution", "auto"),
-            fit=d.get("fit", "stretch"),
+            fit=d.get("fit", "fitbest"),
             extra=dict(d.get("extra") or {}),
         )
 
