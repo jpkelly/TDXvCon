@@ -73,18 +73,19 @@ _WIDGETS = {
     "format_dd":    ("dropDownMenu",      260, 555, 230, _ROW),
     "subtype_dd":   ("dropDownMenu",       20, 510, 230, _ROW),
     "quality_s":    ("sliderHorz",        260, 510, 230, _ROW),
-    # row: FPS | SCALING | SCALE(hidden) | W | H(hidden) | FIT
-    "fps_f":        ("fieldString",        20, 465, 140, _ROW),
-    "scaled_t":     ("buttonToggle",      170, 465, 130, _ROW),
-    "scale_dd":     ("dropDownMenu",      310, 465, 120, _ROW),
-    "resw_f":       ("fieldString",       440, 465,  60, _ROW),
-    "resh_f":       ("fieldString",       510, 465,  60, _ROW),
-    "fit_dd":       ("dropDownMenu",      580, 465,  60, _ROW),
-    # buttons (label disabled)
-    "start_b":      ("buttonMomentary",    20, 420, 110, _ROW),
-    "pause_b":      ("buttonMomentary",   140, 420, 110, _ROW),
-    "stop_b":       ("buttonMomentary",   260, 420, 110, _ROW),
-    "add_b":        ("buttonMomentary",   380, 420, 110, _ROW),
+    # row: FPS | SCALING | SCALE(hidden) | W | H(hidden) | FIT —
+    # tightened per JP: the row overflowed and FIT fell off-panel.
+    "fps_f":        ("fieldString",        20, 465, 110, _ROW),
+    "scaled_t":     ("buttonToggle",      150, 465, 110, _ROW),
+    "scale_dd":     ("dropDownMenu",      270, 465, 130, _ROW),
+    "resw_f":       ("fieldString",       410, 465,  55, _ROW),
+    "resh_f":       ("fieldString",       475, 465,  55, _ROW),
+    "fit_dd":       ("dropDownMenu",      540, 465, 120, _ROW),
+    # buttons (label disabled) — evenly spaced, faces centered
+    "start_b":      ("buttonMomentary",    20, 420, 145, _ROW),
+    "pause_b":      ("buttonMomentary",   175, 420, 145, _ROW),
+    "stop_b":       ("buttonMomentary",   330, 420, 145, _ROW),
+    "add_b":        ("buttonMomentary",   485, 420, 155, _ROW),
     # OUTPUT: full-width read-only field BELOW the buttons (JP: the
     # derived filename is too long for a side slot — give it the row)
     "output_l":     ("label",              20, 375, 620, _ROW),
@@ -460,34 +461,38 @@ def build():
         if name in widgets:
             setp(widgets[name], "Widgetlabel", title)
     # ADD button: opens a native file dialog, appends to the queue
-    # (JP: no dialog existed to add files to the lister).
+    # (JP: no dialog existed to add files to the lister). Face/center
+    # config now handled in the buttons block below (same as the rest).
     if "add_b" in widgets:
-        setp(widgets["add_b"], "Buttonofflabel", "+ ADD")
-        setp(widgets["add_b"], "Buttononlabel", "+ ADD")
-        setp(widgets["add_b"], "Labeldisplay", "off")
-        setp(widgets["add_b"], "Labelwidth", 1)
-        setp(widgets["add_b"], "Labeltop", 1)
         setp(widgets["add_b"], "Offtoonscript0",
              "op.vcon.op('panel_callbacks').module.AddFiles()")
         say("  add_b: file dialog -> queue wired")
 
-    # Buttons: face text only. THE TITLE LABELS ARE THE PROBLEM (JP, twice:
-    # "Momentary Button" keeps coming back). Kill them at BOTH levels:
-    # 1) the widget's own Labeldisplay 'off' (top-level par, token form)
-    # 2) AND Buttonofflabel/Buttononlabel drive the FACE — we keep those.
-    #    The title strip is the widget's Label area: width 0 AND display off
-    #    AND its text blanked — belt, suspenders, and a third belt.
+    # Buttons: face text centered within the background. The faces sat
+    # left-of-center because the widget's LABEL AREA (Labelwidth) offset
+    # the face — with titles suppressed, the label area must be zero AND
+    # the label strip hidden, so the face fills the whole background.
     for name, text in [("start_b", "START"), ("pause_b", "PAUSE"),
-                       ("stop_b", "STOP")]:
+                       ("stop_b", "STOP"), ("add_b", "+ ADD")]:
         if name in widgets:
             w_ = widgets[name]
+            setp(w_, "Widgetlabel", text)
             setp(w_, "Buttonofflabel", text)
             setp(w_, "Buttononlabel", text)
             setp(w_, "Labeldisplay", "off")
-            setp(w_, "Labelwidth", 1)
-            setp(w_, "Labeltop", 1)          # pin remaining sliver to top
-            setp(w_, "Widgetlabel", text)    # if title still shows, it IS the label text
-            say(f"  {name}: title suppressed (Labeldisplay off + width 1)")
+            setp(w_, "Labelwidth", 0)
+            setp(w_, "Labeltop", 1)
+            # face alignment within the button background
+            try:
+                w_.par.Buttonalignx = "center"
+                w_.par.Buttonaligny = "center"
+            except Exception:
+                pass
+            try:
+                w_.par.Labelhorizontalmode = "fill"
+            except Exception:
+                pass
+            say(f"  {name}: face centered (label area zeroed)")
 
     # ---- defaults ----------------------------------------------------------
     say("configuring widgets (external pars only)")
