@@ -338,7 +338,13 @@ def build():
         try:
             # width EXPRESSION drives the fill: Progress 0..1 -> 0..620
             fill.par.w.expr = "op.vcon.par.Progress * 620"
-            say("  progress bar: fill width <- Progress par expression")
+            # Z-ORDER (probe 8): same x/y and equal layer=0 means TD draws
+            # same-layer siblings by NAME — 'prog_fill' before
+            # 'prog_track' — so the gray track covered the green fill.
+            # Depth Layer: higher draws over lower.
+            fill.par.layer = 1
+            track.par.layer = 0
+            say("  progress bar: fill width <- Progress par, fill layer 1 (draws over track)")
         except Exception as exc:
             say(f"  (fill width expr: {exc})")
 
