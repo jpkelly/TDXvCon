@@ -580,12 +580,40 @@ def build():
                          fitop.par.outputresolution.menuLabels]
             except Exception as exc:
                 say(f"  (fit TOP menu read: {exc})")
-        # drop the fit TOP's own Custom Resolution entry (our 'custom'
-        # W/H path covers it) and anything empty
-        keep = [(n, l) for n, l in zip(names, labels) if n
-                and n != "customresolution"]
-        say(f"  fit TOP outputresolution menu mirrored: "
-            f"{[n for n, _ in keep] or '(EMPTY — check fit TOP)'}")
+        # JP (2026-09-14): the SCALE menu holds EXACTLY the six scale
+        # entries + Custom. The fit TOP's live menu carries more
+        # (useinput/fit/limit/parpanel/...) which are NOT scales. Match
+        # the six by ALIAS SETS against the live menu's tokens AND
+        # labels (JP's build shows tokens eighth/quarter/half/2x/4x/8x
+        # with labels Eighth/Quarter/Half/Two Times/Four Times/Eight
+        # Times); anything unmatched is left OUT.
+        _SCALE_ALIASES = [
+            (("eighth",), ("Eighth",)),
+            (("quarter",), ("Quarter",)),
+            (("half",), ("Half",)),
+            (("2x", "twotimes", "2X"), ("Two Times", "2x")),
+            (("4x", "fourtimes", "4X"), ("Four Times", "4x")),
+            (("8x", "eighttimes", "8X"), ("Eight Times", "8x")),
+        ]
+        keep = []
+        for token_al, label_al in _SCALE_ALIASES:
+            hit = None
+            for tok in token_al:
+                if tok in names:
+                    hit = names.index(tok)
+                    break
+            if hit is None:
+                for lab in label_al:
+                    if lab in labels:
+                        hit = labels.index(lab)
+                        break
+            if hit is not None:
+                keep.append((names[hit], labels[hit]))
+        if len(keep) < 6:
+            say(f"  !! SCALE mirror incomplete: found {len(keep)}/6 "
+                f"scale entries in live fit TOP menu {names}")
+        else:
+            say(f"  fit TOP scale entries mirrored: {[n for n, _ in keep]}")
         menu_names = [n for n, _ in keep] + ["custom"]
         menu_labels = [l for _, l in keep] + ["Custom"]
         set_menu(widgets["scale_dd"], menu_names, menu_labels,
@@ -645,6 +673,13 @@ def build():
         setp(widgets["quality_s"], "Onvaluechangescript0",
              "op.vcon.op('panel_callbacks').module.OnQualityChanged()")
         say("  quality_s: live MvO sync wired")
+    # FPS field -> MvO fps par LIVE (JP 2026-09-14: the field both READS
+    # the par — seeded from it at build end — and CHANGES it, the same
+    # live-editor pattern as the QUALITY slider)
+    if "fps_f" in widgets:
+        setp(widgets["fps_f"], "Onvaluechangescript0",
+             "op.vcon.op('panel_callbacks').module.OnFpsChanged()")
+        say("  fps_f: live MvO fps sync wired")
     # CODEC: repopulates subtype/format menus, previews, AND applies the
     # codec to MvO LIVE (JP: dropdown changes must show in MvO now).
     # The combined hook chain fires: UpdateSubtypes re-filters menus,
@@ -806,23 +841,13 @@ def build():
     # columns JP wants. Sizing: '#' gone; file stretches (it's the
     # first/widest), status takes its content width.
 
-    # bar TOPs read the DRIVER table's progress col (index 2)
-    try:
-        bars = q_.create(find_type("containerCOMP"), "rowbars")
-        for i in range(12):
-            btop = bars.create(find_type("constantTOP"), f"bar{i}")
-            btop.par.colorr = 0.2
-            btop.par.colorg = 0.8
-            btop.par.colorb = 0.2
-            btop.par.alpha = 1.0
-            # width follows that row's progress value in queue_table
-            btop.par.resx.expr = (
-                f"op('/project1/vcon/queue_table')[{i + 1}, 2] * 400"
-            )
-            btop.par.resy = 26
-        say("  row bar TOPs created (12) — widths <- queue_table progress col")
-    except Exception as exc:
-        say(f"  (row bars: {exc})")
+    # ---- per-row progress bars: PARKED (probe 11b/12 — the colDefine
+    # topPath per-row mechanism was never proven). The row-bars code that
+    # lived here errored on every build since inception (constant TOPs
+    # have no .resx par attribute on this build) and the TOPs it did
+    # create were invisible (never referenced by any colDefine). When
+    # row bars are wanted: wire a topPath per-row in the listerConfig
+    # colDefine first, THEN create the bar TOPs it references.
 
     # ---- panel Execute DAT: batch tick --------------------------------------
     # VERIFIED pattern from build_network.py's controller tick: the Execute
@@ -895,3 +920,14 @@ if os.path.isfile(_CAP_DUMP):
 else:
     print("[panel] no capture file — defaults only "
           "(run capture_panel.py after hand-tuning)")
+
+# Seed the FPS field from MvO's fps par (JP: the field READS the par's
+# current setting). Runs AFTER the bake so the read wins over any
+# captured field text. Both paths (capture / no capture) land here.
+# The write fires OnFpsChanged -> Setfps with the same value —
+# idempotent, no loop.
+try:
+    op.vcon.op('panel_callbacks').module.SyncFpsField()
+    print("[panel] fps field seeded from MvO fps par")
+except Exception as exc:
+    print(f"[panel] (fps seed: {exc})")

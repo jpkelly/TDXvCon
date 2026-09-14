@@ -374,11 +374,7 @@ class VconExt:
                     if w and h:
                         self._set_fit_menu(f.par.outputresolution,
                                            "custom", "customresolution")
-                        try:
-                            f.par.resolution = (int(w), int(h))
-                        except Exception:
-                            f.par.resx = int(w)
-                            f.par.resy = int(h)
+                        self._set_fit_custom_res(f, int(w), int(h))
                         debug(f"vCon: fit custom {int(w)}x{int(h)}")
                 else:
                     self._set_fit_menu(f.par.outputresolution, token)
@@ -414,6 +410,46 @@ class VconExt:
             return True
         except Exception as exc:
             debug(f"vCon: Setquality failed: {exc}")
+            return False
+
+    def Setfps(self, value):
+        """Promoted panel hook: the panel's FPS field drives MvO's fps
+        par LIVE (JP: the field both READS the par — seeded at build —
+        and CHANGES it, the same live-editor pattern as Setquality).
+
+        'auto' (or blank/keep) = follow the source: the par is set
+        from the loaded movie's sample rate when one is available
+        (the same resolution _apply_codec_params applies per job); with
+        nothing loaded the par is left as-is and job-time auto still
+        applies. Any positive number sets the par directly. Idle-
+        guarded like the other live hooks: an encode in flight keeps
+        its settings, and each job re-applies the panel value at start.
+        """
+        if self.state != "idle":
+            debug("vCon: Setfps skipped — encoder busy")
+            return False
+        v = str(value or "").strip().lower()
+        try:
+            if v in ("", "auto", "keep"):
+                try:
+                    sr = self.info["sample_rate"][0]
+                except Exception:
+                    sr = 0.0
+                if sr and sr > 0:
+                    self.movieout.par.fps = sr
+                    debug(f"vCon: MvO fps <- {sr} (source rate)")
+                    return True
+                debug("vCon: Setfps auto — no source rate available, "
+                      "par left as-is")
+                return False
+            f = float(v)
+            if f <= 0:
+                raise ValueError(f"fps must be positive (got {v!r})")
+            self.movieout.par.fps = f
+            debug(f"vCon: MvO fps <- {f}")
+            return True
+        except Exception as exc:
+            debug(f"vCon: Setfps failed: {exc}")
             return False
 
     def Setparams(self, codec=None, subtype=None, pixel_format=None,
@@ -1028,20 +1064,48 @@ class VconExt:
         # 'customresolution') — menu-verified write with alias
         self._set_fit_menu(f.par.outputresolution, "custom",
                            "customresolution")
-        try:
-            f.par.resolution = (w, h)
-        except Exception:
-            try:
-                f.par.resx = w
-                f.par.resy = h
-            except Exception as exc:
-                raise ValueError(
-                    f"cannot set fit TOP resolution to {w}x{h}: {exc}"
-                )
+        self._set_fit_custom_res(f, w, h)
         # Switch the data path: moviein -> fit -> movieout. moviein feeds
         # fit permanently (builder); only MvO's input source changes here.
         self._switch_mvo_input(f)
         self._set_status(f"encoding at {w}x{h} ({mode})")
+
+    def _set_fit_custom_res(self, f, w, h):
+        """Write the fit TOP's custom resolution — par names drift across
+        TD builds (LIVE-EVIDENCE, three rounds):
+          - 2026-09-13 probe: f.par.resolution exists? NO — resx/resy were
+            the Common-page fields on that build
+          - 2026-09-14 build log: 'td.ParCollection has no resx' — resx/
+            resy GONE on this build
+          - JP reports the par names are resolutionw / resolutionh
+        So: try resolutionw/resolutionh FIRST (JP's live report), then
+        resolution (tuple form), then resx/resy — first pair that
+        exists wins, everything soft-fails and reports. A raise here
+        would kill the fit-mode write too (same try in Setfitparams —
+        the bug that un-wired FIT with custom W/H).
+        """
+        w, h = int(w), int(h)
+        try:
+            f.par.resolutionw = w
+            f.par.resolutionh = h
+            return
+        except Exception:
+            pass
+        try:
+            f.par.resolution = (w, h)
+            return
+        except Exception:
+            pass
+        try:
+            f.par.resx = w
+            f.par.resy = h
+            return
+        except Exception:
+            pass
+        raise ValueError(
+            f"cannot set fit TOP resolution to {w}x{h} "
+            f"(no resolutionw/resolution/resx par on this build)"
+        )
 
     def _switch_mvo_input(self, src):
         """Point movieout's first input at ``src`` (moviein or fit).

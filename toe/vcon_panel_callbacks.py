@@ -441,6 +441,42 @@ def OnFitChanged():
         ext().Setfitparams(scale=choice, fit=fitmode)
 
 
+def OnFpsChanged():
+    """FPS field hook -> MvO's fps par, LIVE (JP: the field changes the
+    par — same live-editor pattern as the QUALITY slider). 'auto'
+    resolves to the loaded source's rate when one is available.
+    """
+    v = str(_val("fps_f") or "").strip()
+    try:
+        ext().Setfps(v)
+    except Exception as exc:
+        note(f"fps set failed: {exc}")
+
+
+def SyncFpsField():
+    """Seed the FPS field FROM MvO's fps par (JP: the field reads the
+    par's current setting). Runs once at build end, AFTER the capture
+    bake, so the read wins over any captured field text. 'auto' can be
+    re-typed any time to follow each source's own rate at job time
+    (the seed write fires OnFpsChanged -> Setfps with the same value —
+    idempotent, no loop).
+    """
+    w = widget("fps_f")
+    if w is None:
+        return
+    try:
+        v = float(ext().movieout.par.fps.eval())
+    except Exception as exc:
+        note(f"fps read failed: {exc}")
+        return
+    text = str(int(v)) if v == int(v) else ('%g' % v)
+    try:
+        w.par.Value0.val = text
+        note(f"FPS field <- {text} (MvO par)")
+    except Exception as exc:
+        note(f"fps field write failed: {exc}")
+
+
 def _res_value():
     """Resolution args for Transcode(): (resolution, scale).
 
