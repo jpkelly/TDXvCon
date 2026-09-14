@@ -721,27 +721,46 @@ class VconExt:
             )
         f.par.fit = mode
         # Common page: Custom Resolution + explicit W H (par.resolution is
-        # a 2-tuple: '1920 1080' via a tuple assignment).
-        f.par.outputresolution = "customresolution"
+        # a 2-tuple). Token LIVE-VERIFIED by the builder: the menu value is
+        # 'custom' (NOT the docs-style 'customresolution').
+        f.par.outputresolution = "custom"
         f.par.resolution = (w, h)
-        # Wire the data path: moviein -> fit -> movieout. moviein -> fit is
-        # wired permanently by the builder (one output may feed many
-        # destinations); only movieout's input source changes here.
-        try:
-            movieout.inputConnect(f, 0)
-        except Exception as exc:
-            debug(f"fit TOP wire failed: {exc}")
+        # Switch the data path: moviein -> fit -> movieout. moviein feeds
+        # fit permanently (builder); only MvO's input source changes here.
+        self._switch_mvo_input(f)
         self._set_status(f"encoding at {w}x{h} ({mode})")
+
+    def _switch_mvo_input(self, src):
+        """Point movieout's first input at ``src`` (moviein or fit).
+
+        Uses the verified connector API (dst.inputConnectors[0].connect —
+        the same mechanism the builder wires with). Whether connect()
+        replaces an existing input or raises is verified by the rewire
+        probe; the disconnect() fallback covers builds where it raises.
+        """
+        movieout = self.movieout
+        try:
+            current = movieout.inputs[0] if movieout.inputs else None
+            if current is src:
+                return                    # already wired here — nothing to do
+        except Exception:
+            pass
+        conn = movieout.inputConnectors[0]
+        try:
+            conn.connect(src)
+        except Exception:
+            try:
+                conn.disconnect()
+            except Exception as exc:
+                debug(f"MvO input switch: disconnect failed: {exc}")
+                return
+            conn.connect(src)
+        debug(f"vCon: MvO input -> {src.name}")
 
     def _bypass_fit(self):
         """Wire moviein straight to movieout, dropping the fit TOP."""
         try:
-            moviein = self.moviein
-            movieout = self.movieout
-            f = self.fit
-            if f is not None:
-                movieout.inputConnect(moviein, 0)
-                f.par.outputresolution = "useinput"
+            self._switch_mvo_input(self.moviein)
         except Exception as exc:
             debug(f"bypass_fit: {exc}")
 
