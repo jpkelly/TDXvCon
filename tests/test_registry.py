@@ -350,7 +350,9 @@ def test_td_params_notchlc_defaults():
     # an invalid menu value silently falls back to index 0 ('rle'), which
     # produced a valid-looking file in the WRONG codec.
     assert params["videocodec"] == "notchlc"
-    assert params["quality"] == "optimal"
+    # Quality travels as the FLOAT MvO's slider takes (Derivative guide:
+    # good=0.0 very-good=0.285 excellent=0.575 optimal=0.862 best=1.0)
+    assert params["quality"] == 0.862
     assert params["moviecontainer"] == "mov"   # menu value, verified live
     assert params["fps"] == "auto"
     # notchlc has no subtypes — must not emit a bogus videocodectype
@@ -372,7 +374,7 @@ def test_all_registry_menu_values_are_lowercase_tokens():
 
 def test_td_params_defaults_quality_when_omitted():
     spec = next(c for c in BUILTIN_CODECS if c.name == "notchlc")
-    assert spec.td_params()["quality"] == "optimal"
+    assert spec.td_params()["quality"] == 0.862
 
 
 def test_td_params_alpha_emits_pixel_format():

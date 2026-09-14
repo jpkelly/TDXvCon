@@ -241,14 +241,25 @@ def UpdateSubtypes():
             except Exception:
                 pass
             _grey_out(fmt_w, grey)
-        # QUALITY: TD exposes NO quality menu for NotchLC on this build
-        # (builder dump: movieout.quality = []) — the -q ladder is Notch
-        # manual knowledge, applied by the toe via a fallback. Grey the
-        # menu when the codec has no ladder rather than offering junk.
+        # QUALITY: a NAMED-LEVEL dropdown, per codec. Only codecs with a
+        # ladder get options (NotchLC); everything else greys out — same
+        # "empty menu = grey" rule as MvO's own parameter dialog. The
+        # chosen NAME maps to MvO's quality FLOAT slider value in the
+        # registry (good=0.0 ... best=1.0, Derivative guide).
         q_w = widget("quality_dd")
         if q_w is not None:
-            has_q = bool(meta.get("qualities"))
-            _grey_out(q_w, not has_q)
+            quals = list(meta.get("qualities", []))
+            if quals:
+                setp_par(q_w, "Menunames", " ".join(quals))
+                setp_par(q_w, "Menulabels", " ".join(quals))
+                try:
+                    if q_w.par.Value0.val not in quals:
+                        q_w.par.Value0.val = quals[-2] if len(quals) > 1 else quals[0]
+                except Exception:
+                    pass
+                _grey_out(q_w, False)
+            else:
+                _grey_out(q_w, True)
         _update_res_fields()
         PreviewOutput()
     except Exception as exc:
@@ -349,7 +360,7 @@ def Start():
     if subtype == "none":
         subtype = None
     if quality and not CODECS.get(codec, {}).get("qualities"):
-        quality = None
+        quality = None          # codec has no quality ladder
 
     if not src:
         note("pick a source file or folder first")
@@ -429,7 +440,7 @@ def _run_next():
     if fmt == "none":
         fmt = None
     if quality and not CODECS.get(codec, {}).get("qualities"):
-        quality = None
+        quality = None          # codec has no quality ladder
     ok = e.Transcode(
         input_path=src,
         output_path=nxt["output"],

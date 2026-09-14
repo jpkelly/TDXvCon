@@ -84,7 +84,7 @@ def test_submit_bakes_td_params_into_spec(queue, sample_spec):
     assert isinstance(params, dict)
     # lowercase menu token, NOT the "NotchLC" display label
     assert params["videocodec"] == "notchlc"
-    assert params["quality"] == "optimal"
+    assert params["quality"] == 0.862   # 'optimal' → MvO slider float
     assert params["moviecontainer"] == "mov"
 
 
@@ -92,7 +92,7 @@ def test_submit_td_params_respect_quality_override(queue, sample_input, tmp_path
     spec = JobSpec(input=sample_input, output=tmp_path / "o.mov",
                    codec="notchlc", quality="best")
     job = queue.submit(spec)
-    assert job.spec.extra["td_params"]["quality"] == "best"
+    assert job.spec.extra["td_params"]["quality"] == 1.0   # 'best' → 1.0
 
 
 def test_handle_message_lifecycle(queue, sample_spec):

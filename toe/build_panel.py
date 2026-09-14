@@ -300,6 +300,11 @@ def build():
             "yuv420p10bit", "yuv444p8bit", "yuv444p10bit"]
     if "format_dd" in widgets:
         set_menu(widgets["format_dd"], fmts, fmts, "none")
+    # QUALITY: a NAMED-LEVEL dropdown (JP: no panel slider). Choosing a
+    # level sets MvO's quality FLOAT slider to the mapped value — the
+    # registry converts the name before it reaches the wire (Derivative
+    # guide: good=0.0 very-good=0.285 excellent=0.575 optimal=0.862
+    # best=1.0). Greyed out for codecs without a ladder.
     qual = mod.CODECS["notchlc"]["qualities"]
     if "quality_dd" in widgets:
         set_menu(widgets["quality_dd"], qual, qual, "optimal")

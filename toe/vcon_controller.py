@@ -754,7 +754,19 @@ class VconExt:
         set_menu("videocodectype", p.get("videocodectype"))
         set_menu("moviepixelformat", p.get("moviepixelformat"))
         set_menu("moviecontainer", p.get("moviecontainer"))
-        set_menu("quality", p.get("quality"))
+        # QUALITY is NOT a menu: for NotchLC MvO exposes a FLOAT slider
+        # (0-1). Sending a name ('optimal') to a non-menu par raises or
+        # no-ops; the registry resolves names to VALUES before they ever
+        # reach here (Derivative's NotchLC guide: best=1.0, optimal=0.862,
+        # excellent=0.575, very-good=0.285, good=0.0).
+        q = p.get("quality")
+        if q is not None:
+            try:
+                movieout.par.quality.val = float(q)
+            except (TypeError, ValueError):
+                problems.append(f"quality={q!r} is not a number")
+            except Exception as exc:
+                problems.append(f"quality assignment failed: {exc}")
 
         if problems:
             raise ValueError("; ".join(problems))

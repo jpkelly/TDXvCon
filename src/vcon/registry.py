@@ -26,8 +26,21 @@ from typing import Any
 from vcon.codec_meta import CodecMeta, all_metas
 from vcon.errors import CodecError
 
-#: Quality ladder NotchLC uses (per Notch manual); optimal is the sweet spot.
+#: Quality ladder NotchLC uses — the CLI accepts these names; optimal is
+#: the sweet spot. NOT A TD MENU: Movie File Out exposes quality for
+#: NotchLC as a FLOAT slider (0-1). These are the exact values from
+#: Derivative's NotchLC User Guide (best=1.0, optimal=0.862, ...), sent
+#: verbatim over the wire; the toe assigns the float.
 NOTCHLC_QUALITY = ("good", "very-good", "excellent", "optimal", "best")
+
+#: Named quality → MvO slider value (Derivative's NotchLC guide).
+NOTCHLC_QUALITY_VALUES = {
+    "good": 0.0,
+    "very-good": 0.285,
+    "excellent": 0.575,
+    "optimal": 0.862,
+    "best": 1.0,
+}
 
 
 def platform_of_current_machine() -> str:
@@ -160,7 +173,10 @@ class CodecSpec:
             params["videocodectype"] = resolved_sub
         resolved_q = self.resolve_quality(quality)
         if resolved_q is not None:
-            params["quality"] = resolved_q
+            # Named level -> the float MvO's quality slider takes
+            # (NotchLC only; other codecs have no ladder).
+            params["quality"] = NOTCHLC_QUALITY_VALUES.get(
+                resolved_q, resolved_q)
         if self.default_ext:
             params["moviecontainer"] = self.default_ext
         # Pixel format is CODEC- AND SUBTYPE-SPECIFIC. Only send a value the
