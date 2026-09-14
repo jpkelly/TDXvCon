@@ -6,13 +6,24 @@ capture (the canonical hand-tuned state) wins over builder defaults.
 Order matters:
   1. geometry (panel-view x/y/w/h) per widget
   2. pars — OP-valued strings re-LINKED (object first, path fallback —
-     the set_op_par pattern); the capture already skipped refs pointing
-     INSIDE a widget (internal wiring stays untouched)
+     the set_op_par pattern), with a RENAME fallback: a captured path
+     that no longer resolves (the live toe's panel_dnd11 vs a fresh
+     build's panel_dnd) retries with trailing digits stripped; the
+     capture already skipped refs pointing INSIDE a widget (internal
+     wiring stays untouched). A par the capture holds as a CONSTANT
+     gets its live expression CLEARED first — stock exprs (e.g.
+     buttonMomentary's chr(0xF070E) icon on Buttonofflabel) would
+     otherwise re-evaluate and swallow the write. Widget metadata pars
+     (Version/Toxsavebuild/Help) are skipped.
   3. expressions AND binds REBOUND after values (the status label's
      live Widgetlabel expr and any par bindings survive; baking only
-     the eval'd value would freeze them)
+     the eval'd value would freeze them). BROKEN expressions are
+     compile-guarded and skipped with a warning — the first capture
+     carried a hand typo ('2o') that would otherwise bake an error par.
   4. queue listerconfig DAT texts (hand-tuned column settings)
-  5. ONE explicit lister Refresh pulse on the settled state (the
+  5. res-field visibility re-run once (scale/fit/W-H show state can
+     arrive via captured Value0 writes without firing widget hooks),
+     then ONE explicit lister Refresh pulse on the settled state (the
      established pattern — refresh-on-input-change throws on
      mid-write tables)
 A pre-v3 dump contains TD reprs ('type:tableDAT path:...') that are not
@@ -22,6 +33,9 @@ valid Python — the compile guard catches it and says re-capture.
 DUMP = ('/Users/jp/Documents/GitHub/vCon/toe/'
         'panel_layout_captured.py')
 PANEL_PATH = '/project1/vcon/panel'
+
+#: widget metadata pars — not bakeable state, silently skipped
+_META_SKIP = {'Version', 'Toxsavebuild', 'Help'}
 
 try:
     with open(DUMP, encoding='utf-8') as f:
@@ -56,23 +70,35 @@ def _target(name):
 def _set_value(w, par, value):
     """Set one par; OP-ref strings re-link, everything else plain.
 
-    The capture stored OP refs as path strings. A string that resolves
-    to a live op AND whose current eval is an op → set object-first
-    (path fallback, set_op_par pattern). Everything else is a plain
-    value (a string like 'C:/' never resolves via op(), so plain
-    string pars can never be mistaken for refs).
+    The capture stored OP refs as path strings. A path that doesn't
+    resolve gets ONE fallback — trailing digits stripped (fresh-build
+    renames: the live toe's panel_dnd11 becomes plain panel_dnd) —
+    and if that also fails the par is LEFT AS BUILT rather than
+    written broken. A string that never resolves via op() (like a
+    destination path 'C:/') never enters the ref branch, so plain
+    string pars can't be mistaken for refs.
     """
     if isinstance(value, str) and value.startswith('/'):
         try:
             cur = par.eval()
         except Exception:
             cur = None
-        ref = None
-        try:
-            ref = op(value)
-        except Exception:
+        if _is_op(cur):
+            # fresh-build RENAME fallback: the live toe's panel_dnd11 vs
+            # a fresh build's panel_dnd — retry with trailing digits
+            # stripped before giving up
             ref = None
-        if _is_op(cur) and ref is not None:
+            for cand in (value, value.rstrip('0123456789')):
+                try:
+                    ref = op(cand)
+                except Exception:
+                    ref = None
+                if ref is not None:
+                    break
+            if ref is None:
+                print(f"[capture] !! {w.name}.{par.name}: no live op "
+                      f"for {value!r} — left as built")
+                return False
             for candidate in (ref, value):
                 try:
                     setattr(w.par, par.name, candidate)
@@ -103,7 +129,11 @@ def _apply_entry(name, entry):
             except Exception as exc:
                 print(f"[capture] ( {name}.{pname}: {exc} )")
     missed = 0
+    exprs = entry.get('expressions') or {}
+    binds = entry.get('binds') or {}
     for pname, value in (entry.get('pars') or {}).items():
+        if pname in _META_SKIP:
+            continue          # widget metadata — not bakeable state
         try:
             par = w.par[pname]
         except Exception:
@@ -113,18 +143,47 @@ def _apply_entry(name, entry):
             print(f"[capture] ( {name}: no par {pname} )")
             missed += 1
             continue
-        if str(par.style) == 'Pulse':
-            continue
+        try:
+            if str(par.style) == 'Pulse':
+                continue
+        except Exception:
+            pass
+        # CONSTANT over expression: a live expression re-evaluates and
+        # swallows the write (stock buttonMomentary drives Buttonofflabel
+        # with a chr(0xF070E) icon expr — JP's captured text must replace
+        # it). Clear expression mode first; captured exprs are re-set
+        # right after, so the captured state always wins.
+        if pname not in exprs:
+            try:
+                if par.expr:
+                    par.expr = ''
+            except Exception:
+                pass
+        if pname not in binds:
+            try:
+                if par.bindExpr:
+                    par.bindExpr = ''
+            except Exception:
+                pass
         if not _set_value(w, par, value):
             missed += 1
     # expressions AND binds AFTER values: rebinding wins (live wiring
-    # restored — the 'None' string was filtered at capture time)
-    for pname, expr in (entry.get('expressions') or {}).items():
+    # restored — the 'None' string was filtered at capture time).
+    # BROKEN expressions are compile-guarded: the first capture carried
+    # a hand typo ('2o' on resh_f.Labelwidth) that would otherwise bake
+    # an error par into every rebuild.
+    for pname, expr in exprs.items():
+        try:
+            compile(expr, f'{name}.{pname}', 'eval')
+        except Exception as exc:
+            print(f"[capture] !! {name}.{pname}: broken expression "
+                  f"{expr!r} skipped ({exc})")
+            continue
         try:
             w.par[pname].expr = expr
         except Exception as exc:
             print(f"[capture] ( {name}.{pname} expr: {exc} )")
-    for pname, bindexpr in (entry.get('binds') or {}).items():
+    for pname, bindexpr in binds.items():
         try:
             w.par[pname].bindExpr = bindexpr
         except Exception as exc:
@@ -184,6 +243,14 @@ if CAPTURED:
                 _restore_listerconfig(_entry)
         if 'panel' in CAPTURED and isinstance(CAPTURED['panel'], dict):
             _apply_entry('panel', CAPTURED['panel'])
+        # res-field visibility: captured Value0 writes (scaled=on,
+        # scale=custom) may land without firing the widget hooks — re-run
+        # the visibility logic once so SCALE/FIT/W/H match the state
+        try:
+            op.vcon.op('panel_callbacks').module._update_res_fields()
+            print("[capture] res-field visibility refreshed")
+        except Exception:
+            pass
         # one clean refresh on the settled state
         _q = _panel_comp.op('queue')
         if _q is not None:

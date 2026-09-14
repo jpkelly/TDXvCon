@@ -224,6 +224,13 @@ def build():
         if vcon.op(stale) is not None:
             say(f"removing existing {stale}")
             vcon.op(stale).destroy()
+    # panel_dnd DATs ACCUMULATE across rebuilds (create-with-existing-
+    # name auto-renames: the live toe had panel_dnd11) — sweep them ALL
+    # so every rebuild names the fresh callbacks DAT plainly 'panel_dnd'
+    for ch in list(vcon.children):
+        if ch.name.startswith("panel_dnd"):
+            say(f"removing existing {ch.name}")
+            ch.destroy()
 
     # ---- callbacks DAT (file-linked, like the controller DAT) -----------
     say("creating panel_callbacks DAT (file-linked)")
