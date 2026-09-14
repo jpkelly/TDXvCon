@@ -576,65 +576,45 @@ def _set_output_text(text):
         note(f"output text failed: {exc}")
 
 
-def _lister_data_table():
-    """The lister's internal data table (its OWN row numbering — no
-    header). Found by scanning for the tableDAT holding data rows — no
-    hardcoded internal op names (the lister's internals move between
-    builds; JP's panel even flattened listerConfig to panel root)."""
-    q = widget("queue")
-    if q is None:
-        return None
-    for holder in (q, panel()):
-        if holder is None:
-            continue
-        for ch in holder.children:
-            try:
-                if not ch.isDAT or ch.numCols < 1 or ch.numRows < 1:
-                    continue
-                c0 = str(ch[0, 0] or "")
-                if c0 and c0 != "file":
-                    return ch
-            except Exception:
-                continue
-    return None
-
-
 def _queue_item_from_info(info):
-    """Map a lister selection to its _queue item — by NAME MATCH, immune
-    to row-numbering conventions (0- vs 1-based): candidate names are
-    read from the lister's own data table and from queue_display at the
-    plausible rows, then matched against the queue by basename."""
+    """Map a lister selection to its _queue item.
+
+    LIVE-VERIFIED (JP's first-click dump 2026-09-14): the onSelectRow
+    info carries rowData with the FILE NAME DIRECTLY:
+      {'row': 5, 'rowData': {'file': 'OK_Go_TTSP.mp4', ...},
+       'sourceIndex': 5, 'callbackName': 'onSelectRow'}
+    So: rowData.file first (exact, no row-numbering guesses), then
+    basename match at the row index, then direct index as a last
+    resort. The old table-scanning heuristic is gone (it could grab
+    the WRONG internal DAT — the lister's license-text callbacks DAT
+    passes a 'not a header' check).
+    """
+    # 1) direct: rowData carries the file name
+    rd = info.get("rowData") or {}
+    nm = str(rd.get("file") or "").strip()
+    if nm:
+        for it in _queue:
+            if os.path.basename(it["input"]) == nm:
+                return it
+    # 2) row index: try both conventions against queue_display
     r = info.get("row")
     try:
         r = int(r)
     except (TypeError, ValueError):
         return None
-    names = []
-    t = _lister_data_table()
-    if t is not None:
-        for idx in (r, r - 1):
-            try:
-                if 0 <= idx < t.numRows:
-                    cell = str(t[idx, 0] or "")
-                    if cell:
-                        names.append(cell)
-            except Exception:
-                pass
     try:
         d = op.vcon.op("queue_display")
         if d is not None:
             for idx in (r + 1, r):
                 if 0 <= idx < d.numRows:
-                    cell = str(d[idx, 0] or "")
-                    if cell:
-                        names.append(cell)
+                    cell = str(d[idx, 0] or "").strip()
+                    if cell and cell != "file":
+                        for it in _queue:
+                            if os.path.basename(it["input"]) == cell:
+                                return it
     except Exception:
         pass
-    for nm in names:
-        for it in _queue:
-            if os.path.basename(it["input"]) == nm:
-                return it
-    # last resort: direct index (0-based assumption)
+    # 3) last resort: direct index (0-based assumption)
     if 0 <= r < len(_queue):
         return _queue[r]
     return None
@@ -676,11 +656,18 @@ def OnQueueRowSelected(info=None):
     """
     global _noted_select, _inspect_item, _inspect_ticks
     info = info or {}
-    if not _noted_select:
-        _noted_select = True
-        note(f"lister onSelectRow info: {info!r}")   # mapping is verifiable
+    # LIVE-VERIFIED shape (first-click dump): row / rowData.file /
+    # sourceIndex / callbackName. EVERY click reports its outcome now
+    # (the one-shot dump hid failures on clicks 2+).
+    note(f"lister onSelectRow: {info.get('callbackName')} "
+         f"row={info.get('row')} "
+         f"file={(info.get('rowData') or {}).get('file')}")
     item = _queue_item_from_info(info)
     if item is None:
+        note("  no matching queue item — inspect skipped")
+        return
+    if item is _inspect_item and _inspect_ticks > 0:
+        note("  re-click on the inspecting item — ignored")
         return
     _inspect_item = item
     _inspect_ticks = 0
@@ -759,6 +746,7 @@ def _inspect_tick():
         codec = vdesc or vcodec
         parts.append(codec if codec else "(codec unavailable)")
         _set_output_text("  |  ".join(parts))
+        note(f"  inspector: {', '.join(parts)}")
         _inspect_item = None
 
 
