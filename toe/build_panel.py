@@ -289,20 +289,40 @@ def build():
                 say(f"  (lister source: {exc})")
 
     # ---- panel Execute DAT: batch tick --------------------------------------
-    # VERIFIED pattern from build_network.py: an Execute DAT's callback is
-    # its TEXT (a def), and the pars are framestart/frameend/active — there
-    # is no par.frame collection (that raised tdAttributeError live).
+    # VERIFIED pattern from build_network.py's controller tick: the Execute
+    # DAT requires the COMPLETE function set (onFrameStart, onFrameEnd,
+    # onCreate, onStart, onExit) — a missing onFrameEnd raised 'Cannot find
+    # function named: onFrameEnd' live. Callback goes in the DAT's text;
+    # pars are framestart/frameend/active.
     say("creating panel Execute DAT (batch tick)")
     ex = vcon.create(executeDAT, "panel_tick")
     ex.nodeX = 300
     ex.nodeY = 30
     ex.text = (
         "# Panel tick: feed the batch queue when the encoder is idle.\n"
+        "\n"
+        "\n"
         "def onFrameStart(frame):\n"
         "    try:\n"
         "        op.vcon.op('panel_callbacks').module.onFrame()\n"
         "    except Exception:\n"
         "        pass\n"
+        "\n"
+        "\n"
+        "def onFrameEnd(frame):\n"
+        "    pass\n"
+        "\n"
+        "\n"
+        "def onCreate():\n"
+        "    pass\n"
+        "\n"
+        "\n"
+        "def onStart():\n"
+        "    pass\n"
+        "\n"
+        "\n"
+        "def onExit():\n"
+        "    pass\n"
     )
     for p in ("framestart", "frameend", "active"):
         try:
