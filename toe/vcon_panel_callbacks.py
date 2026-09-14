@@ -1,19 +1,18 @@
 """vcon panel callbacks — the panel's logic, run inside TouchDesigner.
 
-Loaded as a file-linked module DAT inside the vCon COMP. Widget callbacks
-call into here via Global OP Shortcut: op.vcon.op('panel_callbacks').module.<fn>().
+Loaded as a file-linked module DAT inside the vCon COMP. Widgets fire
+into here via Offtoonscript0 (buttons) and Onvaluechangescript0 (fields).
 
-LIVE-VERIFIED (probes 2026-09-13): widget config pars are on the INNER
-COMP (child of the loadTox wrapper, same name as the wrapper) and are
-First-uppercase: Value0 holds the widget's value, Label its label text.
-Everything here uses external widget parameters only — internals are
-never touched (they're clone-managed and wiped on update).
+LIVE-VERIFIED widget facts: config pars are on the INNER COMP (children
+scan; op(name) self-matches the wrapper) and are First-uppercase: Value0
+is the widget's value; Onvaluechangescript0 fires on any value change;
+buttons fire Offtoonscript0 on press. The extension's busy property is
+is_busy (lowercase) — the panel must NOT call a promoted-style Isbusy.
 """
 
 import os
 
-#: Codec table for the panel's dropdowns — the same knowledge the CLI's
-#: registry encodes (src/vcon/codec_meta.py), distilled to TD menu tokens.
+#: Codec table — distilled from src/vcon/codec_meta.py (TD menu tokens).
 #: KEEP IN STEP with codec_meta.py — regenerate via toe/gen_codec_table.py.
 CODECS = {
     "notchlc": {
@@ -68,6 +67,14 @@ CONTAINERS = {
     "h264": ".mp4", "h265": ".mp4", "av1": ".mp4",
 }
 
+#: Movie extensions TD imports (docs.derivative.ca File_Types, verified).
+MOVIE_EXTS = {".m4v", ".mkv", ".mov", ".mp4", ".hsp", ".notchlc", ".mpeg",
+              ".mpg", ".avi", ".flv", ".m2ts", ".wmv", ".h265", ".vp8",
+              ".vp9", ".3gp", ".mxf", ".ts", ".r3d"}
+
+#: Batch queue: list of dicts {input, output, status, rel}
+_queue = []
+
 
 def ext():
     """The vCon extension (Global OP Shortcut 'vcon' — set by the builder)."""
@@ -83,19 +90,26 @@ def widget(name):
     """The INNER widget COMP of a named panel child (children scan —
     op(name) self-matches the wrapper, verified live)."""
     p = panel()
+    if p is None:
+        return None
     outer = p.op(name)
     if outer is None:
         return None
     for c in outer.children:
         if c.name == outer.name or c.isPanel:
             return c
-    return None
+    return outer
 
 
 def _val(name):
     """Read a widget's Value0."""
     w = widget(name)
-    return w.par.Value0.eval() if w is not None else None
+    if w is None:
+        return None
+    try:
+        return w.par.Value0.eval()
+    except Exception:
+        return None
 
 
 def _output_name(input_path, codec, subtype=None):
@@ -108,12 +122,7 @@ def _output_name(input_path, codec, subtype=None):
 
 
 def _unique_output(path):
-    """Never overwrite: clip.notchlc.mov exists -> 'clip.notchlc (2).mov'.
-
-    The same auto-naming the reference transcoders use (their screenshots
-    show 'GlowingNights_05 (2).mov'). The panel path bypasses the CLI's
-    -y/-n overwrite prompts, so non-clobbering names are the safe default.
-    """
+    """Never overwrite: clip.notchlc.mov exists -> 'clip.notchlc (2).mov'."""
     if not os.path.exists(path):
         return path
     folder = os.path.dirname(path)
@@ -126,8 +135,53 @@ def _unique_output(path):
         n += 1
 
 
+def _derive_output(src, dst, codec, subtype):
+    """The output path a job would get, given current widget state."""
+    derived = _output_name(src, codec, subtype)
+    if dst and os.path.isdir(dst):
+        return os.path.join(dst, os.path.basename(derived))
+    return derived
+
+
+def _is_movie(path):
+    return os.path.splitext(path)[1].lower() in MOVIE_EXTS
+
+
+# ---------------------------------------------------------------------
+# Live preview of the output filename
+# ---------------------------------------------------------------------
+
+def PreviewOutput():
+    """Update the read-only OUTPUT label from current widget state.
+
+    Called on any relevant widget change. Shows the auto-named output the
+    next START would create — including ' (2)' collision numbering.
+    """
+    try:
+        src = _val("source")
+        out_l = widget("output_l")
+        if out_l is None:
+            return
+        if not src or not os.path.isfile(src):
+            out_l.par.Label.val = ""
+            return
+        dst = _val("destination")
+        codec = _val("codec_dd") or "notchlc"
+        subtype = _val("subtype_dd")
+        if subtype == "none":
+            subtype = None
+        out = _unique_output(_derive_output(src, dst, codec, subtype))
+        out_l.par.Label.val = os.path.basename(out)
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------
+# Buttons
+# ---------------------------------------------------------------------
+
 def Start():
-    """Read the panel widgets and submit one job through the extension."""
+    """Submit one job (file source) or a batch (folder source)."""
     src = _val("source")
     dst = _val("destination")
     codec = _val("codec_dd") or "notchlc"
@@ -138,37 +192,40 @@ def Start():
     res = str(_val("res_f") or "auto").strip().lower()
     fitmode = _val("fit_dd")
 
-    if not src or not os.path.isfile(src):
-        note("pick a source file first")
-        return
-
     if fps in ("", "keep", "auto"):
         fps = "auto"
     if res in ("", "keep", "auto"):
         res = "auto"
-
-    derived = _output_name(src, codec, subtype)
-    if dst and os.path.isdir(dst):
-        # Destination is a FOLDER: the derived FILENAME joins into it.
-        # (Passing the folder itself as the output file made movieout
-        # error 'Filename missing extension' every frame — caught live.)
-        out = os.path.join(dst, os.path.basename(derived))
-    else:
-        out = derived
-    # Auto-name: never clobber — ' (2)', ' (3)', ... on collisions.
-    out = _unique_output(out)
-    # Show the exact name that will be created (widget callbacks can't
-    # take expressions; a panel Update pulse refreshes on setting changes).
-    _show_output(out)
-
-    # pixel format 'none' = let the codec/registry decide (auto)
     if fmt == "none":
         fmt = None
-    if quality and not CODECS.get(codec, {}).get("qualities"):
-        quality = None          # this codec has no quality ladder
     if subtype == "none":
         subtype = None
+    if quality and not CODECS.get(codec, {}).get("qualities"):
+        quality = None
 
+    if not src:
+        note("pick a source file or folder first")
+        return
+
+    # ---- folder source: enqueue every movie in the tree -----------------
+    if os.path.isdir(src):
+        items = _scan_movies(src)
+        if not items:
+            note("no movie files found in that folder")
+            return
+        for inp, rel in items:
+            out = _unique_output(_derive_output(inp, dst, codec, subtype))
+            _queue.append({"input": inp, "output": out, "status": "queued",
+                           "rel": rel})
+        note(f"queued {len(items)} file(s) — press START again to run")
+        _refresh_queue()
+        return
+
+    if not os.path.isfile(src):
+        note("source not found")
+        return
+
+    out = _unique_output(_derive_output(src, dst, codec, subtype))
     ok = ext().Transcode(
         input_path=src,
         output_path=out,
@@ -180,73 +237,68 @@ def Start():
         resolution=res,
         fit=fitmode,
     )
-    note(f"job submitted -> {os.path.basename(out)}" if ok
-         else "busy — job refused")
+    if not ok:
+        note("busy — job refused")
+    else:
+        _mark_running(out)
+        note(f"encoding {os.path.basename(out)}")
 
 
-def _show_output(path):
-    """Display the exact output path that will be created.
-
-    The statusline widget is bound to the Status par by the builder, so
-    writing to the par is the one sanctioned way to put text there (and
-    the controller overwrites it as soon as the job starts loading — the
-    output name shows in the moment between picking settings and START,
-    which is exactly when the user wants to see it).
-
-    A dedicated label would be cleaner (v2 panel item): a 'output_l'
-    label widget whose text a callback refreshes on every widget change.
-    """
-    try:
-        op.vcon.par.Status.val = f"will create: {os.path.basename(path)}"
-    except Exception:
-        pass
-
-
-def PreviewOutput():
-    """Refresh the 'will create:' line from current widget state.
-
-    Called from widgets' Onvaluechangescript0 (set by the builder on
-    source/codec/subtype/destination) so the preview updates live as the
-    user picks settings — before START is ever pressed.
-    """
-    try:
-        src = _val("source")
-        if not src or not os.path.isfile(src):
-            return                      # nothing sensible to preview yet
-        dst = _val("destination")
-        codec = _val("codec_dd") or "notchlc"
-        subtype = _val("subtype_dd")
-        if subtype == "none":
-            subtype = None
-        derived = _output_name(src, codec, subtype)
-        if dst and os.path.isdir(dst):
-            out = os.path.join(dst, os.path.basename(derived))
-        else:
-            out = derived
-        op.vcon.par.Status.val = f"will create: {os.path.basename(_unique_output(out))}"
-    except Exception:
-        pass
-
-
-def NormalizeDestination():
-    """Show only the selected FOLDER in the destination widget.
-
-    fieldFolderBrowser can yield a path with the file appended (or the
-    user may paste a file path); strip to the directory for display and
-    for Start()'s isdir check.
-    """
-    w = widget("destination")
-    if w is None:
+def _run_next():
+    """Dequeue the next batch job and submit it (called when idle)."""
+    e = ext()
+    if e.is_busy:
         return
-    v = w.par.Value0.eval()
-    if v and os.path.isfile(v):
-        w.par.Value0.val = os.path.dirname(v)
+    nxt = None
+    for item in _queue:
+        if item["status"] == "queued":
+            nxt = item
+            break
+    if nxt is None:
+        return
+    src = nxt["input"]
+    base = os.path.basename(src)
+    dst = _val("destination")
+    codec = _val("codec_dd") or "notchlc"
+    subtype = _val("subtype_dd")
+    if subtype == "none":
+        subtype = None
+    quality = _val("quality_dd")
+    fmt = _val("format_dd")
+    fps = str(_val("fps_f") or "auto").strip().lower()
+    res = str(_val("res_f") or "auto").strip().lower()
+    fitmode = _val("fit_dd")
+    if fps in ("", "keep", "auto"):
+        fps = "auto"
+    if res in ("", "keep", "auto"):
+        res = "auto"
+    if fmt == "none":
+        fmt = None
+    if quality and not CODECS.get(codec, {}).get("qualities"):
+        quality = None
+    ok = e.Transcode(
+        input_path=src,
+        output_path=nxt["output"],
+        codec=codec,
+        subtype=subtype,
+        quality=quality,
+        fps=fps,
+        pixel_format=fmt,
+        resolution=res,
+        fit=fitmode,
+    )
+    if ok:
+        nxt["status"] = "running"
+        _refresh_queue()
+    else:
+        # busy: try again next time the panel pings
+        pass
 
 
 def PauseResume():
     """Toggle pause/resume on the active job."""
     e = ext()
-    if not e.Isbusy:
+    if not e.is_busy:
         note("nothing running")
         return
     if getattr(e, "_paused", False):
@@ -256,10 +308,96 @@ def PauseResume():
 
 
 def Stop():
-    """Cancel the active job."""
+    """Cancel the active job and clear the batch queue."""
     ext().Cancel()
+    for item in _queue:
+        if item["status"] in ("queued", "running"):
+            item["status"] = "cancelled"
+    _refresh_queue()
     note("cancelled")
 
+
+# ---------------------------------------------------------------------
+# Batch queue
+# ---------------------------------------------------------------------
+
+def _scan_movies(folder, recursive=True):
+    """[(path, rel)] for every movie file under folder (sorted)."""
+    import glob
+    out = []
+    if recursive:
+        for path in sorted(glob.glob(os.path.join(folder, "**", "*"),
+                                     recursive=True)):
+            if os.path.isfile(path) and _is_movie(path):
+                out.append((path, os.path.relpath(path, folder)))
+    else:
+        for path in sorted(glob.glob(os.path.join(folder, "*"))):
+            if os.path.isfile(path) and _ismovie(path):
+                out.append((path, os.path.relpath(path, folder)))
+    return out
+
+
+def _refresh_queue():
+    """Redraw the batch queue table (the lister widget's source DAT)."""
+    t = panel().op("queue_table")
+    if t is None:
+        return
+    t.clear()
+    t.appendRow(["#", "file", "status"])
+    for i, item in enumerate(_queue, 1):
+        t.appendRow([str(i), os.path.basename(item["input"]),
+                     item["status"]])
+
+
+def _mark_running(output_path):
+    for item in _queue:
+        if item["output"] == output_path and item["status"] == "queued":
+            item["status"] = "running"
+            break
+    _refresh_queue()
+
+
+def _mark_done(output_path):
+    """Mark the queue row whose output matches; enqueue the next job."""
+    done = False
+    for item in _queue:
+        if item["output"] == output_path:
+            item["status"] = "done"
+            done = True
+    if done:
+        _refresh_queue()
+        _run_next()
+
+
+def _on_job_done(output_path):
+    """Poll-based completion hook for the panel: refresh + run next."""
+    _mark_done(output_path)
+
+
+def onFrame():
+    """Panel-level Execute DAT tick: feed the batch loop + auto-refresh.
+
+    When the controller goes idle and queue rows remain queued, submit the
+    next job. When a running row's output file exists and the controller
+    is idle, the job finished — mark done, then next.
+    """
+    try:
+        e = ext()
+    except Exception:
+        return
+    if e.is_busy:
+        return
+    # finished detection: a running row whose output now exists
+    for item in list(_queue):
+        if item["status"] == "running" and os.path.exists(item["output"]):
+            item["status"] = "done"
+    _run_next()
+    _refresh_queue()
+
+
+# ---------------------------------------------------------------------
+# Misc
+# ---------------------------------------------------------------------
 
 def onDragDrop(info):
     """Drop Script entry: file/folder dropped onto the panel."""
@@ -276,13 +414,18 @@ def onDragDrop(info):
         note("source set from drop")
 
 
-def note(text):
-    """Panel-local feedback line — printed to the textport.
+def NormalizeDestination():
+    """Show only the selected FOLDER in the destination widget."""
+    w = widget("destination")
+    if w is None:
+        return
+    v = w.par.Value0.eval()
+    if v and os.path.isfile(v):
+        w.par.Value0.val = os.path.dirname(v)
 
-    Deliberately NOT written to the Status par: the controller owns that
-    (encode progress, errors, idle). The panel printing its own messages
-    means they coexist instead of racing each other's writes.
-    """
+
+def note(text):
+    """Panel-local feedback line — printed to the textport."""
     print(f"[panel] {text}")
 
 
