@@ -232,9 +232,9 @@ def _update_res_fields():
     (res_w / res_h). Display uses the widget's display par (panel-level,
     not enable) so the values survive toggling.
     """
-    mode = str(_val("resmode_dd") or "keep").strip().lower()
-    show = 1 if mode == "custom" else 0
-    for name in ("res_w", "res_h"):
+    mode = str(_val("resmode_dd") or "unscaled").strip().lower()
+    show = 1 if mode == "scaled" else 0
+    for name in ("scale_dd",):
         w = widget(name)
         if w is not None:
             try:
@@ -250,20 +250,20 @@ def _update_res_fields():
 
 
 def _res_value():
-    """The resolution string for Transcode(): 'auto' or 'WxH'."""
-    mode = str(_val("resmode_dd") or "keep").strip().lower()
-    if mode != "custom":
-        return "auto"
-    w = _val("res_w")
-    h = _val("res_h")
+    """Resolution args for Transcode(): ('auto', scale) from the panel.
+
+    RES widget: 'unscaled' sends nothing (source size preserved);
+    'scaled' sends the chosen factor — the CONTROLLER computes the final
+    WxH from the movie's real dimensions after load (the panel cannot
+    know them pre-load). Returns (resolution, scale)."""
+    mode = str(_val("resmode_dd") or "unscaled").strip().lower()
+    if mode != "scaled":
+        return "auto", None
+    factor = str(_val("scale_dd") or "1").strip()
     try:
-        wi = int(float(w))
-        hi = int(float(h))
+        return "auto", float(factor)
     except (TypeError, ValueError):
-        return "auto"
-    if wi < 1 or hi < 1:
-        return "auto"
-    return f"{wi}x{hi}"
+        return "auto", None
 
 
 def setp_par(inner, par_name, value):
@@ -289,7 +289,7 @@ def Start():
     fmt = _val("format_dd")
     fps = str(_val("fps_f") or "auto").strip().lower()
     fitmode = _val("fit_dd")
-    res = _res_value()
+    res, scale = _res_value()
 
     if fps in ("", "keep", "auto"):
         fps = "auto"
@@ -332,6 +332,7 @@ def Start():
         fps=fps,
         pixel_format=fmt,
         resolution=res,
+        scale=scale,
         fit=fitmode,
     )
     if not ok:
@@ -364,7 +365,7 @@ def _run_next():
     fmt = _val("format_dd")
     fps = str(_val("fps_f") or "auto").strip().lower()
     fitmode = _val("fit_dd")
-    res = _res_value()
+    res, scale = _res_value()
     if fps in ("", "keep", "auto"):
         fps = "auto"
     if fmt == "none":
@@ -380,6 +381,7 @@ def _run_next():
         fps=fps,
         pixel_format=fmt,
         resolution=res,
+        scale=scale,
         fit=fitmode,
     )
     if ok:

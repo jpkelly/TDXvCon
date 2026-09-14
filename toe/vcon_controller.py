@@ -257,7 +257,7 @@ class VconExt:
     def Transcode(self, input_path, output_path, codec="notchlc",
                   subtype=None, quality=None, fps="auto",
                   pixel_format=None, container=None,
-                  resolution="auto", fit=None):
+                  resolution="auto", fit=None, scale=None):
         """Encode one file. The embedder/panel-facing entry point.
 
         Promoted (capitalised) so it reads as a method of the component::
@@ -267,6 +267,8 @@ class VconExt:
         All codec arguments are TD MENU TOKENS (the values the registry
         resolves; e.g. subtype 'prores422hq', not '422hq'). The panel
         resolves aliases against its embedded codec table before calling.
+        ``scale`` (0.25/0.5/1/2/3) defers resolution math to the controller,
+        which computes WxH from the movie's real dimensions after load.
 
         Returns True if the job was accepted, False if the component is busy.
         Completion is asynchronous — poll `Isbusy` / watch the Status
@@ -285,7 +287,9 @@ class VconExt:
             params["moviepixelformat"] = pixel_format
         if container:
             params["moviecontainer"] = container
-        if resolution and resolution != "auto":
+        if scale is not None:
+            params["scale"] = scale
+        elif resolution and resolution != "auto":
             params["resolution"] = resolution
             params["fit"] = fit or "fitbest"
         self.onReceive(json.dumps({
@@ -501,8 +505,30 @@ class VconExt:
             )
             return
 
-        self._apply_resolution(self.job["params"].get("resolution"),
-                              self.job["params"].get("fit"))
+        # Resolution: params may carry either an explicit "resolution"
+        # (WxH, from the CLI's -s flag) or a "scale" factor (panel: quarter/
+        # half/1x/2x/3x) which needs the movie's ACTUAL dimensions — known
+        # only now, after the load settles. Scale wins if both arrive.
+        params = self.job["params"]
+        resolution = params.get("resolution")
+        scale = params.get("scale")
+        if scale is not None:
+            try:
+                mw = int(moviein.width)
+                mh = int(moviein.height)
+            except Exception:
+                mw = mh = 0
+            try:
+                factor = float(scale)
+            except (TypeError, ValueError):
+                factor = 0.0
+            if mw > 0 and mh > 0 and factor > 0:
+                # Even dimensions: most movie codecs require even W/H.
+                resolution = (f"{max(2, int(mw * factor) // 2 * 2)}x"
+                              f"{max(2, int(mh * factor) // 2 * 2)}")
+            else:
+                resolution = None   # unknowable now — fall back to unscaled
+        self._apply_resolution(resolution, params.get("fit"))
 
         movieout = self.movieout
         movieout.par.file = self.job["output"]

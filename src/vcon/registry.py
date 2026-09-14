@@ -135,6 +135,7 @@ class CodecSpec:
         alpha: bool | None = None,
         resolution: str = "auto",
         fit: str = "fitbest",
+        scale: float | None = None,
     ) -> dict[str, Any]:
         """Build the Movie File Out TOP parameter payload for one job.
 
@@ -182,10 +183,23 @@ class CodecSpec:
         elif alpha is False and fmts:
             params["moviepixelformat"] = fmts[0]
         params["fps"] = fps or "auto"
-        # Custom resolution: applied by the toe via a Fit TOP. "auto" sends
-        # nothing — the toe bypasses the fit TOP entirely (moviein wired
-        # straight to movieout), so existing jobs change zero behavior.
-        if resolution and resolution != "auto":
+        # Resolution: two mutually-exclusive paths.
+        # - resolution WxH (CLI -s): explicit, applied by the toe via the
+        #   Fit TOP; "auto" sends nothing so the fit TOP stays bypassed.
+        # - scale factor (panel: 0.25/0.5/1/2/3): the source dimensions are
+        #   unknown until the movie is LOADED in TouchDesigner, so the factor
+        #   travels and the CONTROLLER computes the final WxH from the real
+        #   movie (even-dimension clamped) in _input_ready().
+        if scale is not None:
+            try:
+                f = float(scale)
+            except (TypeError, ValueError):
+                f = 0.0
+            if f > 0:
+                params["scale"] = f
+                from vcon.models import normalize_fit
+                params["fit"] = normalize_fit(fit or "fitbest")
+        elif resolution and resolution != "auto":
             params["resolution"] = resolution
             # Normalize aliases to TD's live Fit TOP menu tokens
             # (fill|fithorz|fitvert|fitbest|fitoutside).

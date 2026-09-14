@@ -47,9 +47,8 @@ _WIDGETS = {
     "quality_dd":   ("dropDownMenu",      290, 456, 260, 30),
     "fps_f":        ("fieldString",        10, 406, 160, 30),
     "resmode_dd":   ("dropDownMenu",      180, 406, 130, 30),
-    "res_w":        ("fieldString",       320, 406, 75, 30),
-    "res_h":        ("fieldString",       405, 406, 75, 30),
-    "fit_dd":       ("dropDownMenu",      490, 406, 60, 30),
+    "scale_dd":     ("dropDownMenu",      320, 406, 130, 30),
+    "fit_dd":       ("dropDownMenu",      460, 406, 90, 30),
     "start_b":      ("buttonMomentary",    10, 346, 120, 36),
     "pause_b":      ("buttonMomentary",   140, 346, 120, 36),
     "stop_b":       ("buttonMomentary",   270, 346, 120, 36),
@@ -69,8 +68,7 @@ _TITLES = {
     "quality_dd": "QUALITY",
     "fps_f": "FPS",
     "resmode_dd": "RES",
-    "res_w": "W",
-    "res_h": "H",
+    "scale_dd": "SCALE",
     "fit_dd": "FIT",
     "output_l": "OUTPUT",
     "status_l": "STATUS",
@@ -208,10 +206,8 @@ def build():
 
     # ---- defaults ----------------------------------------------------------
     say("configuring widgets (external pars only)")
-    for name, val in [("fps_f", "auto"), ("res_w", "1920"),
-                      ("res_h", "1080")]:
-        if name in widgets:
-            setp(widgets[name], "Value0", val)
+    if "fps_f" in widgets:
+        setp(widgets["fps_f"], "Value0", "auto")
     # output label: read-only-ish — the preview callback writes its text
     if "output_l" in widgets:
         setp(widgets["output_l"], "Label", "(pick a source)")
@@ -239,19 +235,27 @@ def build():
                  ["Fit Best", "Stretch", "Fit Width", "Fit Height",
                   "Cover/Crop"],
                  "fitbest")
-    # RESOLUTION switch: Keep (source size) or Custom (reveals W/H fields,
-    # hidden by default — visibility toggled by _update_res_fields()).
+    # RESOLUTION: Unscaled (source size preserved — fit TOP bypassed) or
+    # Scaled, which reveals the SCALE dropdown (quarter..3x). The factor is
+    # applied by the CONTROLLER against the movie's real dimensions after
+    # load (the panel can't know WxH pre-load); even-dimension clamped.
     if "resmode_dd" in widgets:
-        set_menu(widgets["resmode_dd"], ["keep", "custom"],
-                 ["Keep", "Custom"], "keep")
-    for name in ("res_w", "res_h"):
-        if name in widgets:
-            outer = panelcomp.op(name)
-            if outer is not None:
-                try:
-                    outer.par.display = 0
-                except Exception as exc:
-                    say(f"  (display {name}: {exc})")
+        set_menu(widgets["resmode_dd"], ["unscaled", "scaled"],
+                 ["Unscaled", "Scaled"], "unscaled")
+    if "scale_dd" in widgets:
+        set_menu(widgets["scale_dd"],
+                 ["0.25", "0.5", "1", "2", "3"],
+                 ["Quarter (1/4x)", "Half (1/2x)", "Full (1x)",
+                  "Two times (2x)", "Three times (3x)"],
+                 "1")
+    # SCALE dropdown hidden while Unscaled — _update_res_fields toggles it.
+    if "scale_dd" in widgets:
+        outer = panelcomp.op("scale_dd")
+        if outer is not None:
+            try:
+                outer.par.display = 0
+            except Exception as exc:
+                say(f"  (display scale_dd: {exc})")
 
     # ---- buttons -----------------------------------------------------------
     say("wiring buttons")
@@ -294,11 +298,11 @@ def build():
         setp(widgets["subtype_dd"], "Onvaluechangescript0",
              "op.vcon.op('panel_callbacks').module.UpdateSubtypes()")
         say("  subtype_dd: format filter wired")
-    # RESOLUTION switch toggles W/H field visibility
+    # RESOLUTION switch toggles the SCALE dropdown's visibility
     if "resmode_dd" in widgets:
         setp(widgets["resmode_dd"], "Onvaluechangescript0",
              "op.vcon.op('panel_callbacks').module._update_res_fields()")
-        say("  resmode_dd: field visibility wired")
+        say("  resmode_dd: scale visibility wired")
     if "destination" in widgets:
         setp(widgets["destination"], "Valueparexec",
              "op.vcon.op('panel_callbacks').module.NormalizeDestination()")

@@ -90,6 +90,7 @@ class QueueManager:
             alpha=spec.alpha,
             resolution=spec.resolution,
             fit=spec.fit,
+            scale=spec.extra.get("scale"),
         )
         job = Job(spec=spec, id=job_id)
         self._jobs[job_id] = job
