@@ -281,16 +281,25 @@ def build():
     if "prog_track" in widgets and "prog_fill" in widgets:
         track = widgets["prog_track"]
         fill = widgets["prog_fill"]
-        # track: gray background strip
+        # track: gray background strip. LIVE-GOTCHA: bgcolor as an
+        # attribute raised tdAttributeError on this build (same as the
+        # panel COMP early on) — the Look pars are bgcolorr/g/b/a, and
+        # bgalpha must be >0 for the color to show.
         try:
-            track.par.bgcolor = (0.5, 0.5, 0.5)
+            track.par.bgcolorr = 0.5
+            track.par.bgcolorg = 0.5
+            track.par.bgcolorb = 0.5
+            track.par.bgcolora = 1.0
             track.par.bgalpha = 1.0
             track.par.alignallow = "none"      # keep absolute placement
         except Exception as exc:
             say(f"  (track look: {exc})")
         # fill: green progress, width EXPRESSION maps Progress 0..1 to 0..620
         try:
-            fill.par.bgcolor = (0.2, 0.8, 0.2)
+            fill.par.bgcolorr = 0.2
+            fill.par.bgcolorg = 0.8
+            fill.par.bgcolorb = 0.2
+            fill.par.bgcolora = 1.0
             fill.par.bgalpha = 1.0
             fill.par.alignallow = "none"
             fill.par.w.expr = "op.vcon.par.Progress * 620"
