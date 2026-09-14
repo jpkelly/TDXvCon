@@ -748,18 +748,66 @@ def onFrame():
 # ---------------------------------------------------------------------
 
 def onDragDrop(info):
-    """Drop Script entry: file/folder dropped onto the panel."""
+    """Drop Script entry: files/folders dropped anywhere on the panel.
+
+    DESIRED WORKFLOW (JP): drops enqueue DIRECTLY into the batch queue —
+    a file adds one row; a folder adds every movie under it (recursive,
+    same scan as folder-in-SOURCE + START). Also mirrors the drop into
+    the SOURCE widget so the OUTPUT preview derives. The tick then feeds
+    rows to the encoder one at a time; no START needed unless queued
+    items should re-run.
+    """
     items = info.get("dropItems") if isinstance(info, dict) else None
     if not items:
-        items = info["dropItems"] if hasattr(info, "__getitem__") else None
+        try:
+            items = info["dropItems"]
+        except Exception:
+            return
     if not items:
         return
-    first = items[0]
-    path = first if isinstance(first, str) else first.get("path", str(first))
-    w = widget("source")
-    if w is not None and path:
-        w.par.Value0.val = path
-        note("source set from drop")
+
+    paths = []
+    for it in items:
+        p = it if isinstance(it, str) else it.get("path", str(it))
+        if p:
+            paths.append(p)
+    if not paths:
+        return
+
+    added = 0
+    for path in paths:
+        if os.path.isdir(path):
+            for inp, rel in _scan_movies(path):
+                out = _unique_output(_derive_output(
+                    inp, _dst_dir(), _val("codec_dd") or "notchlc",
+                    _val("subtype_dd")))
+                _queue.append({"input": inp, "output": out,
+                               "status": "queued", "rel": rel})
+                added += 1
+        elif os.path.isfile(path):
+            out = _unique_output(_derive_output(
+                path, _dst_dir(), _val("codec_dd") or "notchlc",
+                _val("subtype_dd")))
+            _queue.append({"input": path, "output": out,
+                           "status": "queued",
+                           "rel": os.path.basename(path)})
+            added += 1
+            # mirror the first file into SOURCE for the OUTPUT preview
+            w = widget("source")
+            if w is not None and added == 1:
+                w.par.Value0.val = path
+
+    if added:
+        _refresh_queue()
+        note(f"dropped {added} file(s) into the queue")
+    else:
+        note("no movie files in the drop")
+
+
+def _dst_dir():
+    """The destination folder (or None) from the DESTINATION widget."""
+    dst = _val("destination")
+    return os.path.dirname(dst) if dst else None
 
 
 def NormalizeDestination():

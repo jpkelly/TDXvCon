@@ -602,6 +602,22 @@ def build():
         except Exception:
             pass
 
+    # ---- panel drop script: drag files/folders straight into the queue ----
+    # This was NEVER wired (onDragDrop existed in the callbacks but nothing
+    # pointed the panel's dropscript par at it — drops did nothing). The
+    # panel-level Drop Script handles every drop that lands anywhere on
+    # the panel, including over the lister.
+    say("wiring panel drop script (files/folders -> queue)")
+    try:
+        panelcomp.par.dropscript.val = (
+            "op('panel_callbacks').module.onDragDrop(args[0])"
+        )
+        # built-in drop options off — our script is the only handler
+        panelcomp.par.builtindrop = "off"
+        say("  panel dropscript -> onDragDrop")
+    except Exception as exc:
+        say(f"  (dropscript: {exc})")
+
     # ---- panel Execute DAT: batch tick --------------------------------------
     # VERIFIED pattern from build_network.py's controller tick: the Execute
     # DAT requires the COMPLETE function set (onFrameStart, onFrameEnd,
