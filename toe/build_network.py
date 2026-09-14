@@ -295,6 +295,10 @@ def build():
              "fit.fit")
     menu_set(fit.par.outputresolution, ["customresolution", "custom"],
              "fit.outputresolution")
+    # moviein feeds BOTH movieout (direct) and fit: one output may drive
+    # many destinations. The controller switches movieout's input between
+    # moviein (auto jobs — fit stays dormant) and fit (custom -s jobs).
+    connect_ops(moviein, fit, label="moviein -> fit")
     # Wire moviein -> fit; the controller connects fit -> movieout when a
     # custom resolution job arrives, and rewires moviein -> movieout for
     # "auto" jobs (bypassing fit).

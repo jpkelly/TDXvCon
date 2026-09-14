@@ -724,7 +724,9 @@ class VconExt:
         # a 2-tuple: '1920 1080' via a tuple assignment).
         f.par.outputresolution = "customresolution"
         f.par.resolution = (w, h)
-        # Wire moviein → fit → movieout (connect the data path through).
+        # Wire the data path: moviein -> fit -> movieout. moviein -> fit is
+        # wired permanently by the builder (one output may feed many
+        # destinations); only movieout's input source changes here.
         try:
             movieout.inputConnect(f, 0)
         except Exception as exc:
