@@ -293,37 +293,54 @@ def build():
     say(f"loaded {len(widgets)}/{len(_WIDGETS)} widgets (flat at panel root)")
 
     # ---- progress bar: track + fill, painted with Constant TOPs ----
-    # A bare containerCOMP has NO Look page (no bgcolorr/g/b — those
-    # raised/were skipped every round). Panels paint via a Background
-    # TOP (Look page 'top' on palette widgets; on bare Containers we
-    # point par.top at a Constant TOP we create inside).
+    # A bare containerCOMP has NO Look page — panels paint via a
+    # Background TOP (Look page 'top' on widget COMPs). PROVEN pattern
+    # from build_network's set_op_par: OP-type pars accept the object OR
+    # the path string, depending on build — try both. Every write in its
+    # OWN try so one miss can't skip the rest (the old block lost the
+    # width expression when par.top raised — probe 7 found both dead).
+    def _link_op(holder, par_name, target):
+        for value in (target, target.path):
+            try:
+                setattr(holder.par, par_name, value)
+                return True
+            except Exception:
+                continue
+        say(f"  !! {holder.name}.{par_name}: neither object nor path "
+            f"accepted")
+        return False
+
     if "prog_track" in widgets and "prog_fill" in widgets:
         track = widgets["prog_track"]
         fill = widgets["prog_fill"]
+        # track: gray paint
         try:
             ttop = track.create(find_type("constantTOP"), "paint")
             ttop.par.colorr = 0.5
             ttop.par.colorg = 0.5
             ttop.par.colorb = 0.5
             ttop.par.alpha = 1.0
-            ttop.par.resolution = (620, 16)
-            track.par.top = ttop
-            say("  track painted gray via Constant TOP")
+            if _link_op(track, "top", ttop):
+                say("  track painted gray (Background TOP linked)")
         except Exception as exc:
             say(f"  (track paint: {exc})")
+        # fill: green paint + width expression — separate try blocks
         try:
             ftop = fill.create(find_type("constantTOP"), "paint")
             ftop.par.colorr = 0.2
             ftop.par.colorg = 0.8
             ftop.par.colorb = 0.2
             ftop.par.alpha = 1.0
-            ftop.par.resolution = (620, 16)
-            fill.par.top = ftop
-            # width EXPRESSION drives the fill: Progress 0..1 -> 0..620
-            fill.par.w.expr = "op.vcon.par.Progress * 620"
-            say("  progress bar: gray track + green fill (Constant TOPs), width <- Progress par")
+            if _link_op(fill, "top", ftop):
+                say("  fill painted green (Background TOP linked)")
         except Exception as exc:
             say(f"  (fill paint: {exc})")
+        try:
+            # width EXPRESSION drives the fill: Progress 0..1 -> 0..620
+            fill.par.w.expr = "op.vcon.par.Progress * 620"
+            say("  progress bar: fill width <- Progress par expression")
+        except Exception as exc:
+            say(f"  (fill width expr: {exc})")
 
     mod = cb.module
 
