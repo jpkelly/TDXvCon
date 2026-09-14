@@ -37,7 +37,7 @@ import time
 #: Controller build identifier. Written into the toe's custom "Version"
 #: parameter at build time so a stale toe is identifiable in the UI.
 #: Keep in step with vcon.__version__ (tests assert this).
-CONTROLLER_VERSION = "0.1.0"
+CONTROLLER_VERSION = "0.1.1"
 
 PROTOCOL_VERSION = 1
 #: Default TCP port. Overridable per-instance via the COMP's Tcpport custom
@@ -672,6 +672,12 @@ class VconExt:
         self._set_status(f"error: {message}")
         self._send({"type": "error", "id": (self.job or {}).get("id", "?"),
                     "message": message, "code": code})
+        # Reset the Progress par so a failed job doesn't leave it stuck
+        # mid-way. (Success path resets it in _finish.)
+        try:
+            self.ownerComp.par.Progress.val = 0.0
+        except Exception:
+            pass
         self.job = None
         self.state = "idle"
 
