@@ -363,7 +363,10 @@ def _update_res_fields():
                    (fit configured with the chosen mode; a later job only
                    sets the exact WxH once the movie's size is known)
       - UNSCALED-> controller rewires moviein -> movieout NOW
-    Plus: the SCALE dropdown shows/hides with the toggle.
+    Plus: the SCALE dropdown shows/hides with the toggle. The SCALE/FIT/
+    W-H choices also push LIVE into the fit TOP (OnFitChanged below —
+    the panel IS the parameter editor), and the visibility state
+    re-derives from the actual widget values.
     """
     mode = _val("scaled_t")
     # buttonToggle's Value0 is a BOOLEAN (0/1), not a string — comparing
@@ -403,31 +406,71 @@ def _update_res_fields():
                 outer.par.x = 440 if custom else 1200
             except Exception as exc:
                 note(f"display toggle failed ({name}): {exc}")
+    # 3) LIVE push: the current SCALE/FIT/W-H choice into the fit TOP
+    #    (the panel IS the parameter editor — the network updates at
+    #    the SWITCH, not just at job time).
+    if scaled:
+        try:
+            OnFitChanged()
+        except Exception as exc:
+            note(f"live fit push failed: {exc}")
+
+
+def OnFitChanged():
+    """SCALE / FIT / W-H widget hook → fit TOP, LIVE.
+
+    Called by Onvaluechangescript0 on scale_dd / fit_dd / resw_f /
+    resh_f (wired by the builder). Pushes the current choice through
+    Setfitparams so the fit TOP's Output Resolution / Fit / custom
+    WxH pars move immediately — JP: the panel IS the parameter editor.
+    """
+    scaled = bool(_val("scaled_t"))
+    scaled = scaled and not ext().is_busy
+    if not scaled:
+        return          # fit TOP bypassed (or mid-encode) — nothing to push
+    choice = str(_val("scale_dd") or "").strip()
+    fitmode = str(_val("fit_dd") or "").strip() or None
+    w = str(_val("resw_f") or "").strip()
+    h = str(_val("resh_f") or "").strip()
+    if choice == "custom":
+        if w.isdigit() and h.isdigit() and int(w) > 0 and int(h) > 0:
+            ext().Setfitparams(scale=choice, fit=fitmode, w=w, h=h)
+        else:
+            note("custom resolution needs valid W and H in the fields")
+    elif choice:
+        ext().Setfitparams(scale=choice, fit=fitmode)
 
 
 def _res_value():
     """Resolution args for Transcode(): (resolution, scale).
 
-    SCALING off -> ('auto', None). ON: factor scales send the chosen
-    multiplier (the controller computes WxH from the movie's real
-    dimensions); 'custom' sends an ABSOLUTE WxH from the W/H fields
-    (the controller applies it directly).
+    SCALING off -> ('auto', None). ON: the SCALE dropdown holds a fit
+    TOP Output Resolution token (the panel menu MIRRORS that menu —
+    eighth/quarter/half/twotimes/fourtimes/eighttimes) which the fit
+    TOP applies natively; 'custom' sends an ABSOLUTE WxH from the W/H
+    fields (the controller applies it directly).
     """
     mode = _val("scaled_t")
     if not bool(mode):
         return "auto", None
-    choice = str(_val("scale_dd") or "0.5").strip()
+    choice = str(_val("scale_dd") or "").strip()
+    if not choice:
+        # EMPTY SCALE with scaling on: no token to send — auto, not a
+        # guessed default (a garbage token would fail the job loudly)
+        note("no SCALE chosen — falling back unscaled")
+        return "auto", None
     if choice == "custom":
-        w = str(_val("resw_f") or "").strip()
-        h = str(_val("resh_f") or "").strip()
-        if w.isdigit() and h.isdigit() and int(w) > 0 and int(h) > 0:
-            return f"{int(w)}x{int(h)}", None
+        W = str(_val("resw_f") or "").strip()
+        H = str(_val("resh_f") or "").strip()
+        if W.isdigit() and H.isdigit() and int(W) > 0 and int(H) > 0:
+            return f"{int(W)}x{int(H)}", None
         note("custom resolution needs valid W and H — falling back unscaled")
         return "auto", None
-    try:
-        return "auto", float(choice)
-    except (TypeError, ValueError):
-        return "auto", None
+    # A fit TOP Output Resolution token (eighth/quarter/half/twotimes/
+    # fourtimes/eighttimes) — the controller menu-verifies it against
+    # the live fit TOP menu and fails LOUDLY on drift, never silent
+    # index-0 fallback.
+    return "auto", choice
 
 
 def setp_par(inner, par_name, value):

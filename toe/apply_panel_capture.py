@@ -37,6 +37,17 @@ PANEL_PATH = '/project1/vcon/panel'
 #: widget metadata pars — not bakeable state, silently skipped
 _META_SKIP = {'Version', 'Toxsavebuild', 'Help'}
 
+#: BUILDER-OWNED pars — the bake never applies these from a capture.
+#: Menus are GENERATED (codec registry, live fit-TOP mirror); script
+#: pars are WIRED by the builder. A stale capture re-applying them
+#: would un-wire future features — exactly the regression this rule
+#: prevents (the first capture held the old SCALE factor menu + old
+#: hook strings, which would have reverted the fit-TOP wiring).
+#: The capture owns LOOK + LAYOUT + STATE (Value0 selections);
+#: the builder owns WIRING + MENUS.
+_BUILDER_OWNED = {'Menunames', 'Menulabels', 'Onvaluechangescript0',
+                  'Offtoonscript0', 'Ontooffscript0', 'Valueparexec'}
+
 try:
     with open(DUMP, encoding='utf-8') as f:
         _src = f.read()
@@ -134,6 +145,8 @@ def _apply_entry(name, entry):
     for pname, value in (entry.get('pars') or {}).items():
         if pname in _META_SKIP:
             continue          # widget metadata — not bakeable state
+        if pname in _BUILDER_OWNED:
+            continue          # builder-owned wiring/menus — never from capture
         try:
             par = w.par[pname]
         except Exception:

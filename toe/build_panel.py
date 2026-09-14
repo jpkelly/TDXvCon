@@ -562,14 +562,34 @@ def build():
         setp(widgets["scaled_t"], "Buttononlabel", "ON")
         setp(widgets["scaled_t"], "Value0", 0)
     if "scale_dd" in widgets:
-        # JP: Full (1x) removed — redundant with SCALING off. Custom
-        # reveals the W/H fields for an absolute output resolution.
-        set_menu(widgets["scale_dd"],
-                 ["0.5", "0.333", "0.25", "2", "3", "4", "custom"],
-                 ["Half (1/2x)", "Third (1/3x)", "Quarter (1/4x)",
-                  "Two times (2x)", "Three times (3x)", "Four times (4x)",
-                  "Custom"],
-                 "0.5")
+        # JP: the SCALE menu MIRRORS the fit TOP's Output Resolution menu
+        # (eighth/quarter/half/two times/four times/eight times). Tokens
+        # and labels come from the LIVE fit TOP — never hardcoded (the
+        # verified-tokens rule). 'custom' is ours (the W/H fields) and
+        # maps to the fit TOP's Custom Resolution via Setfitparams.
+        names, labels = [], []
+        fitop = vcon.op("fit")
+        if fitop is None:
+            say("  !! no fit TOP in vcon — SCALE menu needs build_network "
+                "first")
+        else:
+            try:
+                names = [str(n) for n in
+                         fitop.par.outputresolution.menuNames]
+                labels = [str(l) for l in
+                         fitop.par.outputresolution.menuLabels]
+            except Exception as exc:
+                say(f"  (fit TOP menu read: {exc})")
+        # drop the fit TOP's own Custom Resolution entry (our 'custom'
+        # W/H path covers it) and anything empty
+        keep = [(n, l) for n, l in zip(names, labels) if n
+                and n != "customresolution"]
+        say(f"  fit TOP outputresolution menu mirrored: "
+            f"{[n for n, _ in keep] or '(EMPTY — check fit TOP)'}")
+        menu_names = [n for n, _ in keep] + ["custom"]
+        menu_labels = [l for _, l in keep] + ["Custom"]
+        set_menu(widgets["scale_dd"], menu_names, menu_labels,
+                menu_names[0] if menu_names else "custom")
     # W/H fields: defaults + hidden (only CUSTOM reveals them)
     for name, val in (("resw_f", "1920"), ("resh_f", "1080")):
         if name in widgets:
@@ -654,11 +674,24 @@ def build():
         setp(widgets["scaled_t"], "Onvaluechangescript0",
              "op.vcon.op('panel_callbacks').module._update_res_fields()")
         say("  scaled_t: live fit rewire wired")
-    # SCALE menu choice drives W/H visibility too (Custom reveals them)
+    # SCALE menu choice drives W/H visibility (Custom reveals them)
+    # AND pushes the token into the fit TOP's Output Resolution LIVE
     if "scale_dd" in widgets:
         setp(widgets["scale_dd"], "Onvaluechangescript0",
-             "op.vcon.op('panel_callbacks').module._update_res_fields()")
-        say("  scale_dd: custom W/H visibility wired")
+             "op.vcon.op('panel_callbacks').module._update_res_fields(); "
+             "op.vcon.op('panel_callbacks').module.OnFitChanged()")
+        say("  scale_dd: visibility + live fit push wired")
+    # FIT dropdown -> fit TOP's Fit parameter, LIVE
+    if "fit_dd" in widgets:
+        setp(widgets["fit_dd"], "Onvaluechangescript0",
+             "op.vcon.op('panel_callbacks').module.OnFitChanged()")
+        say("  fit_dd: live fit push wired")
+    # W/H fields -> fit TOP Custom Resolution, LIVE (custom scale only)
+    for _wname in ("resw_f", "resh_f"):
+        if _wname in widgets:
+            setp(widgets[_wname], "Onvaluechangescript0",
+                 "op.vcon.op('panel_callbacks').module.OnFitChanged()")
+            say(f"  {_wname}: live fit push wired")
     if "destination" in widgets:
         setp(widgets["destination"], "Valueparexec",
              "op.vcon.op('panel_callbacks').module.NormalizeDestination()")

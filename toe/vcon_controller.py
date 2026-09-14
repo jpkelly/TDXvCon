@@ -267,8 +267,12 @@ class VconExt:
         All codec arguments are TD MENU TOKENS (the values the registry
         resolves; e.g. subtype 'prores422hq', not '422hq'). The panel
         resolves aliases against its embedded codec table before calling.
-        ``scale`` (0.25/0.5/1/2/3) defers resolution math to the controller,
-        which computes WxH from the movie's real dimensions after load.
+        ``scale`` is either a fit TOP Output Resolution token (eighth/
+        quarter/half/twotimes/fourtimes/eighttimes — the panel SCALE menu
+        mirrors that menu; the fit TOP applies it natively, no source
+        dimensions needed) or a legacy float factor, for which the
+        controller computes WxH from the movie's real dimensions after
+        load.
 
         Returns True if the job was accepted, False if the component is busy.
         Completion is asynchronous — poll `Isbusy` / watch the Status
@@ -289,6 +293,10 @@ class VconExt:
             params["moviecontainer"] = container
         if scale is not None:
             params["scale"] = scale
+            # The fit mode travels with the token too — _apply_fitres
+            # re-asserts it per-job, so the panel stays authoritative
+            # even if the live par was left elsewhere.
+            params["fit"] = fit or "fitbest"
         elif resolution and resolution != "auto":
             params["resolution"] = resolution
             params["fit"] = fit or "fitbest"
@@ -335,6 +343,57 @@ class VconExt:
             return True
         except Exception as exc:
             debug(f"vCon: Setfitpath failed: {exc}")
+            return False
+
+    def Setfitparams(self, scale=None, fit=None, w=None, h=None):
+        """Promoted panel hook: SCALE / FIT / W-H widgets drive the fit
+        TOP LIVE (JP: the panel IS the parameter editor — a dropdown
+        change must show in the network immediately, like Setquality).
+
+        - ``scale``: a fit TOP Output Resolution token (the panel SCALE
+          menu mirrors that menu) or the sentinel 'custom' (WxH)
+        - ``fit``: a fit TOP Fit menu token (fill|fithorz|fitvert|
+          fitbest|fitoutside — the panel FIT dropdown holds exactly these)
+        - ``w``/``h``: with scale='custom', the absolute output resolution
+
+        Idle-guarded: an encode in flight keeps its settings; per-job
+        _apply_fitres/_apply_resolution re-assert at every START, so
+        the panel stays authoritative between jobs.
+        """
+        if self.state != "idle":
+            debug("vCon: Setfitparams skipped — encoder busy")
+            return False
+        f = self.fit
+        if f is None:
+            debug("vCon: Setfitparams skipped — no fit TOP (rebuild toe)")
+            return False
+        try:
+            if scale is not None and str(scale) != "":
+                token = str(scale)
+                if token == "custom":
+                    if w and h:
+                        self._set_fit_menu(f.par.outputresolution,
+                                           "custom", "customresolution")
+                        try:
+                            f.par.resolution = (int(w), int(h))
+                        except Exception:
+                            f.par.resx = int(w)
+                            f.par.resy = int(h)
+                        debug(f"vCon: fit custom {int(w)}x{int(h)}")
+                else:
+                    self._set_fit_menu(f.par.outputresolution, token)
+                    debug(f"vCon: fit outputresolution <- {token}")
+            if fit:
+                mode = str(fit).lower()
+                menu = list(getattr(f.par.fit, "menuNames", None) or [])
+                if menu and mode not in menu:
+                    raise ValueError(
+                        f"fit mode {mode!r} not in Fit TOP menu {menu}")
+                f.par.fit = mode
+                debug(f"vCon: fit mode <- {mode}")
+            return True
+        except Exception as exc:
+            debug(f"vCon: Setfitparams failed: {exc}")
             return False
 
     def Setquality(self, value):
@@ -587,14 +646,28 @@ class VconExt:
             )
             return
 
-        # Resolution: params may carry either an explicit "resolution"
-        # (WxH, from the CLI's -s flag) or a "scale" factor (panel: quarter/
-        # half/1x/2x/3x) which needs the movie's ACTUAL dimensions — known
-        # only now, after the load settles. Scale wins if both arrive.
+        # Resolution: params may carry an explicit "resolution" (WxH, from
+        # the CLI's -s flag), a "scale" FLOAT factor (legacy panel path —
+        # needs the movie's ACTUAL dimensions, known only now after the
+        # load settles), or a "scale" STRING token (the panel SCALE menu
+        # mirrors the fit TOP's Output Resolution menu: eighth/quarter/
+        # half/twotimes/fourtimes/eighttimes) which the fit TOP applies
+        # NATIVELY relative to its input — no dimension math at all.
+        # Scale wins if several arrive.
         params = self.job["params"]
         resolution = params.get("resolution")
         scale = params.get("scale")
-        if scale is not None:
+        consumed = False
+        if isinstance(scale, str) and scale not in ("", "auto"):
+            # Native fit TOP token: _apply_fitres menu-verifies it and
+            # fails LOUDLY on drift (never index-0 silent fallback).
+            try:
+                self._apply_fitres(scale, params.get("fit"))
+            except Exception as exc:
+                self._fail(f"fit resolution rejected: {exc}", "fit-error")
+                return
+            consumed = True
+        elif scale is not None:
             # NATIVE movie dimensions: fileWidth/fileHeight (MoviefileinTOP
             # class, docs). .width/.height are the TOP's output TEXTURE size
             # — wrong source for scale math.
@@ -621,7 +694,12 @@ class VconExt:
                     "scale-error",
                 )
                 return
-        self._apply_resolution(resolution, params.get("fit"))
+        if not consumed:
+            try:
+                self._apply_resolution(resolution, params.get("fit"))
+            except Exception as exc:
+                self._fail(f"resolution rejected: {exc}", "fit-error")
+                return
 
         movieout = self.movieout
         movieout.par.file = self.job["output"]
@@ -850,6 +928,54 @@ class VconExt:
     #: Kept as a module constant so a future panel can list the modes.
     FIT_MODES = ("fill", "fithorz", "fitvert", "fitbest", "fitoutside")
 
+    def _set_fit_menu(self, par, token, *aliases):
+        """Menu-verified write for a fit TOP menu par.
+
+        TD silently falls back to menu index 0 on an unknown token —
+        the wrong-output failure mode this project exists to prevent.
+        Only a token the LIVE menu holds is written; aliases cover
+        build-to-build token drift ('custom' vs 'customresolution').
+        Returns the token actually written.
+        """
+        try:
+            menu = list(getattr(par, "menuNames", None) or [])
+        except Exception:
+            menu = []
+        for cand in (token,) + aliases:
+            if not menu or cand in menu:
+                par.val = cand
+                return cand
+        raise ValueError(f"{token!r} not in live fit TOP menu {menu}")
+
+    def _apply_fitres(self, token, fit_mode=None):
+        """Configure the fit TOP with a NATIVE Output Resolution token.
+
+        The panel's SCALE dropdown mirrors the fit TOP's Output
+        Resolution menu (eighth/quarter/half/twotimes/fourtimes/
+        eighttimes) — the fit TOP scales relative to its input itself,
+        so no source-dimension math happens here. Menu-verified writes
+        only: an unknown token raises instead of silently falling back
+        to menu index 0.
+        """
+        f = self.fit
+        if f is None:
+            raise ValueError(
+                "this toe has no fit TOP; rebuild the toe "
+                "(exec build_network.py in the textport)"
+            )
+        self._set_fit_menu(f.par.outputresolution, str(token))
+        if fit_mode:
+            mode = str(fit_mode).lower()
+            menu = list(getattr(f.par.fit, "menuNames", None) or [])
+            if menu and mode not in menu:
+                raise ValueError(
+                    f"fit mode {mode!r} not in Fit TOP menu {menu}"
+                )
+            f.par.fit = mode
+        # Switch the data path: moviein -> fit -> movieout
+        self._switch_mvo_input(f)
+        self._set_status(f"encoding at fit resolution {token}")
+
     def _apply_resolution(self, resolution, fit_mode):
         """Configure the Fit TOP for a custom resolution (or bypass it).
 
@@ -898,7 +1024,10 @@ class VconExt:
         # tdAttributeError, killing scaled jobs at load). resx/resy are
         # the Common-page fields; try 'resolution' first (tuple form) and
         # fall back to resx/resy — whichever this build exposes.
-        f.par.outputresolution = "custom"
+        # custom token drifts between TD builds ('custom' vs
+        # 'customresolution') — menu-verified write with alias
+        self._set_fit_menu(f.par.outputresolution, "custom",
+                           "customresolution")
         try:
             f.par.resolution = (w, h)
         except Exception:
