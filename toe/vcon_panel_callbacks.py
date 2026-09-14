@@ -194,10 +194,14 @@ def _is_movie(path):
 # ---------------------------------------------------------------------
 
 def PreviewOutput():
-    """Update the read-only OUTPUT label from current widget state.
+    """Update the read-only OUTPUT field from current widget state.
 
     Called on any relevant widget change. Shows the auto-named output the
     next START would create — including ' (2)' collision numbering.
+
+    LIVE-VERIFIED (probe 4): the label widget renders its WIDGETLABEL
+    (title) as the displayed text — writes to the 'Label' config par
+    never showed. Full path: destination folder + derived file name.
     """
     try:
         src = _val("source")
@@ -205,14 +209,9 @@ def PreviewOutput():
         if out_l is None:
             return
         if not src or not os.path.isfile(src):
-            lab = out_l.par.Label
-            if lab.mode != ParMode.CONSTANT:
-                lab.mode = ParMode.CONSTANT
-            lab.val = ""
+            out_l.par.Widgetlabel.val = "(pick a source)"
             return
         dst = _val("destination")
-        # destination holds a full output path after first preview — its
-        # folder is the real destination for derivation
         dst_dir = dst if dst and os.path.isdir(dst) else (
             os.path.dirname(dst) if dst else None)
         codec = _val("codec_dd") or "notchlc"
@@ -220,14 +219,9 @@ def PreviewOutput():
         if subtype == "none":
             subtype = None
         out = _unique_output(_derive_output(src, dst_dir, codec, subtype))
-        lab = out_l.par.Label
-        if lab.mode != ParMode.CONSTANT:
-            lab.mode = ParMode.CONSTANT   # expr mode evaluates text as a path
-        # Full path: folder (from DESTINATION) + derived file name —
-        # the read-only field shows exactly where the file will land.
-        lab.val = out
-    except Exception:
-        pass
+        out_l.par.Widgetlabel.val = out
+    except Exception as exc:
+        note(f"preview failed: {exc}")
 
 
 def UpdateSubtypes():

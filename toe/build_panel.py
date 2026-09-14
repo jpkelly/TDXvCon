@@ -294,13 +294,12 @@ def build():
     say("configuring widgets (external pars only)")
     if "fps_f" in widgets:
         setp(widgets["fps_f"], "Value0", "auto")
-    # output label: READ-ONLY field showing the full output path
-    # (destination folder + auto-derived file name) — JP: the file name
-    # must be visible before START, not crammed into the folder browser.
+    # output field: READ-ONLY display of the full output path
+    # (destination folder + auto-derived file name). Renders via
+    # Widgetlabel (probe 4) — PreviewOutput writes it live.
     if "output_l" in widgets:
-        setp(widgets["output_l"], "Label", "(pick a source)")
+        setp(widgets["output_l"], "Widgetlabel", "(pick a source)")
         try:
-            # wide enough for a full path; Labelwordwrap keeps it readable
             setp(widgets["output_l"], "Labelwordwrap", 1)
         except Exception:
             pass
@@ -386,8 +385,11 @@ def build():
             say(f"  (progress bind: {exc})")
     if "status_l" in widgets:
         try:
-            widgets["status_l"].par.Label.expr = "op.vcon.par.Status"
-            say("  status label bound to Status par")
+            # LIVE-VERIFIED (probe 4): label widgets render their
+            # WIDGETLABEL, not the 'Label' config par. An expression on
+            # Widgetlabel makes the displayed status track the par live.
+            widgets["status_l"].par.Widgetlabel.expr = "op.vcon.par.Status"
+            say("  status label bound to Status par (Widgetlabel expr)")
         except Exception as exc:
             say(f"  (status bind: {exc})")
 
