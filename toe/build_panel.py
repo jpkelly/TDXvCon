@@ -82,6 +82,7 @@ _WIDGETS = {
     "start_b":      ("buttonMomentary",    20, 375, 110, _ROW),
     "pause_b":      ("buttonMomentary",   140, 375, 110, _ROW),
     "stop_b":       ("buttonMomentary",   260, 375, 110, _ROW),
+    "add_b":        ("buttonMomentary",   380, 375, 110, _ROW),
     # OUTPUT: full-width read-only field BELOW the buttons (JP: the
     # derived filename is too long for a side slot — give it the row)
     "output_l":     ("label",              20, 330, 620, _ROW),
@@ -447,6 +448,18 @@ def build():
     for name, title in _LOCAL_TITLES.items():
         if name in widgets:
             setp(widgets[name], "Widgetlabel", title)
+    # ADD button: opens a native file dialog, appends to the queue
+    # (JP: no dialog existed to add files to the lister).
+    if "add_b" in widgets:
+        setp(widgets["add_b"], "Buttonofflabel", "+ ADD")
+        setp(widgets["add_b"], "Buttononlabel", "+ ADD")
+        setp(widgets["add_b"], "Labeldisplay", "off")
+        setp(widgets["add_b"], "Labelwidth", 1)
+        setp(widgets["add_b"], "Labeltop", 1)
+        setp(widgets["add_b"], "Offtoonscript0",
+             "op.vcon.op('panel_callbacks').module.AddFiles()")
+        say("  add_b: file dialog -> queue wired")
+
     # Buttons: face text only. THE TITLE LABELS ARE THE PROBLEM (JP, twice:
     # "Momentary Button" keeps coming back). Kill them at BOTH levels:
     # 1) the widget's own Labeldisplay 'off' (top-level par, token form)
@@ -647,15 +660,38 @@ def build():
     # onDropGetResults(comp, info). dragItems arrive as tdu.FileInfo-like
     # items with .path for file drops.
     say("wiring drag/drop callbacks (files/folders -> queue)")
+    # PAR NAMES (TDParameterHelp, containerCOMP): the mode par is 'drop'
+    # (Menu — values checked against the LIVE menu before writing), the
+    # callbacks DAT par is 'dragdropcallbacks' (DAT) — my earlier
+    # 'dropcallback' did not exist (silently missed).
+    drop_menu = []
     try:
-        panelcomp.par.drop = "usedragdropcallbacks"
-    except Exception as exc:
-        say(f"  (drop mode: {exc})")
+        drop_menu = list(panelcomp.par.drop.menuNames or [])
+    except Exception:
+        pass
+    if drop_menu:
+        say(f"  drop menu: {drop_menu}")
+        # pick the callbacks-style entry by substring, not a guessed token
+        target = next((m for m in drop_menu
+                       if "callback" in m.lower()), None)
+        if target is None:
+            target = next((m for m in drop_menu
+                           if "drop" in m.lower() and "allow" in m.lower()),
+                          None)
+        if target is not None:
+            panelcomp.par.drop = target
+            say(f"  drop mode -> {target!r}")
+        else:
+            say(f"  !! no callbacks entry in drop menu {drop_menu}")
+    else:
+        say("  (drop menu unreadable — leaving default)")
+    if _link_op(panelcomp, "dragdropcallbacks", dnd_cb):
+        say("  dragdropcallbacks DAT linked")
+    # builtindrop OFF: our callbacks are the only drop handler
     try:
-        panelcomp.par.dropcallback = dnd_cb
-        say("  drop callbacks DAT linked")
-    except Exception as exc:
-        say(f"  (dropcallback: {exc})")
+        panelcomp.par.builtindrop = "off"
+    except Exception:
+        pass
 
     # ---- panel Execute DAT: batch tick --------------------------------------
     # VERIFIED pattern from build_network.py's controller tick: the Execute

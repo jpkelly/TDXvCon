@@ -810,6 +810,46 @@ def _dst_dir():
     return os.path.dirname(dst) if dst else None
 
 
+def AddFiles():
+    """The + button: open a file dialog and APPEND to the queue.
+
+    JP: there was no way to add files to the lister via a dialog — the
+    SOURCE browser only ever holds ONE path. ui.chooseFile is the
+    documented native dialog (start=None opens at last location;
+    fileTypes filters). Multi-select isn't available in one call on
+    all builds, so the button can be pressed repeatedly; folder adds
+    come through drag/drop or SOURCE-browse + START.
+    """
+    try:
+        path = ui.chooseFile(start=None, fileTypes=list(MOVIE_EXTS),
+                             title="Add movie to the queue")
+    except Exception as exc:
+        note(f"file dialog failed: {exc}")
+        return
+    if not path:
+        return
+    if os.path.isfile(path):
+        codec = _val("codec_dd") or "notchlc"
+        out = _unique_output(_derive_output(path, _dst_dir(), codec,
+                                            _val("subtype_dd")))
+        _queue.append({"input": path, "output": out,
+                       "status": "queued",
+                       "rel": os.path.basename(path)})
+        _refresh_queue()
+        note(f"added {os.path.basename(path)} to the queue")
+    elif os.path.isdir(path):
+        n = 0
+        for inp, rel in _scan_movies(path):
+            out = _unique_output(_derive_output(
+                inp, _dst_dir(), _val("codec_dd") or "notchlc",
+                _val("subtype_dd")))
+            _queue.append({"input": inp, "output": out, "status": "queued",
+                           "rel": rel})
+            n += 1
+        _refresh_queue()
+        note(f"added {n} file(s) from folder")
+
+
 def NormalizeDestination():
     """DESTINATION stays a FOLDER path (its browser widget requires it).
 
