@@ -215,7 +215,7 @@ def build():
         say(f"(opshortcut: {exc})")
 
     for stale in (COMP_NAME, "panel_callbacks", "queue_table",
-                  "panel_tick"):
+                  "queue_display", "panel_tick"):
         if vcon.op(stale) is not None:
             say(f"removing existing {stale}")
             vcon.op(stale).destroy()
