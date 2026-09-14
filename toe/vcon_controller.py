@@ -427,6 +427,14 @@ class VconExt:
         self.total = 0
         self._loading_ticks = 0
         self._finishing_ticks = 0
+        # Reset the Progress par — the success (_closed) and failure
+        # (_fail) paths both reset it; the CANCEL path was the one that
+        # left the bar stuck at its last value (JP: "progress stops but
+        # does not reset when we stop").
+        try:
+            self.ownerComp.par.Progress.val = 0.0
+        except Exception:
+            pass
         self.state = "idle"
 
     # ------------------------------------------------------------------
