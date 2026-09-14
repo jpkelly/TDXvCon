@@ -1,47 +1,61 @@
-"""Probe 5: why does the progress slider's number box still show?
+"""Probe 5 final: complete dump of every display-ish par on the slider.
 
 Paste in the TD textport:
 
     exec(open('/Users/jp/Documents/GitHub/vCon/toe/probe_numfield.py',
               encoding='utf-8').read())
 
-Reads the live state of every Numeric/Slider display par on prog_s,
-then flips the most likely candidates to 0 one at a time — watch the
-panel after each step and note which one makes the '0.000' box vanish.
+Prints EVERY custom par on prog_s whose name mentions display/field/
+width/mode, with: live value, TD par style, and the full menu list.
+The output names the controlling par and its exact off-value — no
+guessing. Then tries the two strongest candidates stepwise (watch the
+panel; original values printed for restore).
 """
 
-p = op('/project1/vcon/panel')
-w = p.op('prog_s')
+w = op('/project1/vcon/panel/prog_s')
 if w is None:
-    raise RuntimeError('prog_s not found')
+    raise RuntimeError('prog_s not found — build the panel first')
 
-# TOP-LEVEL only (JP rule) — the widget COMP is the panel child
-target = w
-print(f'[probe] target: {target.path}')
+print('[probe] EVERY display/field-ish par on prog_s (top level):')
+saved = []
+for pg in w.customPages:
+    for par in pg.pars:
+        n = par.name
+        ln = n.lower()
+        if any(k in ln for k in ('display', 'field', 'view', 'readout')):
+            try:
+                cur = par.eval()
+            except Exception:
+                cur = '(eval failed)'
+            menus = list(getattr(par, 'menuNames', None) or [])
+            style = getattr(par, 'style', '?')
+            print(f'  {n} = {cur!r}  style={style}  menus={menus}')
+            saved.append((n, cur))
 
-# 1. current state of every candidate
-for name in ('Numericfielddisplay', 'Numericfieldwidth',
-             'Numericfieldhorizontalmode', 'Numericfieldverticalmode',
-             'Sliderlabeldisplay', 'Sliderlabelnames'):
-    par = getattr(target.par, name, None)
-    if par is None:
-        print(f'[probe] {name}: (no such par)')
-    else:
+print()
+print('[probe] stepwise hide attempts (WATCH THE PANEL):')
+# strongest candidates, with type-correct values derived from the dump
+for n, _ in saved:
+    if n.lower().endswith('display') or 'fielddisplay' in n.lower():
+        par = getattr(w.par, n, None)
+        if par is None:
+            continue
+        menus = list(getattr(par, 'menuNames', None) or [])
+        if menus:
+            # pick the token that means hidden: 'off'/'no'/'none' if present
+            off = next((m for m in menus
+                        if m.lower() in ('off', 'no', 'none', 'hidden',
+                                         'false')), menus[0])
+        else:
+            off = 0
         try:
-            print(f'[probe] {name} = {par.eval()!r}  (valid={par.valid})')
+            par.val = off
+            print(f'  SET {n} = {off!r}   <-- LOOK NOW')
         except Exception as exc:
-            print(f'[probe] {name} = (eval failed: {exc})')
+            print(f'  {n}={off!r} failed: {exc}')
 
-# 2. flip candidates one at a time — watch the panel after each print
-for name, val in [('Numericfielddisplay', 'off'),
-                  ('Numericfieldwidth', 0),
-                  ('Sliderlabeldisplay', 'off')]:
-    par = getattr(target.par, name, None)
-    if par is None:
-        continue
-    try:
-        par.val = val
-        print(f'[probe] set {name}={val} — did the number box disappear?')
-    except Exception as exc:
-        print(f'[probe] {name} write failed: {exc}')
-print('[probe] done — report which step (if any) hid the box')
+print()
+print('[probe] ORIGINAL VALUES (to restore if a step hid too much):')
+for n, v in saved:
+    print(f'  {n} was {v!r}')
+print('[probe] Report which SET line hid the 0.000 box (if any).')
