@@ -115,6 +115,7 @@ _inspect_item = None
 _inspect_ticks = 0
 _noted_select = False
 _noted_table = False   # one-shot raw-table dump for label verification
+_last_sel = ""         # last lister Selectedrows seen (poll fallback)
 
 
 def ext():
@@ -1151,10 +1152,31 @@ def onFrame():
         pass
 
     # 1c) row-click inspector: a clicked queue file loads in the
-    # Media File Info DAT; finish its display in output_l once cooked
+    # Media File Info DAT; finish its display in output_l once cooked.
+    # FALLBACK POLL: if the lister's Advancedcallbacks gate is ever off
+    # (stock default — the builder turns it on, but a stale capture
+    # could revert it), onSelectRow never fires; the Selectedrows par
+    # still tracks the selection, so detect changes here too.
     try:
         if _inspect_item is not None:
             _inspect_tick()
+    except Exception:
+        pass
+    try:
+        q_ = widget("queue")
+        sel = str(q_.par.Selectedrows.eval() or "") if q_ is not None else ""
+        if sel and sel != _last_sel:
+            _last_sel = sel
+            # map the lister's selection to a queue item: try both the
+            # info shape (row int) and the raw string
+            for cand in (sel.strip(), int(sel.strip())):
+                try:
+                    item = _queue_item_from_info({"row": cand})
+                    if item is not None and item is not _inspect_item:
+                        OnQueueRowSelected({"row": cand})
+                        break
+                except (TypeError, ValueError):
+                    continue
     except Exception:
         pass
 

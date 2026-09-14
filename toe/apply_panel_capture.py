@@ -291,6 +291,17 @@ if CAPTURED:
             print("[capture] res-field visibility refreshed")
         except Exception:
             pass
+        # RE-ASSERT the lister's Advancedcallbacks gate AFTER the bake:
+        # it's the master switch for onSelectRow (a stale capture could
+        # carry it off — the stock default — which silently kills row
+        # clicks)
+        try:
+            _qq = _panel_comp.op('queue')
+            if _qq is not None:
+                _qq.par.Advancedcallbacks.val = True
+                print("[capture] lister Advancedcallbacks re-asserted ON")
+        except Exception:
+            pass
         # VCON-LEVEL NODE LAYOUT + COLORS: also restored by
         # build_network.py at its save step, but the PANEL build
         # doesn't run that — apply here too so either runner honors
@@ -323,6 +334,22 @@ if CAPTURED:
             print(f"[capture] vcon node layout applied to "
                   f"{_applied}/{len(_vlay)} ops"
                   + (f", {_ncol} colors" if _ncol else ''))
+        # PANEL-ROOT NON-WIDGET ops (listerConfig/inspector/DATs — JP's
+        # hand-arranged, never captured before): positions ride
+        # 'panelnodelayout' {name: (x, y)}
+        _play = CAPTURED.get('panelnodelayout')
+        if _play:
+            _papplied = 0
+            for _name, (_px, _py) in _play.items():
+                _op_ = _panel_comp.op(_name)
+                if _op_ is not None:
+                    try:
+                        _op_.nodeX, _op_.nodeY = (_px, _py)
+                        _papplied += 1
+                    except Exception:
+                        pass
+            print(f"[capture] panel-root ops layout applied to "
+                  f"{_papplied}/{len(_play)} ops")
         # one clean refresh on the settled state
         _q = _panel_comp.op('queue')
         if _q is not None:

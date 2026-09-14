@@ -464,6 +464,23 @@ def build():
     except Exception:
         pass
 
+    # ---- panel-root NON-WIDGET ops (listerConfig, inspector, DATs) ----
+    # CAPTURE-TRACKED (JP 2026-09-14): these nodes' network positions are
+    # hand-arranged too, but they aren't panel VIEW widgets — they get
+    # no _WIDGETS entry and were never captured. The capture records
+    # them as 'panelnodelayout'; apply positions AFTER the bake too so
+    # the capture always wins over the builder's hard-coded spots.
+    for ch in list(panelcomp.children):
+        nm = ch.name
+        if nm in widgets or nm.startswith("_"):
+            continue        # view widgets get nodelayout from the bake
+        _pos = (_CAPTURE.get("panelnodelayout") or {}).get(nm)
+        if _pos:
+            try:
+                ch.nodeX, ch.nodeY = _pos
+            except Exception:
+                pass
+
     # ---- queue lister: force geometry + visibility ------------------------
     # The lister's copy historically resisted place() (missing Layout
     # pars on its wrapper). Write each geometry par individually and
@@ -959,6 +976,19 @@ def build():
     # owning the column tuning in the OTHER config DATs).
     say("injecting onSelectRow forwarder into listerConfig callbacks")
     if q is not None:
+        # MASTER GATE (live-discovered 2026-09-14): the lister's
+        # Advancedcallbacks toggle is OFF by stock default — when off,
+        # the lister NEVER calls its Callbackdat (onSelectRow included)
+        # and every custom row callback silently does nothing. Turn it
+        # ON here, every build (builder-owned wiring, capture can't
+        # turn it off: Advancedcallbacks isn't in the builder-owned
+        # skip list, but we re-assert after the bake too for safety).
+        try:
+            q.par.Advancedcallbacks.val = True
+            say("  lister Advancedcallbacks ON (custom callbacks gate)")
+        except Exception as exc:
+            say(f"  !! Advancedcallbacks: {exc} — row clicks will not "
+                f"fire onSelectRow; the onFrame poll still detects them")
         try:
             cbdat = q.par.Configcomp.eval().op("callbacks")
             txt = cbdat.text or ""

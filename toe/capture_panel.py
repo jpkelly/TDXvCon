@@ -444,6 +444,25 @@ if _vcon_layout:
           f"{len(_vcon_layout)} ops recorded "
           f"({_ncol} with custom colors)")
 
+# ---- PANEL-ROOT NON-WIDGET OPS (listerConfig, inspector, DATs) -------
+# JP 2026-09-14: these nodes' network positions are hand-arranged too,
+# but they're not panel VIEW widgets (no _WIDGETS entry) — recorded
+# separately as {name: (nodeX, nodeY)} so the bake can restore them.
+_panel_nodes = {}
+_known = set(_TOX_OF) | set(_BARE_CONTAINERS) | {"panel"}
+for c in p.children:
+    nm = c.name
+    if nm.startswith('_') or nm in _known:
+        continue
+    try:
+        _panel_nodes[nm] = (c.nodeX, c.nodeY)
+    except Exception:
+        continue
+if _panel_nodes:
+    print(f"[capture] panel-root ops layout: "
+          f"{len(_panel_nodes)} recorded "
+          f"({', '.join(sorted(_panel_nodes))})")
+
 # ---- MEMBERSHIP accumulators (v4) --------------------------------------
 # added:   hand-added widgets (in the panel, unknown to the builder map)
 # removed: builder widgets deleted by hand (absent from the panel)
@@ -555,6 +574,8 @@ if removed:
     lines.append(f'    "removed": {sorted(removed)!r},')
 if _vcon_layout:
     lines.append(f'    "vconnodelayout": {sorted(_vcon_layout)!r},')
+if _panel_nodes:
+    lines.append(f'    "panelnodelayout": {_panel_nodes!r},')
 lines.append('}')
 text = '\n'.join(lines)
 print()
