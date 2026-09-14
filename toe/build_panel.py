@@ -324,12 +324,10 @@ def build():
     for name, lw in _LABEL_W.items():
         if name in widgets:
             if lw == 0:
-                # hide the title label — STRING MENU token, not a boolean
-                # (integer 0 = menu index 0, which may BE 'on')
-                try:
-                    setp(widgets[name], "Labeldisplay", "off")
-                except Exception:
-                    pass
+                # Buttons get title suppression in the buttons block
+                # (Labeldisplay off + width 1 + Widgetlabel text) — skip
+                # here to avoid racing that config.
+                pass
             else:
                 setp(widgets[name], "Labelwidth", lw)
     # PROGRESS bar title via the status-style label — a plain Container
@@ -338,12 +336,23 @@ def build():
     for name, title in _LOCAL_TITLES.items():
         if name in widgets:
             setp(widgets[name], "Widgetlabel", title)
-    # Buttons: face text only (title label hidden above).
+    # Buttons: face text only. THE TITLE LABELS ARE THE PROBLEM (JP, twice:
+    # "Momentary Button" keeps coming back). Kill them at BOTH levels:
+    # 1) the widget's own Labeldisplay 'off' (top-level par, token form)
+    # 2) AND Buttonofflabel/Buttononlabel drive the FACE — we keep those.
+    #    The title strip is the widget's Label area: width 0 AND display off
+    #    AND its text blanked — belt, suspenders, and a third belt.
     for name, text in [("start_b", "START"), ("pause_b", "PAUSE"),
                        ("stop_b", "STOP")]:
         if name in widgets:
-            setp(widgets[name], "Buttonofflabel", text)
-            setp(widgets[name], "Buttononlabel", text)
+            w_ = widgets[name]
+            setp(w_, "Buttonofflabel", text)
+            setp(w_, "Buttononlabel", text)
+            setp(w_, "Labeldisplay", "off")
+            setp(w_, "Labelwidth", 1)
+            setp(w_, "Labeltop", 1)          # pin remaining sliver to top
+            setp(w_, "Widgetlabel", text)    # if title still shows, it IS the label text
+            say(f"  {name}: title suppressed (Labeldisplay off + width 1)")
 
     # ---- defaults ----------------------------------------------------------
     say("configuring widgets (external pars only)")
