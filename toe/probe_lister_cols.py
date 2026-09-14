@@ -1,47 +1,35 @@
-"""Probe 11b: colDefaults complete + topPath/topFill semantics.
+"""Probe 12: the live colDefine — column widths after auto-define.
 
 Paste in the TD textport:
 
     exec(open('/Users/jp/Documents/GitHub/vCon/toe/probe_lister_cols.py',
               encoding='utf-8').read())
 
-colDefaults (already seen, 19 rows) defines per-column rendering and
-includes topPath/topFill — a TOP drawn behind the cell (JP's bar-behind-
-the-filename). This finishes the dump:
-  1. ALL 19 colDefaults rows
-  2. the ListerExt's col define API
-  3. the configDefault COMP children (the colDefine lives here)
+The auto-generated columns gave '#' a huge width (JP: the number column
+eats the lister). Dumps the LIVE colDefine table (in the lister's
+Configcomp, whose path probe 9 showed as listerConfig) so widths and
+the 'progress' column can be corrected by editing the real config.
 """
 
 q = op('/project1/vcon/panel/queue')
 if q is None:
     raise RuntimeError('queue lister not found')
 
-print('[probe] colDefaults — ALL rows:')
-t = q.op('colDefaults')
-if t is None:
-    print('  MISSING')
-else:
-    for r in range(t.numRows):
-        print(f'  {t[r, 0].val!r}: {t[r, 1].val!r}')
+print('[probe] Configcomp par:', end=' ')
+try:
+    print(q.par.Configcomp.eval())
+except Exception as exc:
+    print(f'(read failed: {exc})')
 
-print()
-print('[probe] ListerExt public methods (col/define/row/draw API):')
-ext_ = q.op('ListerExt')
-if ext_ is None:
-    print('  MISSING')
-else:
-    names = [m for m in dir(ext_) if not m.startswith('_')
-             and any(k in m.lower() for k in ('col', 'define', 'row',
-                                              'draw', 'top'))]
-    print(f'  {names}')
-
-print()
-print('[probe] configDefault COMP children (colDefine lives here):')
-cfg = q.op('configDefault')
+# the config COMP the lister created (probe 9: /project1/vcon/panel/listerConfig)
+cfg = op('/project1/vcon/panel/listerConfig')
 if cfg is None:
-    print('  MISSING')
+    print('[probe] listerConfig MISSING at panel level')
+    cfg = q.op('listerConfig')
+if cfg is None:
+    print('[probe] no config COMP found')
 else:
+    print(f'[probe] config COMP: {cfg.path}')
     for c in cfg.children:
         info = ''
         try:
@@ -49,9 +37,17 @@ else:
         except Exception:
             pass
         print(f'  {c.name}{info}')
-        if hasattr(c, 'numRows') and c.numRows:
-            for r in range(min(c.numRows, 20)):
-                try:
-                    print(f'    {c[r, 0].val!r}: {c[r, 1].val!r}')
-                except Exception:
-                    pass
+    t = cfg.op('colDefine')
+    if t is not None:
+        print(f'[probe] colDefine ({t.numCols} cols x {t.numRows} rows):')
+        for c in range(t.numCols):
+            col = []
+            for r in range(t.numRows):
+                col.append(f'{t[r, c].val!r}')
+            print(f'  col {c}: {col}')
+    # also the define table
+    d = cfg.op('define')
+    if d is not None:
+        print(f'[probe] define ({d.numRows}x{d.numCols}):')
+        for r in range(d.numRows):
+            print(f'  {d[r, 0].val!r}: {d[r, 1].val!r}')
