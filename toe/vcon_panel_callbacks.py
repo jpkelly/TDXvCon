@@ -107,6 +107,25 @@ def _output_name(input_path, codec, subtype=None):
     return os.path.join(folder, f"{stem}.{tag}{ext}")
 
 
+def _unique_output(path):
+    """Never overwrite: clip.notchlc.mov exists -> 'clip.notchlc (2).mov'.
+
+    The same auto-naming the reference transcoders use (their screenshots
+    show 'GlowingNights_05 (2).mov'). The panel path bypasses the CLI's
+    -y/-n overwrite prompts, so non-clobbering names are the safe default.
+    """
+    if not os.path.exists(path):
+        return path
+    folder = os.path.dirname(path)
+    stem, ext = os.path.splitext(os.path.basename(path))
+    n = 2
+    while True:
+        cand = os.path.join(folder, f"{stem} ({n}){ext}")
+        if not os.path.exists(cand):
+            return cand
+        n += 1
+
+
 def Start():
     """Read the panel widgets and submit one job through the extension."""
     src = _val("source")
@@ -136,6 +155,8 @@ def Start():
         out = os.path.join(dst, os.path.basename(derived))
     else:
         out = derived
+    # Auto-name: never clobber — ' (2)', ' (3)', ... on collisions.
+    out = _unique_output(out)
 
     # pixel format 'none' = let the codec/registry decide (auto)
     if fmt == "none":
