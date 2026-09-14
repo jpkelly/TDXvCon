@@ -889,6 +889,25 @@ def build():
         setp(widgets["destination"], "Valueparexec",
              "op.vcon.op('panel_callbacks').module.NormalizeDestination()")
 
+    # ---- persistent settings: append PersistSettings() to every
+    # persistent widget's change hook so runtime selections are saved
+    # to panel_settings.json on every change (survives TD quit/relaunch).
+    _PERSIST_HOOK = ("; op.vcon.op('panel_callbacks').module."
+                     "PersistSettings()")
+    for _pname in ("codec_dd", "subtype_dd", "format_dd", "quality_s",
+                   "fps_f", "fps_t", "scaled_t", "scale_dd", "fit_dd",
+                   "resw_f", "resh_f", "destination"):
+        if _pname in widgets:
+            try:
+                cur = str(widgets[_pname].par.Onvaluechangescript0.eval()
+                          or "")
+                if "PersistSettings" not in cur:
+                    widgets[_pname].par.Onvaluechangescript0.val = (
+                        cur + _PERSIST_HOOK)
+            except Exception:
+                pass
+    say("  persistent settings hooks wired (12 widgets)")
+
     # ---- queue lister points at queue_table --------------------------------
     # LIVE-VERIFIED (probe 9): source par is INPUTTABLEDAT (style=DAT).
     # ORDER IS CRITICAL: set Refreshoninputchange=off BEFORE linking —
@@ -1152,8 +1171,20 @@ except Exception as exc:
 # once so the field's enable state + display match the mode from the
 # captured Value0 (grey-out is a live par write, not captured state).
 try:
-    if op.vcon.op('panel').op('fps_t') is not None:
-        op.vcon.op('panel_callbacks').module.OnFpsModeChanged()
-        print("[panel] fps mode applied (grey-out + display)")
+    op.vcon.op('panel').op('fps_t') is not None
+    op.vcon.op('panel_callbacks').module.OnFpsModeChanged()
+    print("[panel] fps mode applied (grey-out + display)")
 except Exception as exc:
     print(f"[panel] (fps mode apply: {exc})")
+
+# ---- restore persistent runtime settings (survives TD quit/relaunch) -
+# Runs AFTER the bake + the seeds so the user's last selections win
+# over builder defaults and captured state. The capture owns LAYOUT;
+# this owns RUNTIME SELECTIONS (destination, codec, fps mode, scale,
+# quality, format, etc.). Written on every widget change via
+# _save_settings() in the callbacks module.
+try:
+    op.vcon.op('panel_callbacks').module._load_settings()
+    print("[panel] persistent settings restored")
+except Exception as exc:
+    print(f"[panel] (settings restore: {exc})")

@@ -129,6 +129,69 @@ def _tick_err(label, exc):
 _last_sel = ""         # last lister Selectedrows seen (poll fallback)
 _selected_path = None  # input path of the last clicked row (remove_b target)
 
+#: --- persistent panel state (survives TD quit/relaunch) -------------
+#: A JSON file written on every relevant widget change and restored
+#: at build end (after the bake, before the preview/fps seeds). The
+#: capture owns LAYOUT; this owns RUNTIME SELECTIONS.
+import json as _json
+
+_SETTINGS_PATH = ('/Users/jp/Documents/GitHub/vCon/toe/'
+                 'panel_settings.json')
+
+#: which widget Value0 pars are persisted (string values stored as-is)
+_PERSIST_WIDGETS = (
+    "destination", "codec_dd", "subtype_dd", "format_dd",
+    "quality_s", "fps_f", "fps_t", "scaled_t", "scale_dd",
+    "fit_dd", "resw_f", "resh_f",
+)
+
+
+def _save_settings():
+    """Write the panel's runtime selections to JSON (called on every
+    relevant widget change via Onvaluechangescript0 hooks)."""
+    out = {}
+    for name in _PERSIST_WIDGETS:
+        w = widget(name)
+        if w is None:
+            continue
+        try:
+            out[name] = w.par.Value0.eval()
+        except Exception:
+            pass
+    try:
+        with open(_SETTINGS_PATH, 'w', encoding='utf-8') as f:
+            _json.dump(out, f, indent=2)
+    except Exception as exc:
+        debug(f"panel settings save failed: {exc}")
+
+
+def _load_settings():
+    """Restore the panel's runtime selections from JSON (called at build
+    end, after the bake). Returns silently if no file exists yet."""
+    if not os.path.isfile(_SETTINGS_PATH):
+        return
+    try:
+        with open(_SETTINGS_PATH, 'r', encoding='utf-8') as f:
+            data = _json.load(f)
+    except Exception as exc:
+        debug(f"panel settings load failed: {exc}")
+        return
+    for name, val in data.items():
+        w = widget(name)
+        if w is None:
+            continue
+        try:
+            w.par.Value0.val = val
+        except Exception:
+            pass
+    note(f"panel settings restored from {os.path.basename(_SETTINGS_PATH)}")
+
+
+def PersistSettings():
+    """Call from any widget's Onvaluechangescript0 to save the panel's
+    runtime state. Appended to existing hooks by the builder."""
+    _save_settings()
+
 
 def ext():
     """The vCon extension (Global OP Shortcut 'vcon' — set by the builder)."""
