@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.python-version
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# vCon runtime state
+*.nlc.mov
+.vcon-state.json
+
+# TouchDesigner versioned backups (TD writes transcoder.1.toe etc. alongside)
+src/vcon/data/transcoder.[0-9]*.toe
+
+# Original scratch toes this project started from (kept locally, not published)
+VideoConverter*.toe

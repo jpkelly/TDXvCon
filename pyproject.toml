@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# Distribution name. The PyPI name "vcon" is taken by an unrelated package,
+# so the distribution is "tdxvcon". The IMPORT name stays "vcon" and the
+# command stays "vcon" — short to type, unambiguous to install:
+#     pipx install tdxvcon
+#     vcon -i in.mov -c notchlc out.mov
+name = "tdxvcon"
+version = "0.1.0"
+description = "GPU video transcoder front-end driving TouchDesigner's Movie File Out TOP (NotchLC, Hap, ProRes, ...) — FFmpeg-style CLI."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "JP Kelly" }]
+dependencies = []
+keywords = [
+    "touchdesigner", "notchlc", "hap", "prores", "video", "transcode",
+    "codec", "top", "moviefileout", "mediamanagement",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Video :: Conversion",
+    "Topic :: Multimedia :: Video :: Non-Linear Editor",
+]
+
+[project.scripts]
+vcon = "vcon.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/jpkelly/TDXvCon"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+vcon = ["data/*.toe"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
