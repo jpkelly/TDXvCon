@@ -37,48 +37,41 @@ COMP_PARENT = "/project1/vcon"
 COMP_NAME = "panel"
 REPO = "/Users/jp/Documents/GitHub/vCon"
 
-#: GRID GEOMETRY — the layout is COMPUTED, not hand-placed: rows are
-#: indexed top-down, all heights uniform, two columns with fixed spans.
-#: Column spans guarantee no widget crosses into its neighbor or past
-#: the right edge (x + w <= 640 on a 660-wide panel).
-_ROW = 30            # every widget, every row
-_PITCH = 45          # row spacing
-_TOP = 590           # first row's y (panel origin is bottom-left)
-_X = 20              # left margin
-_W_FULL = 620        # full-width widgets (label 110 + field 510)
-_C1X, _C1W = 20, 290     # settings column 1
-_C2X, _C2W = 330, 310    # settings column 2
+#: GRID GEOMETRY — computed rows, uniform 30px heights, narrow columns.
+#: Panel is 660x640; STATUS sits at the very bottom (plenty of room).
+#: Row pitch 45; y from panel bottom.
+_ROW = 30
+_TOP = 600
 
 
 def _r(n):
-    """Panel y for row n (counted from the top)."""
-    return _TOP - n * _PITCH
+    return _TOP - n * 45
 
 
 _WIDGETS = {
-    # rows 0-1: browsers (full width)
-    "source":       ("fieldFileBrowser",   _X, _r(0), _W_FULL, _ROW),
-    "destination":  ("fieldFolderBrowser", _X, _r(1), _W_FULL, _ROW),
-    # rows 2-4: settings, two columns
-    "codec_dd":     ("dropDownMenu",      _C1X, _r(2), _C1W, _ROW),
-    "subtype_dd":   ("dropDownMenu",      _C2X, _r(2), _C2W, _ROW),
-    "format_dd":    ("dropDownMenu",      _C1X, _r(3), _C1W, _ROW),
-    "quality_dd":   ("dropDownMenu",      _C2X, _r(3), _C2W, _ROW),
-    "fps_f":        ("fieldString",       _C1X, _r(4), _C1W, _ROW),
-    "resmode_dd":   ("dropDownMenu",      _C2X, _r(4), _C2W, _ROW),
-    # row 5: FIT (left) | SCALE (right, hidden while Unscaled)
-    "fit_dd":       ("dropDownMenu",      _C1X, _r(5), _C1W, _ROW),
-    "scale_dd":     ("dropDownMenu",      _C2X, _r(5), _C2W, _ROW),
-    # row 6: buttons | OUTPUT name
-    "start_b":      ("buttonMomentary",    20, _r(6), 100, _ROW),
-    "pause_b":      ("buttonMomentary",   130, _r(6), 100, _ROW),
-    "stop_b":       ("buttonMomentary",   240, _r(6), 100, _ROW),
-    "output_l":     ("label",             350, _r(6), 290, _ROW),
-    # row 7: progress | STATUS
-    "prog_s":       ("sliderHorz",        20, _r(7), 330, _ROW),
-    "status_l":     ("label",             360, _r(7), 290, _ROW),
-    # queue at the bottom
-    "queue":        ("lister",             20,  20, 620, 200),
+    # browsers, full width
+    "source":       ("fieldFileBrowser",   20, 600, 620, _ROW),
+    "destination":  ("fieldFolderBrowser", 20, 555, 620, _ROW),
+    # settings, two narrow columns (half-width each — no spillover)
+    "codec_dd":     ("dropDownMenu",       20, 510, 230, _ROW),
+    "subtype_dd":   ("dropDownMenu",      260, 510, 230, _ROW),
+    "format_dd":    ("dropDownMenu",       20, 465, 230, _ROW),
+    "quality_dd":   ("dropDownMenu",      260, 465, 230, _ROW),
+    # row: FPS | RES | SCALE(hidden) | FIT — all narrow
+    "fps_f":        ("fieldString",        20, 420, 120, _ROW),
+    "resmode_dd":   ("dropDownMenu",      150, 420, 110, _ROW),
+    "scale_dd":     ("dropDownMenu",      270, 420, 110, _ROW),
+    "fit_dd":       ("dropDownMenu",      390, 420, 120, _ROW),
+    # buttons (label disabled) | OUTPUT name
+    "start_b":      ("buttonMomentary",    20, 375, 90, _ROW),
+    "pause_b":      ("buttonMomentary",   120, 375, 90, _ROW),
+    "stop_b":       ("buttonMomentary",   210, 375, 90, _ROW),
+    "output_l":     ("label",             310, 375, 330, _ROW),
+    # PROGRESS slider, full width
+    "prog_s":       ("sliderHorz",         20, 330, 620, _ROW),
+    # queue, then STATUS at the very bottom
+    "queue":        ("lister",             20,  90, 620, 200),
+    "status_l":     ("label",              20,  40, 620, _ROW),
 }
 
 #: Field titles via Widgetlabel (LIVE-DUMPED: the widget's title par).
@@ -220,22 +213,47 @@ def build():
     for name, title in _TITLES.items():
         if name in widgets:
             setp(widgets[name], "Widgetlabel", title)
-    # Labelwidth per column: full-width rows get 110; two-column widgets
-    # get 90 so the label never eats the field; small buttons none.
+    # Labelwidth per row type; buttons get NO label area (their titles were
+    # doubled-up with face text — label disabled per JP's note).
     _LABEL_W = {"source": 110, "destination": 110, "codec_dd": 90,
                 "subtype_dd": 90, "format_dd": 90, "quality_dd": 90,
-                "fps_f": 60, "resmode_dd": 60, "scale_dd": 70,
-                "fit_dd": 60, "output_l": 110, "status_l": 110,
-                "start_b": 60, "pause_b": 60, "stop_b": 60}
+                "fps_f": 45, "resmode_dd": 45, "scale_dd": 60,
+                "fit_dd": 45, "output_l": 110, "status_l": 110,
+                "start_b": 0, "pause_b": 0, "stop_b": 0}
     for name, lw in _LABEL_W.items():
         if name in widgets:
-            setp(widgets[name], "Labelwidth", lw)
-    # Buttons' titles were never set in earlier versions (default text
-    # 'Momentary Button' showed) — Widgetlabel covers every widget.
+            if lw == 0:
+                # hide the title label instead of an empty strip
+                try:
+                    setp(widgets[name], "Labeldisplay", 0)
+                except Exception:
+                    pass
+            else:
+                setp(widgets[name], "Labelwidth", lw)
+    # PROGRESS slider: hide the numeric readout + rename the title.
+    # Par names for the value-label are not live-verified — print them.
+    if "prog_s" in widgets:
+        names = [p.name for p in widgets["prog_s"].customPars]
+        say(f"  slider pars: {', '.join(names)}")
+        for cand in ("Valuedisplay", "Showvalue", "Valuenumberdisplay",
+                     "Numbershow", "Value0display"):
+            par = getattr(widgets["prog_s"].par, cand, None)
+            if par is not None:
+                try:
+                    par.val = 0
+                    say(f"  slider readout hidden via '{cand}'")
+                except Exception:
+                    pass
+    _TITLES = {
+        "prog_s": "PROGRESS",
+    }
+    for name, title in _TITLES.items():
+        if name in widgets:
+            setp(widgets[name], "Widgetlabel", title)
+    # Buttons: face text only (title label hidden above).
     for name, text in [("start_b", "START"), ("pause_b", "PAUSE"),
                        ("stop_b", "STOP")]:
         if name in widgets:
-            setp(widgets[name], "Widgetlabel", text)
             setp(widgets[name], "Buttonofflabel", text)
             setp(widgets[name], "Buttononlabel", text)
 
