@@ -1333,34 +1333,20 @@ def onFrame():
 
     # 1c) row-click inspector: a clicked queue file loads in the
     # Media File Info DAT; finish its display in output_l once cooked.
-    # FALLBACK POLL: if the lister's Advancedcallbacks gate is ever off
-    # (stock default — the builder turns it on, but a stale capture
-    # could revert it), onSelectRow never fires; the Selectedrows par
-    # still tracks the selection, so detect changes here too.
-    # ERRORS ARE REPORTED, not swallowed: this block hid a broken tick
-    # for two rounds (no display update, no trace of why).
+    # The onSelectRow forwarder (builder-injected, Advancedcallbacks ON)
+    # is the PRIMARY path — confirmed firing in JP's textport log. The
+    # Selectedrows POLL that lived here was REMOVED: it re-called
+    # OnQueueRowSelected every frame (new dict identity failed the
+    # re-click guard), reloading the DAT and resetting _inspect_ticks
+    # to 0 — the DAT never cooked, the tick never reached threshold,
+    # the display never updated. THE ROOT CAUSE of "nothing changes
+    # when clicking on an item."
+    # ERRORS ARE REPORTED, not swallowed.
     try:
         if _inspect_item is not None:
             _inspect_tick()
     except Exception as exc:
         note(f"inspector tick error: {type(exc).__name__}: {exc}")
-    try:
-        q_ = widget("queue")
-        sel = str(q_.par.Selectedrows.eval() or "") if q_ is not None else ""
-        if sel and sel != _last_sel:
-            _last_sel = sel
-            # map the lister's selection to a queue item: try both the
-            # info shape (row int) and the raw string
-            for cand in (sel.strip(), int(sel.strip())):
-                try:
-                    item = _queue_item_from_info({"row": cand})
-                    if item is not None and item is not _inspect_item:
-                        OnQueueRowSelected({"row": cand})
-                        break
-                except (TypeError, ValueError):
-                    continue
-    except Exception:
-        pass
 
     # 1d) OUTPUT preview refresh when the queue EMPTIES: drops/adds call
     # PreviewOutput directly, but paths that empty the lister (Stop, the
