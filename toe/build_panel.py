@@ -269,7 +269,15 @@ def build():
     qt = vcon.create(tableDAT, "queue_table")
     qt.nodeX = 300
     qt.nodeY = 90
-    qt.appendRow(["#", "file", "status"])
+    qt.appendRow(["file", "status", "progress"])
+    # DISPLAY table: ONLY file + status — the lister reads THIS one, so
+    # auto-define generates exactly two columns (JP: no number column,
+    # no progress column). queue_table keeps progress as the bar-TOP
+    # driver (read by index, never displayed).
+    qd = vcon.create(find_type("tableDAT"), "queue_display")
+    qd.nodeX = 430
+    qd.nodeY = 90
+    qd.appendRow(["file", "status"])
 
     # ---- panel container -------------------------------------------------
     panelcomp = vcon.create(containerCOMP, COMP_NAME)
@@ -643,8 +651,8 @@ def build():
             q.par.Inputtablehasheaders = True
         except Exception:
             pass
-        if _link_op(q, "Inputtabledat", qt):
-            say("  lister Inputtabledat -> queue_table")
+        if _link_op(q, "Inputtabledat", qd):
+            say("  lister Inputtabledat -> queue_display (file, status only)")
         try:
             q.par.Refresh.pulse()      # one clean refresh, settled state
         except Exception:
@@ -729,56 +737,13 @@ def build():
     # explicit colDefine: '#' narrow (30), 'file' wide (stretch), 'status'
     # fixed — NO progress column (the bar TOPs read queue_table's 4th
     # column directly; the lister doesn't display it).
-    say("configuring lister columns (explicit colDefine)")
-    try:
-        # The lister's config COMP (Configcomp par — probe 12 confirmed
-        # /project1/vcon/panel/listerConfig). Turn auto-define OFF so
-        # our column definitions rule.
-        q_.par.Autodefinecols = "off"
-        cfg = None
-        try:
-            cfg = q_.par.Configcomp.eval()
-        except Exception:
-            pass
-        if cfg is None:
-            cfg = panelcomp.op("listerConfig")
-        if cfg is None:
-            say("  !! listerConfig not found — columns stay auto")
-        else:
-            cd = cfg.op("colDefine")
-            if cd is None:
-                say("  !! colDefine table missing in config")
-            else:
-                # 3 columns x 19 rows: header column + one per data col.
-                # Rows (probe 12): column, columnLabel, sourceData,
-                # sourceDataMode, textFormat, cellLook, topPath, topFill,
-                # help, width, stretch, sizable, editable, selectRow,
-                # justify, draggable, clickOnDrag, fontBold, fontItalic.
-                cols = [
-                    ["#", "#", "#", "constant", "", "", "", "BEST", "",
-                     "30", "0", "0", "0", "1", "CENTER", "0", "0", "0", "0"],
-                    ["file", "file", "file", "string", "", "", "", "BEST",
-                     "", "500", "1", "1", "0", "1", "CENTERLEFT",
-                     "0", "0", "0", "0"],
-                    ["status", "status", "status", "string", "", "", "",
-                     "BEST", "", "150", "0", "1", "0", "1", "CENTERLEFT",
-                     "0", "0", "0", "0"],
-                ]
-                cd.setSize(19, 1 + len(cols))
-                for ci, col in enumerate(cols, 1):
-                    for ri, val in enumerate(col):
-                        cd[ri, ci] = val
-                say("  colDefine: # (30) | file (500 stretch) | status (150)"
-                    " — no progress col")
-                # apply: pulse the lister's refresh
-                try:
-                    q_.par.Refresh.pulse()
-                except Exception:
-                    pass
-    except Exception as exc:
-        say(f"  (colDefine: {exc})")
+    say("lister columns: auto-define over queue_display (file, status)")
+    # Auto-define wins (Autodefinecols writes did not stick — probe 13),
+    # so we control its INPUT instead: queue_display has only the two
+    # columns JP wants. Sizing: '#' gone; file stretches (it's the
+    # first/widest), status takes its content width.
 
-    # bar TOPs read the table's 4th column directly (one per row)
+    # bar TOPs read the DRIVER table's progress col (index 2)
     try:
         bars = q_.create(find_type("containerCOMP"), "rowbars")
         for i in range(12):
@@ -789,7 +754,7 @@ def build():
             btop.par.alpha = 1.0
             # width follows that row's progress value in queue_table
             btop.par.resx.expr = (
-                f"op('/project1/vcon/queue_table')[{i + 1}, 3] * 400"
+                f"op('/project1/vcon/queue_table')[{i + 1}, 2] * 400"
             )
             btop.par.resy = 26
         say("  row bar TOPs created (12) — widths <- queue_table progress col")

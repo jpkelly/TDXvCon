@@ -607,7 +607,7 @@ def _refresh_queue():
         prog = float(op.vcon.par.Progress.eval())
     except Exception:
         prog = 0.0
-    rows = [["#", "file", "status", "progress"]]
+    rows = [["file", "status", "progress"]]
     for i, item in enumerate(_queue, 1):
         status = item["status"]
         row_prog = 0.0
@@ -616,32 +616,60 @@ def _refresh_queue():
             row_prog = prog
         elif status == "done":
             row_prog = 1.0
-        rows.append([str(i), os.path.basename(item["input"]),
+        rows.append([os.path.basename(item["input"]),
                      status, f"{row_prog:.4f}"])
-    # Grow-only writes first (append beyond current size), then shrink:
-    # setSize DOWNWARD also cooks mid-state — the lister is off, but be
-    # safe: write all cells for the LARGER of current/new, then trim.
+    # DRIVER table (3 cols: file, status, progress — progress is the
+    # bar-TOP driver read by INDEX from col 2; the lister reads the
+    # DISPLAY table below, so progress never shows).
     try:
         cur_r, cur_c = t.numRows, t.numCols
     except Exception:
         cur_r, cur_c = 0, 3
     big = max(cur_r, len(rows))
     try:
-        t.setSize(big, 4)
+        t.setSize(big, 3)
     except Exception:
         pass
     for r in range(big):
-        row = rows[r] if r < len(rows) else ["", "", "", ""]
-        for c in range(4):
+        row = rows[r] if r < len(rows) else ["", "", ""]
+        for c in range(3):
             try:
                 t[r, c] = row[c]
             except Exception:
                 pass
     if big > len(rows):
         try:
-            t.setSize(len(rows), 4)
+            t.setSize(len(rows), 3)
         except Exception:
             pass
+
+    # DISPLAY table (2 cols: file, status — what the lister reads, so
+    # auto-define makes exactly those two columns; NO number column,
+    # NO progress column, per JP).
+    d = op.vcon.op("queue_display")
+    if d is not None:
+        drows = [[r[0], r[1]] for r in rows]
+        try:
+            dcur = d.numRows
+        except Exception:
+            dcur = 0
+        dbig = max(dcur, len(drows))
+        try:
+            d.setSize(dbig, 2)
+        except Exception:
+            pass
+        for r in range(dbig):
+            row = drows[r] if r < len(drows) else ["", ""]
+            for c in range(2):
+                try:
+                    d[r, c] = row[c]
+                except Exception:
+                    pass
+        if dbig > len(drows):
+            try:
+                d.setSize(len(drows), 2)
+            except Exception:
+                pass
     # ONE refresh, on our schedule, on a complete table.
     q = panel().op("queue")
     if q is not None:
