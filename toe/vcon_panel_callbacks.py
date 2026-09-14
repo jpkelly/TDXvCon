@@ -1358,9 +1358,14 @@ def onFrame():
     for item in list(_queue):
         if item["status"] == "running" and os.path.exists(item["output"]):
             item["status"] = "done"
-    # close the batch gate + reset the bar when everything is done
+    # JP: finished items are REMOVED from the list (the bar + the row
+    # both clear — no stale 'done' rows)
     global _batch_started
-    if _queue and all(it["status"] == "done" for it in _queue):
+    remaining = [it for it in _queue if it["status"] != "done"]
+    if len(remaining) < len(_queue):
+        _queue[:] = remaining
+    # close the batch gate + reset the bar when the queue empties
+    if not _queue:
         _batch_started = False
         try:
             op.vcon.par.Progress.val = 0.0
