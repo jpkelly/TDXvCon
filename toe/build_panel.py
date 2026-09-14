@@ -1,104 +1,113 @@
-"""build_panel.py — generate the vCon panel inside the vCon COMP.
+"""build_panel.py — generate the vCon panel inside the vCon COMP. (v2)
 
 Run in the TouchDesigner TEXTPORT (never import):
 
     exec(open('/Users/jp/Documents/GitHub/vCon/toe/build_panel.py',
               encoding='utf-8').read())
 
-Creates /project1/vcon/panel — a Container COMP of Basic Widgets (loaded
-from the app bundle's palette .tox files), laid out in the reference
-transcoder's shape: source/destination row, codec settings rows, buttons,
-progress + status, and a batch queue list.
+Creates /project1/vcon/panel — Basic Widgets loaded from the app bundle's
+palette .tox files, configured ENTIRELY through their external (custom)
+parameters. Widgets are never entered or modified internally.
 
-SEPARATE from build_network.py on purpose: network rebuilds destroy the
-whole vCon COMP (including the panel), so the panel has its own generator.
-Re-running THIS script overwrites any manual layout tweaks — an explicit
-choice, not an accident. Adjust layout visually in TD afterwards; this
-script only needs to run again to regenerate from scratch.
-
-Widget sources: TD app bundle, tfs/Samples/Palette/UI/Basic Widgets —
-discovered live 2026-09-13 (no palette global exists on this build).
+LIVE-VERIFIED FACTS this version is built on (probes 1-3, 2026-09-13):
+  - loadTox(path) returns a WRAPPER COMP whose single child of the same
+    name is the actual widget; config pars live on the inner COMP's
+    custom pages (the wrapper has only builtin pages).
+  - op(name) from a COMP SELF-MATCHES — use a children scan, not op().
+  - Widget custom pars are First-uppercase (TD naming rule): Menunames,
+    Menulabels, Value0, Label. Value0 on a dropDownMenu IS a menu par;
+    names/labels are space-delimited, quoted when containing spaces.
+  - Renaming to a name that already exists inside raises 'duplicate
+    operator name'; copy(widget, name=unique) works for multi-instance.
+  - The vcon COMP gets a Global OP Shortcut ('vcon') so widget commands
+    and binds are location-independent (op.vcon from anywhere).
 """
 
-#: Absolute paths — this script runs inside TD, which may not share the
-#: repo's CWD. Override by setting PANEL_TOX_DIR before exec().
+import os
+
 _TOX_DIR = ("/Applications/TouchDesigner.app/Contents/Resources/tfs/"
             "Samples/Palette/UI/Basic Widgets")
-
-COMP_PARENT = "/project1/vcon"      # where the panel COMP is created
+COMP_PARENT = "/project1/vcon"
 COMP_NAME = "panel"
+REPO = "/Users/jp/Documents/GitHub/vCon"
+
+#: panel children: outer-name -> (tox name, x, y, w, h)  [y up from bottom]
+_WIDGETS = {
+    "source":       ("fieldFileBrowser",   10, 470, 540, 30),
+    "destination":  ("fieldFolderBrowser", 10, 410, 540, 30),
+    "codec_dd":     ("dropDownMenu",       10, 350, 250, 30),
+    "subtype_dd":   ("dropDownMenu",      280, 350, 270, 30),
+    "format_dd":    ("dropDownMenu",       10, 290, 250, 30),
+    "quality_dd":   ("dropDownMenu",      280, 290, 270, 30),
+    "fps_f":        ("fieldString",        10, 230, 120, 30),
+    "res_f":        ("fieldString",        140, 230, 130, 30),
+    "fit_dd":       ("dropDownMenu",      280, 230, 270, 30),
+    "start_b":      ("buttonMomentary",    10, 170, 120, 34),
+    "pause_b":      ("buttonMomentary",   140, 170, 120, 34),
+    "stop_b":       ("buttonMomentary",   270, 170, 120, 34),
+    "prog_s":       ("sliderHorz",         10, 110, 400, 30),
+    "status_l":     ("label",              10,  60, 540, 26),
+}
+
+#: Button command par candidates (First-upper). A miss prints the widget's
+#: full customPars list, so the right name is visible in one run.
+_BUTTON_CMD_PARS = ("Buttoncommandonclick", "Menucommandonclick", "Command",
+                    "Callback", "Onclick", "Buttoncallback", "Script")
 
 
 def say(msg):
     print(f"[panel] {msg}")
 
 
-def load_widget(parent, name, x, y, w=240, h=28):
-    """Load one Basic Widget .tox into parent; returns the COMP or None."""
-    import os
-    path = os.path.join(_TOX_DIR, f"{name}.tox")
-    if not os.path.isfile(path):
-        say(f"!! widget tox not found: {path}")
-        return None
-    before = [c.name for c in parent.children]
-    wcomp = parent.loadTox(path)
-    if wcomp is None:
-        # loadTox may return None even on success; adopt the new child.
-        after = [c.name for c in parent.children]
-        new = [n for n in after if n not in before]
-        if not new:
-            say(f"!! loadTox returned None and no new child appeared ({name})")
-            return None
-        wcomp = parent.op(new[0])
-        say(f"  (loadTox returned None; adopted child {new[0]})")
-    wcomp.name = name
-    wcomp.nodeX = x
-    wcomp.nodeY = y
+def inner_of(wrapper):
+    """The actual widget COMP inside a loadTox wrapper.
+
+    children scan — op(name) from the wrapper would SELF-MATCH the
+    wrapper (verified), so a lookup by name is useless here.
+    """
+    for c in wrapper.children:
+        if c.name == wrapper.name or c.isPanel:
+            return c
+    say(f"!! no inner widget inside {wrapper.path}")
+    return None
+
+
+def place(outer, x, y, w, h):
+    """Panel layout of the wrapper (Layout pars are lowercase x/y/w/h)."""
     try:
-        wcomp.par.w = w
-        wcomp.par.h = h
+        outer.par.x = x
+        outer.par.y = y
+        outer.par.w = w
+        outer.par.h = h
     except Exception as exc:
-        say(f"  (w/h for {name}: {exc})")
-    return wcomp
+        say(f"  (place {outer.name}: {exc})")
 
 
-def set_label(wcomp, text):
-    """Set the label parameter on a label/button widget."""
+def setp(inner, par_name, value):
+    """Set one inner-widget custom par; print the full surface on a miss."""
     try:
-        wcomp.par.label = text
+        getattr(inner.par, par_name).val = value
         return True
-    except Exception as exc:
-        say(f"  (label on {wcomp.name}: {exc})")
+    except Exception:
+        names = [p.name for p in inner.customPars]
+        say(f"  !! {inner.path}: no par {par_name}. customPars: "
+            f"{', '.join(names)}")
         return False
 
 
-def set_menu(wcomp, names, labels=None, default=None):
-    """Populate a dropDownMenu widget's items. names = menu tokens."""
-    try:
-        wcomp.par.menunames = " ".join(names)
-        if labels:
-            wcomp.par.menulabels = " ".join(labels)
-        if default and default in names:
-            wcomp.par.value0 = default
-        return True
-    except Exception as exc:
-        say(f"  (menu on {wcomp.name}: {exc})")
-        return False
-
-
-def wire_button(button, callback):
-    """Point a buttonMomentary's callback at a panel-callbacks function."""
-    try:
-        button.par.callback = f"parent().op('panel_callbacks').module.{callback}()"
-        return True
-    except Exception as exc:
-        say(f"  (callback on {button.name}: {exc})")
-        return False
+def set_menu(inner, names, labels, default):
+    """Populate a dropDownMenu: Menunames/Menulabels then Value0."""
+    ok = True
+    ok &= setp(inner, "Menunames", " ".join(names))
+    ok &= setp(inner, "Menulabels", " ".join(f"'{l}'" for l in labels))
+    if default in names:
+        ok &= setp(inner, "Value0", default)
+    return ok
 
 
 def build():
     say("=" * 52)
-    say("building vCon panel")
+    say("building vCon panel (v2)")
     say("=" * 52)
 
     vcon = op(COMP_PARENT)
@@ -106,140 +115,142 @@ def build():
         raise RuntimeError(f"{COMP_PARENT} not found — run build_network.py "
                            f"first, then this script")
 
+    # Global OP Shortcut: widgets reach the COMP from anywhere via op.vcon
+    try:
+        vcon.par.opshortcut = "vcon"
+    except Exception as exc:
+        say(f"(opshortcut: {exc})")
+
     old = vcon.op(COMP_NAME)
     if old is not None:
-        say(f"removing existing {COMP_PARENT}/{COMP_NAME}")
+        say(f"removing existing {COMP_NAME}")
         old.destroy()
     oldcb = vcon.op("panel_callbacks")
     if oldcb is not None:
         oldcb.destroy()
 
-    # ---- callbacks module DAT (file-linked to the repo, like the
-    # controller DAT: edits in the repo live-apply, edits in TD flow back) --
+    # ---- callbacks DAT (file-linked, like the controller DAT) -----------
     say("creating panel_callbacks DAT (file-linked)")
     cb = vcon.create(textDAT, "panel_callbacks")
     cb.nodeX = 300
-    cb.nodeY = 120
-    cb.par.file = ("/Users/jp/Documents/GitHub/vCon/toe/"
-                   "vcon_panel_callbacks.py")
+    cb.nodeY = 150
+    cb.par.file = f"{REPO}/toe/vcon_panel_callbacks.py"
     cb.par.syncfile = 1
 
     # ---- panel container -------------------------------------------------
-    say("creating panel Container COMP")
     panelcomp = vcon.create(containerCOMP, COMP_NAME)
     panelcomp.nodeX = 300
-    panelcomp.nodeY = 240
-    # Base/Widget COMPs may not expose Container Look pars (bgcolor raised
-    # tdAttributeError live). Width/height only; the panel's look comes
-    # from the widgets' theme anyway.
-    try:
-        panelcomp.par.w = 560
-        panelcomp.par.h = 500
-    except Exception as exc:
-        say(f"  (w/h: {exc})")
+    panelcomp.nodeY = 260
+    place(panelcomp, 0, 0, 560, 500)
 
-    # ---- widget rows (reference-transcoder layout) -----------------------
-    # Row 1: source + destination browsers
-    say("widgets: source / destination file+folder browsers")
-    src = load_widget(panelcomp, "fieldFileBrowser", x=-260, y=0, w=520)
-    dst = load_widget(panelcomp, "fieldFolderBrowser", x=-260, y=-60, w=520)
-    if src:
-        set_label(src, "SOURCE")
-    if dst:
-        set_label(dst, "DESTINATION")
+    # ---- load widgets (one loadTox per type; copy() for repeats) ---------
+    say("loading widgets")
+    loaded = {}          # tox name -> outer wrapper
+    widgets = {}         # outer name -> inner widget COMP
+    for outer_name, (tox, x, y, w, h) in _WIDGETS.items():
+        if tox in loaded:
+            outer = panelcomp.copy(loaded[tox], name=outer_name)
+            if outer is None:
+                say(f"!! copy for {outer_name} returned None")
+                continue
+        else:
+            path = os.path.join(_TOX_DIR, f"{tox}.tox")
+            outer = panelcomp.loadTox(path)
+            if outer is None:
+                say(f"!! loadTox({tox}) returned None")
+                continue
+            outer.name = outer_name      # unique name per widget
+            loaded[tox] = outer
+        place(outer, x, y, w, h)
+        inner = inner_of(outer)
+        if inner is not None:
+            widgets[outer_name] = inner
+    say(f"loaded {len(widgets)}/{len(_WIDGETS)} widgets")
 
-    # Row 2: codec / subtype / pixel format / quality
-    say("widgets: codec / subtype / pixel format / quality menus")
-    codec = load_widget(panelcomp, "dropDownMenu", x=-260, y=-120, w=250)
-    subtype = load_widget(panelcomp, "dropDownMenu", x=10, y=-120, w=250)
-    fmt = load_widget(panelcomp, "dropDownMenu", x=-260, y=-180, w=250)
-    quality = load_widget(panelcomp, "dropDownMenu", x=10, y=-180, w=250)
-
-    # Row 3: fps / resolution / fit mode
-    say("widgets: fps / resolution / fit fields")
-    fps = load_widget(panelcomp, "fieldString", x=-260, y=-240, w=120)
-    res = load_widget(panelcomp, "fieldString", x=-140, y=-240, w=120)
-    fitmode = load_widget(panelcomp, "dropDownMenu", x=10, y=-240, w=250)
-    if fps:
-        set_label(fps, "FPS (keep/number)")
-    if res:
-        set_label(res, "RES (keep/WxH)")
-
-    # Row 4: buttons
-    say("widgets: start / pause / stop buttons")
-    start = load_widget(panelcomp, "buttonMomentary", x=-260, y=-300, w=120)
-    pauser = load_widget(panelcomp, "buttonMomentary", x=-130, y=-300, w=120)
-    stopper = load_widget(panelcomp, "buttonMomentary", x=0, y=-300, w=120)
-    if start:
-        set_label(start, "START")
-        wire_button(start, "Start")
-    if pauser:
-        set_label(pauser, "PAUSE")
-        wire_button(pauser, "PauseResume")
-    if stopper:
-        set_label(stopper, "STOP")
-        wire_button(stopper, "Stop")
-
-    # Row 5: progress + status
-    say("widgets: progress slider + status labels")
-    prog = load_widget(panelcomp, "sliderHorz", x=-260, y=-360, w=380)
-    statusline = load_widget(panelcomp, "label", x=-260, y=-420, w=520)
-    statlabel = load_widget(panelcomp, "label", x=130, y=-360, w=120)
-
-    # ---- populate the codec menus from the callbacks module --------------
-    say("populating codec menus")
     mod = cb.module
+
+    # ---- labels / defaults ------------------------------------------------
+    say("configuring widgets (external pars only)")
+    for name, text in [("source", "SOURCE"), ("destination", "DESTINATION"),
+                       ("fps_f", "FPS"), ("res_f", "RES")]:
+        if name in widgets:
+            setp(widgets[name], "Label", text)
+    for name, val in [("fps_f", "auto"), ("res_f", "auto")]:
+        if name in widgets:
+            setp(widgets[name], "Value0", val)
+
+    # ---- menus ------------------------------------------------------------
     codec_names = list(mod.CODECS.keys())
     codec_labels = [mod.CODECS[k]["label"] for k in codec_names]
-    if codec:
-        set_menu(codec, codec_names, codec_labels, default="notchlc")
-    if subtype:
-        set_menu(subtype, [""], ["(none)"])   # populated on codec change (v1.1)
-    if fmt:
-        set_menu(fmt, ["rgb", "rgba"], ["RGB", "RGB + Alpha"], default="rgb")
-    if quality:
-        set_menu(quality, mod.CODECS["notchlc"]["qualities"],
-                 default="optimal")
-    if fitmode:
-        set_menu(fitmode,
-                 ["fitbest", "fill", "fithorz", "fitvert", "fitoutside"],
-                 ["Fit Best", "Stretch", "Fit Width", "Fit Height",
-                  "Cover/Crop"],
-                 default="fitbest")
+    if "codec_dd" in widgets:
+        set_menu(widgets["codec_dd"], codec_names, codec_labels, "notchlc")
 
-    # ---- bindings --------------------------------------------------------
-    say("binding progress/status to the COMP parameters")
-    if prog:
+    # v1: union of subtype tokens with 'none' first. Per-codec filtering is
+    # a v2 hook — a mismatched pair fails loudly in the controller.
+    subs = ["none"] + sorted({s for c in mod.CODECS.values()
+                              for s in c.get("subtypes", [])})
+    if "subtype_dd" in widgets:
+        set_menu(widgets["subtype_dd"], subs, subs, "none")
+
+    fmts = ["none", "rgb", "rgba", "yuv4228bit", "yuv42210bit",
+            "yuv42212bit", "yuv44410bit", "yuva444412bit", "yuv420",
+            "yuv420p10bit", "yuv444p8bit", "yuv444p10bit"]
+    if "format_dd" in widgets:
+        set_menu(widgets["format_dd"], fmts, fmts, "none")
+
+    qual = mod.CODECS["notchlc"]["qualities"]
+    if "quality_dd" in widgets:
+        set_menu(widgets["quality_dd"], qual, qual, "optimal")
+
+    if "fit_dd" in widgets:
+        set_menu(widgets["fit_dd"],
+                 ["fitbest", "fill", "fithorz", "fitvert", "fitoutside"],
+                 ["'Fit Best'", "'Stretch'", "'Fit Width'",
+                  "'Fit Height'", "'Cover/Crop'"],
+                 "fitbest")
+
+    # ---- buttons ----------------------------------------------------------
+    say("wiring buttons")
+    for name, fn, text in [("start_b", "Start", "START"),
+                           ("pause_b", "PauseResume", "PAUSE"),
+                           ("stop_b", "Stop", "STOP")]:
+        if name not in widgets:
+            continue
+        inner = widgets[name]
+        setp(inner, "Label", text)
+        cmd = f"op.vcon.op('panel_callbacks').module.{fn}()"
+        hit = False
+        for p in _BUTTON_CMD_PARS:
+            par = getattr(inner.par, p, None)
+            if par is not None:
+                par.val = cmd
+                say(f"  {name}: command via par '{p}'")
+                hit = True
+                break
+        if not hit:
+            names = [p.name for p in inner.customPars]
+            say(f"  !! {name}: no command par found. customPars: "
+                f"{', '.join(names)}")
+
+    # ---- progress bind + status label ------------------------------------
+    say("binding progress + status")
+    if "prog_s" in widgets:
         try:
-            # Read-only display slider bound 1-way to the Progress par —
-            # a bidirectional bindExpr would let a user DRAG progress.
-            prog.par.value0.bindExpr = "op('../..').par.Progress"
+            widgets["prog_s"].par.Value0.bindExpr = "op.vcon.par.Progress"
+            say("  progress slider bound to Progress par")
         except Exception as exc:
             say(f"  (progress bind: {exc})")
-    if statusline:
+    if "status_l" in widgets:
         try:
-            statusline.par.label.expr = "op('../..').par.Status"
+            widgets["status_l"].par.Label.expr = "op.vcon.par.Status"
+            say("  status label bound to Status par")
         except Exception as exc:
             say(f"  (status bind: {exc})")
-    if statlabel:
-        try:
-            statlabel.par.label = "frames 0 / 0"
-        except Exception as exc:
-            say(f"  (statlabel: {exc})")
-
-    # ---- drag & drop -----------------------------------------------------
-    say("enabling drag-and-drop on the panel")
-    try:
-        panelcomp.par.dropscript = (
-            "op('panel_callbacks').module.onDragDrop(args[0])"
-        )
-    except Exception as exc:
-        say(f"  (dropscript: {exc})")
 
     say("=" * 52)
     say(f"panel built: {panelcomp.path}")
-    say("adjust layout/labels visually in TD; re-run this script only to")
-    say("regenerate (overwrites tweaks). Open the panel viewer to use it.")
+    say("open the panel viewer (RMB -> View...) to use it. Adjust the")
+    say("layout visually; re-run this script only to regenerate.")
     say("=" * 52)
 
 

@@ -1,20 +1,19 @@
 """vcon panel callbacks — the panel's logic, run inside TouchDesigner.
 
-Loaded as a module DAT inside the panel COMP; the Execute DAT at the panel
-level pulses updates, and panel widgets reach this code via callbacks that
-resolve the extension through the upward parent() chain (the panel COMP is
-a child of the vCon base COMP, so parent() lands on it wherever the whole
-component is dropped).
+Loaded as a file-linked module DAT inside the vCon COMP. Widget callbacks
+call into here via Global OP Shortcut: op.vcon.op('panel_callbacks').module.<fn>().
 
-Public surface (called by widgets' callbacks):
-    Start(), PauseResume(), Stop(), onDragDrop(...)
+LIVE-VERIFIED (probes 2026-09-13): widget config pars are on the INNER
+COMP (child of the loadTox wrapper, same name as the wrapper) and are
+First-uppercase: Value0 holds the widget's value, Label its label text.
+Everything here uses external widget parameters only — internals are
+never touched (they're clone-managed and wiped on update).
 """
 
 import os
 
 #: Codec table for the panel's dropdowns — the same knowledge the CLI's
-#: registry encodes (src/vcon/codec_meta.py), distilled to what the toe
-#: needs: TD menu tokens, per-subtype pixel formats, quality ladder.
+#: registry encodes (src/vcon/codec_meta.py), distilled to TD menu tokens.
 #: KEEP IN STEP with codec_meta.py — regenerate via toe/gen_codec_table.py.
 CODECS = {
     "notchlc": {
@@ -42,8 +41,6 @@ CODECS = {
         "label": "Apple ProRes",
         "subtypes": ["prores422proxy", "prores422lt", "prores422",
                      "prores422hq", "prores4444", "prores4444xq"],
-        # pixel formats vary BY SUBTYPE (verified live):
-        #   422*  → yuv422 8/10/12bit   4444* → yuv44410 + yuva444412
         "pixel_formats": [],
         "qualities": [],
     },
@@ -66,103 +63,136 @@ PRORES_PIXEL_FORMATS = {
     "prores4444xq": ["yuv44410bit", "yuva444412bit"],
 }
 
-#: Extension (.mov/.mp4) per codec — from the catalog's container data.
 CONTAINERS = {
     "notchlc": ".mov", "hap": ".mov", "cineform": ".mov", "prores": ".mov",
     "h264": ".mp4", "h265": ".mp4", "av1": ".mp4",
 }
 
 
-def ctrl():
-    """The vCon extension, found by walking up from this panel.
-
-    parent() from a panel child resolves to the vCon base COMP wherever the
-    component was dropped or renamed (documented in the extension docs).
-    """
-    return parent().ext.Vcon
+def ext():
+    """The vCon extension (Global OP Shortcut 'vcon' — set by the builder)."""
+    return op.vcon.ext.Vcon
 
 
 def panel():
-    """This panel COMP (the DAT this module lives in sits inside it)."""
-    return parent().op("..") if parent().name == "panel_callbacks" else parent()
+    """The panel COMP: a child of vcon named 'panel'."""
+    return op.vcon.op('panel')
+
+
+def widget(name):
+    """The INNER widget COMP of a named panel child (children scan —
+    op(name) self-matches the wrapper, verified live)."""
+    p = panel()
+    outer = p.op(name)
+    if outer is None:
+        return None
+    for c in outer.children:
+        if c.name == outer.name or c.isPanel:
+            return c
+    return None
+
+
+def _val(name):
+    """Read a widget's Value0."""
+    w = widget(name)
+    return w.par.Value0.eval() if w is not None else None
 
 
 def _output_name(input_path, codec, subtype=None):
-    """``clip.mov`` + prores 422hq → ``clip.prores422hq.mov`` (same folder)."""
+    """clip.mov + prores 422hq -> clip.prores422hq.mov (same folder)."""
     folder = os.path.dirname(input_path)
     stem = os.path.splitext(os.path.basename(input_path))[0]
-    tag = subtype or codec
+    tag = subtype if subtype and subtype != "none" else codec
     ext = CONTAINERS.get(codec, ".mov")
     return os.path.join(folder, f"{stem}.{tag}{ext}")
 
 
 def Start():
     """Read the panel widgets and submit one job through the extension."""
-    ext = ctrl()
-    p = panel()
-    src = p.op("source").par.value0.eval()
-    dst = p.op("destination").par.value0.eval()
-    codec = p.op("codec").par.value0.eval()
-    subtype = p.op("subtype").par.value0.eval() if p.op("subtype") else None
-    quality = None
-    qw = p.op("quality")
-    if qw is not None and ext_codec_has_quality(codec):
-        quality = qw.par.value0.eval()
-    fmt = p.op("pixelformat").par.value0.eval() if p.op("pixelformat") else None
-    fps_w = p.op("fps")
-    fps = fps_w.par.value0.eval() if fps_w else "auto"
-    if str(fps).strip().lower() in ("", "keep", "auto"):
-        fps = "auto"
-    res_w = p.op("resolution")
-    res = res_w.par.value0.eval() if res_w else "auto"
-    if str(res).strip().lower() in ("", "keep", "auto"):
-        res = "auto"
-    fit_w = p.op("fitmode")
-    fit = fit_w.par.value0.eval() if fit_w else None
+    src = _val("source")
+    dst = _val("destination")
+    codec = _val("codec_dd") or "notchlc"
+    subtype = _val("subtype_dd")
+    quality = _val("quality_dd")
+    fmt = _val("format_dd")
+    fps = str(_val("fps_f") or "auto").strip().lower()
+    res = str(_val("res_f") or "auto").strip().lower()
+    fitmode = _val("fit_dd")
 
     if not src or not os.path.isfile(src):
-        _status("pick a source file first")
+        note("pick a source file first")
         return
-    out = dst if dst and os.path.isdir(dst) else _output_name(src, codec,
-                                                             subtype)
-    if res != "auto":
-        out = out  # output path is folder-join; resolution only affects encode
 
-    ok = ext.Transcode(
+    if fps in ("", "keep", "auto"):
+        fps = "auto"
+    if res in ("", "keep", "auto"):
+        res = "auto"
+
+    out = dst if dst and os.path.isdir(dst) else _output_name(
+        src, codec, subtype)
+
+    # pixel format 'none' = let the codec/registry decide (auto)
+    if fmt == "none":
+        fmt = None
+    if quality and not CODECS.get(codec, {}).get("qualities"):
+        quality = None          # this codec has no quality ladder
+    if subtype == "none":
+        subtype = None
+
+    ok = ext().Transcode(
         input_path=src,
         output_path=out,
         codec=codec,
-        subtype=subtype if subtype else None,
+        subtype=subtype,
         quality=quality,
         fps=fps,
-        pixel_format=fmt if fmt else None,
+        pixel_format=fmt,
         resolution=res,
-        fit=fit,
+        fit=fitmode,
     )
-    _status("job submitted" if ok else "busy — job refused")
+    note("job submitted" if ok else "busy — job refused")
 
 
 def PauseResume():
     """Toggle pause/resume on the active job."""
-    ext = ctrl()
-    if ext.Isbusy:
-        # paused check: the extension exposes _paused via Ispaused below
-        if getattr(ext, "_paused", False):
-            ext.Resume()
-            _status("resumed")
-        else:
-            ext.Pause()
-            _status("paused")
+    e = ext()
+    if not e.Isbusy:
+        note("nothing running")
+        return
+    if getattr(e, "_paused", False):
+        e.Resume()
+    else:
+        e.Pause()
 
 
 def Stop():
     """Cancel the active job."""
-    ctrl().Cancel()
-    _status("cancelled")
+    ext().Cancel()
+    note("cancelled")
 
 
-def ext_codec_has_quality(codec):
-    return bool(CODECS.get(codec, {}).get("qualities"))
+def onDragDrop(info):
+    """Drop Script entry: file/folder dropped onto the panel."""
+    items = info.get("dropItems") if isinstance(info, dict) else None
+    if not items:
+        items = info["dropItems"] if hasattr(info, "__getitem__") else None
+    if not items:
+        return
+    first = items[0]
+    path = first if isinstance(first, str) else first.get("path", str(first))
+    w = widget("source")
+    if w is not None and path:
+        w.par.Value0.val = path
+        note("source set from drop")
+
+
+def note(text):
+    """Write a short message to the vCon COMP's Status par (which the
+    status label is bound to) — the panel's own feedback line."""
+    try:
+        op.vcon.par.Status.val = text
+    except Exception:
+        print(f"[panel] {text}")
 
 
 def pixel_formats_for(codec, subtype=None):
@@ -170,29 +200,3 @@ def pixel_formats_for(codec, subtype=None):
     if codec == "prores":
         return PRORES_PIXEL_FORMATS.get(subtype, ["yuv4228bit"])
     return CODECS.get(codec, {}).get("pixel_formats", ["rgb"])
-
-
-def onDragDrop(info):
-    """Container Drop Script entry: files/folders dropped onto the panel."""
-    dropItems = info["dropItems"]
-    first = dropItems[0] if dropItems else None
-    if not first:
-        return
-    p = panel()
-    if os.path.isdir(first):
-        # a folder dropped: put it in the SOURCE (folder batch later uses it)
-        p.op("source").par.value0.val = first
-    else:
-        p.op("source").par.value0.val = first
-
-
-def _status(text):
-    """Small helper: write to the panel's own status label (not the COMP's)."""
-    p = panel()
-    lab = p.op("statusline")
-    if lab is not None:
-        try:
-            lab.par.label.eval()
-            lab.par.label.val = text
-        except Exception:
-            pass
