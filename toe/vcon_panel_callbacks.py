@@ -562,21 +562,33 @@ def SyncFpsField():
 
 
 def _set_output_text(text):
-    """Write text to the OUTPUT label.
+    """Write text to the OUTPUT label (the renderable string par).
 
-    LIVE-VERIFIED (2026-09-13 dump): label widgets render the LABEL
-    par, NOT Widgetlabel ('Output field shows nothing' — the second
-    occurrence of this bug: Widgetlabel writes silently don't render
-    on this build). The Widgetlabel is the widget's built-in title
-    strip; the renderable text is the body par.
+    EVIDENCE (JP's capture): Widgetlabel is the STRING that renders —
+    the stale '/Users/jp/Desktop/toConvert/...mov' path JP saw in the
+    field lived in Widgetlabel. The par named 'Label' is an OP-REFERENCE
+    par (type:containerCOMP path:.../label) — writing a string to it
+    silently fails (my regression, reverted).
+
+    The write is READ-BACK VERIFIED: if the par doesn't take the text,
+    that is reported instead of failing silently (the failure mode that
+    cost two rounds here).
     """
     w = widget("output_l")
     if w is None:
+        note("output text: output_l widget not found")
         return
     try:
-        w.par.Label.val = text
+        w.par.Widgetlabel.val = text
     except Exception as exc:
-        note(f"output text failed (Label): {exc}")
+        note(f"output text failed (Widgetlabel): {exc}")
+        return
+    try:
+        got = str(w.par.Widgetlabel.eval())
+        if got != text:
+            note(f"output text: par took {got!r}, expected {text!r}")
+    except Exception:
+        pass
 
 
 def _queue_rebuild_from_table():
@@ -1325,11 +1337,13 @@ def onFrame():
     # (stock default — the builder turns it on, but a stale capture
     # could revert it), onSelectRow never fires; the Selectedrows par
     # still tracks the selection, so detect changes here too.
+    # ERRORS ARE REPORTED, not swallowed: this block hid a broken tick
+    # for two rounds (no display update, no trace of why).
     try:
         if _inspect_item is not None:
             _inspect_tick()
-    except Exception:
-        pass
+    except Exception as exc:
+        note(f"inspector tick error: {type(exc).__name__}: {exc}")
     try:
         q_ = widget("queue")
         sel = str(q_.par.Selectedrows.eval() or "") if q_ is not None else ""
