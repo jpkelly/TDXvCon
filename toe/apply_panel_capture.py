@@ -277,6 +277,23 @@ if CAPTURED:
             print("[capture] res-field visibility refreshed")
         except Exception:
             pass
+        # VCON-LEVEL NODE LAYOUT: also restored by build_network.py at
+        # its save step, but the PANEL build doesn't run that — apply
+        # here too so either runner honors JP's vcon arrangement
+        _vlay = CAPTURED.get('vconnodelayout')
+        if _vlay:
+            _applied = 0
+            for _name, (_nx, _ny) in _vlay:
+                _op_ = _panel_comp.parent().op(_name)
+                if _op_ is not None:
+                    try:
+                        _op_.nodeX = _nx
+                        _op_.nodeY = _ny
+                        _applied += 1
+                    except Exception:
+                        pass
+            print(f"[capture] vcon node layout applied to "
+                  f"{_applied}/{len(_vlay)} ops")
         # one clean refresh on the settled state
         _q = _panel_comp.op('queue')
         if _q is not None:

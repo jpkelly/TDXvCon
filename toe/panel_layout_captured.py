@@ -109,4 +109,5 @@ CAPTURED_PANEL = {
         "pars": {'resizecomp': '/project1/vcon/panel/destination', 'repocomp': '/project1/vcon/panel/destination', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.PreviewOutput()", 'Widgetlabel': 'DESTINATION', 'Labelwidth': 110},
     },
     "removed": ['status_l'],
+    "vconnodelayout": [('callbacks', (260, -580)), ('fit', (-240, -530)), ('info', (-440, -590)), ('moviein', (-440, -460)), ('movieout', (-40, -460)), ('panel', (-40, -120)), ('panel_build_run', (640, 20)), ('panel_callbacks', (150, -100)), ('panel_capture_run', (630, -100)), ('panel_dnd', (190, 290)), ('panel_tick', (-10, 290)), ('queue_display', (190, 150)), ('queue_table', (-20, 150)), ('tcpip', (110, -580)), ('tcpip_callbacks', (-40, -580)), ('tick', (-190, -310)), ('vcon_controller', (-20, -310))],
 }
