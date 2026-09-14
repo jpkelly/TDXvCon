@@ -222,6 +222,10 @@ def build():
 
     if op(target_path) is not None:
         say(f"removing existing {target_path}")
+        # NOTE: TD releases the listening socket asynchronously on destroy,
+        # which can race the fresh tcpip DAT's bind ("port already in use").
+        # Accepted workflow: if that error appears, delete the base COMP
+        # manually and run the build again — seconds of gap releases cleanly.
         op(target_path).destroy()
     # Never leave two controllers alive: they would both bind TCP 7999.
     default_path = "/project1/vcon"
