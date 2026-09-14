@@ -250,6 +250,21 @@ def build():
         except Exception as exc:
             say(f"  (status bind: {exc})")
 
+    # ---- live 'will create:' preview -------------------------------------
+    # Onvaluechangescript0 fires whenever the widget's value changes; the
+    # callbacks module recomputes the auto-named output and shows it.
+    say("wiring live output-name preview")
+    preview = ("op.vcon.op('panel_callbacks').module.PreviewOutput()")
+    for name in ("source", "destination", "codec_dd", "subtype_dd",
+                 "format_dd", "quality_dd"):
+        if name in widgets:
+            if setp(widgets[name], "Onvaluechangescript0", preview):
+                say(f"  {name}: preview wired")
+    # Destination shows only the selected FOLDER (strip an appended file).
+    if "destination" in widgets:
+        setp(widgets["destination"], "Onvaluesetcompletedscript0",
+             "op.vcon.op('panel_callbacks').module.NormalizeDestination()")
+
     say("=" * 52)
     say(f"panel built: {panelcomp.path}")
     say("open the panel viewer (RMB -> View...) to use it. Adjust the")

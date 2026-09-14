@@ -157,6 +157,9 @@ def Start():
         out = derived
     # Auto-name: never clobber — ' (2)', ' (3)', ... on collisions.
     out = _unique_output(out)
+    # Show the exact name that will be created (widget callbacks can't
+    # take expressions; a panel Update pulse refreshes on setting changes).
+    _show_output(out)
 
     # pixel format 'none' = let the codec/registry decide (auto)
     if fmt == "none":
@@ -177,7 +180,67 @@ def Start():
         resolution=res,
         fit=fitmode,
     )
-    note("job submitted" if ok else "busy — job refused")
+    note(f"job submitted -> {os.path.basename(out)}" if ok
+         else "busy — job refused")
+
+
+def _show_output(path):
+    """Display the exact output path that will be created.
+
+    The statusline widget is bound to the Status par by the builder, so
+    writing to the par is the one sanctioned way to put text there (and
+    the controller overwrites it as soon as the job starts loading — the
+    output name shows in the moment between picking settings and START,
+    which is exactly when the user wants to see it).
+
+    A dedicated label would be cleaner (v2 panel item): a 'output_l'
+    label widget whose text a callback refreshes on every widget change.
+    """
+    try:
+        op.vcon.par.Status.val = f"will create: {os.path.basename(path)}"
+    except Exception:
+        pass
+
+
+def PreviewOutput():
+    """Refresh the 'will create:' line from current widget state.
+
+    Called from widgets' Onvaluechangescript0 (set by the builder on
+    source/codec/subtype/destination) so the preview updates live as the
+    user picks settings — before START is ever pressed.
+    """
+    try:
+        src = _val("source")
+        if not src or not os.path.isfile(src):
+            return                      # nothing sensible to preview yet
+        dst = _val("destination")
+        codec = _val("codec_dd") or "notchlc"
+        subtype = _val("subtype_dd")
+        if subtype == "none":
+            subtype = None
+        derived = _output_name(src, codec, subtype)
+        if dst and os.path.isdir(dst):
+            out = os.path.join(dst, os.path.basename(derived))
+        else:
+            out = derived
+        op.vcon.par.Status.val = f"will create: {os.path.basename(_unique_output(out))}"
+    except Exception:
+        pass
+
+
+def NormalizeDestination():
+    """Show only the selected FOLDER in the destination widget.
+
+    fieldFolderBrowser can yield a path with the file appended (or the
+    user may paste a file path); strip to the directory for display and
+    for Start()'s isdir check.
+    """
+    w = widget("destination")
+    if w is None:
+        return
+    v = w.par.Value0.eval()
+    if v and os.path.isfile(v):
+        w.par.Value0.val = os.path.dirname(v)
 
 
 def PauseResume():
