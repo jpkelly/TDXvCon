@@ -340,7 +340,7 @@ def build():
     qt = vcon.create(_TABLEDAT(), "queue_table")
     qt.nodeX = 300
     qt.nodeY = 90
-    qt.appendRow(["file", "status", "progress"])
+    qt.appendRow(["file", "status", "progress", "path"])
     # DISPLAY table: ONLY file + status — the lister reads THIS one, so
     # auto-define generates exactly two columns (JP: no number column,
     # no progress column). queue_table keeps progress as the bar-TOP
