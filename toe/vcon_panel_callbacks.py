@@ -113,7 +113,6 @@ _last_src_fps = None
 #: queue row -> name / resolution / frame rate / codec in output_l)
 _inspect_item = None
 _inspect_ticks = 0
-_noted_select = False
 _noted_table = False   # one-shot raw-table dump for label verification
 _last_sel = ""         # last lister Selectedrows seen (poll fallback)
 
@@ -654,7 +653,7 @@ def OnQueueRowSelected(info=None):
     once the DAT cooks; the next preview/queue event overwrites the
     label back, as before.
     """
-    global _noted_select, _inspect_item, _inspect_ticks
+    global _inspect_item, _inspect_ticks
     info = info or {}
     # LIVE-VERIFIED shape (first-click dump): row / rowData.file /
     # sourceIndex / callbackName. EVERY click reports its outcome now
