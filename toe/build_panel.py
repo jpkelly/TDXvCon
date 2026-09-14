@@ -49,10 +49,10 @@ _WIDGETS = {
     "status_l":     ("label",              10,  60, 540, 26),
 }
 
-#: Button command par candidates (First-upper). A miss prints the widget's
-#: full customPars list, so the right name is visible in one run.
-_BUTTON_CMD_PARS = ("Buttoncommandonclick", "Menucommandonclick", "Command",
-                    "Callback", "Onclick", "Buttoncallback", "Script")
+#: Button custom pars (LIVE-DUMPED from buttonMomentary):
+#:   Offtoonscript0 — script fired on press (momentary off->on)
+#:   Buttonofflabel / Buttononlabel — the visible text
+_BUTTON_SCRIPT_PAR = "Offtoonscript0"
 
 
 def say(msg):
@@ -96,10 +96,16 @@ def setp(inner, par_name, value):
 
 
 def set_menu(inner, names, labels, default):
-    """Populate a dropDownMenu: Menunames/Menulabels then Value0."""
+    """Populate a dropDownMenu: Menunames/Menulabels then Value0.
+
+    Menulabels is space-delimited with quotes around entries containing
+    spaces — the caller passes RAW label text; quoting happens here ONCE
+    (a previous version double-quoted and TD reported 'Invalid menu items').
+    """
     ok = True
     ok &= setp(inner, "Menunames", " ".join(names))
-    ok &= setp(inner, "Menulabels", " ".join(f"'{l}'" for l in labels))
+    quoted = " ".join(f"'{l}'" if " " in l else l for l in labels)
+    ok &= setp(inner, "Menulabels", quoted)
     if default in names:
         ok &= setp(inner, "Value0", default)
     return ok
@@ -205,8 +211,8 @@ def build():
     if "fit_dd" in widgets:
         set_menu(widgets["fit_dd"],
                  ["fitbest", "fill", "fithorz", "fitvert", "fitoutside"],
-                 ["'Fit Best'", "'Stretch'", "'Fit Width'",
-                  "'Fit Height'", "'Cover/Crop'"],
+                 ["Fit Best", "Stretch", "Fit Width", "Fit Height",
+                  "Cover/Crop"],
                  "fitbest")
 
     # ---- buttons ----------------------------------------------------------
@@ -217,20 +223,17 @@ def build():
         if name not in widgets:
             continue
         inner = widgets[name]
-        setp(inner, "Label", text)
+        # Label text on a button lives in Buttonofflabel/Buttononlabel
+        # (the plain Label par is the widget's own name label, not the
+        # button face text — live dump shows both).
+        setp(inner, "Buttonofflabel", text)
+        setp(inner, "Buttononlabel", text)
         cmd = f"op.vcon.op('panel_callbacks').module.{fn}()"
-        hit = False
-        for p in _BUTTON_CMD_PARS:
-            par = getattr(inner.par, p, None)
-            if par is not None:
-                par.val = cmd
-                say(f"  {name}: command via par '{p}'")
-                hit = True
-                break
-        if not hit:
+        if setp(inner, _BUTTON_SCRIPT_PAR, cmd):
+            say(f"  {name}: script via '{_BUTTON_SCRIPT_PAR}' -> {fn}")
+        else:
             names = [p.name for p in inner.customPars]
-            say(f"  !! {name}: no command par found. customPars: "
-                f"{', '.join(names)}")
+            say(f"  !! {name}: no command par. customPars: {', '.join(names)}")
 
     # ---- progress bind + status label ------------------------------------
     say("binding progress + status")

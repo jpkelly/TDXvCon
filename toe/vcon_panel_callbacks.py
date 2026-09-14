@@ -187,12 +187,13 @@ def onDragDrop(info):
 
 
 def note(text):
-    """Write a short message to the vCon COMP's Status par (which the
-    status label is bound to) — the panel's own feedback line."""
-    try:
-        op.vcon.par.Status.val = text
-    except Exception:
-        print(f"[panel] {text}")
+    """Panel-local feedback line — printed to the textport.
+
+    Deliberately NOT written to the Status par: the controller owns that
+    (encode progress, errors, idle). The panel printing its own messages
+    means they coexist instead of racing each other's writes.
+    """
+    print(f"[panel] {text}")
 
 
 def pixel_formats_for(codec, subtype=None):
