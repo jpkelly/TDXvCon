@@ -111,9 +111,21 @@ _last_src_fps = None
 #: row-click inspector state: the clicked item + load ticks (the
 #: Media File Info DAT provides the metadata; JP 2026-09-14: click a
 #: queue row -> name / resolution / frame rate / codec in output_l)
-_inspect_item = None
-_inspect_ticks = 0
 _noted_table = False   # one-shot raw-table dump for label verification
+_tick_alive = False    # one-shot proof the panel tick is running
+_tick_errs = {}        # {label: last frame reported} — rate-limits tick noise
+
+
+def _tick_err(label, exc):
+    """Report a per-frame tick failure once every ~5s — silent tick
+    blocks hid a dead inspector for several rounds."""
+    try:
+        now = absTime.frame
+    except Exception:
+        now = 0
+    if now - _tick_errs.get(label, -9999) > 300:
+        _tick_errs[label] = now
+        note(f"tick error [{label}]: {type(exc).__name__}: {exc}")
 _last_sel = ""         # last lister Selectedrows seen (poll fallback)
 _selected_path = None  # input path of the last clicked row (remove_b target)
 
@@ -756,142 +768,114 @@ def _full_path_for(basename):
 
 
 def OnQueueRowSelected(info=None):
-    """Lister onSelectRow hook (JP 2026-09-14): clicking a queue row
-    shows that FILE's info in the OUTPUT label — name, resolution,
-    frame rate, codec — via the Media File Info DAT (JP's suggestion:
-    native TD metadata, one op). The onFrame tick finishes the display
-    once the DAT cooks; the next preview/queue event overwrites the
-    label back, as before.
+    """Lister onSelectRow hook: show the clicked file's metadata in
+    output_l (name | WxH | fps | length | codec).
+
+    SYNCHRONOUS by design. The previous version handed off to the
+    onFrame tick, which never ran — the display silently depended on a
+    per-frame state machine. Now the click sets the file, FORCE-COOKS
+    the Media File Info DAT, reads it, and writes the label in one go;
+    a delayed retry covers builds where the cook lands a frame later.
     """
-    global _inspect_item, _inspect_ticks
+    global _selected_path
     info = info or {}
-    # LIVE-VERIFIED shape (first-click dump): row / rowData.file /
-    # sourceIndex / callbackName. EVERY click reports its outcome now
-    # (the one-shot dump hid failures on clicks 2+).
     note(f"lister onSelectRow: {info.get('callbackName')} "
          f"row={info.get('row')} "
          f"file={(info.get('rowData') or {}).get('file')}")
     if not _queue:
-        # module recompiled (TD recompiles file-linked DATs on every
-        # file change — the queue list reset; the lister still shows
-        # the table's rows). Rebuild from the durable table copy.
         _queue_rebuild_from_table()
     item = _queue_item_from_info(info)
     if item is None:
         note("  no matching queue item — inspect skipped")
         return
-    if item is _inspect_item and _inspect_ticks > 0:
-        note("  re-click on the inspecting item — ignored")
-        return
-    _inspect_item = item
-    _inspect_ticks = 0
-    # REMOVAL TRACKING (JP's remove_b 2026-09-14): the selected item is
-    # stored BY PATH — dict identity dies with every module recompile
-    # (the queue list rebuilds from the table), a path survives.
-    global _selected_path
     _selected_path = item["input"]
-    # no intermediate 'inspecting …' text (JP: not needed) — output_l
-    # keeps its current content until the metadata lands
+    full = _full_path_for(os.path.basename(item["input"])) or item["input"]
+    _inspect_now(full, attempt=0)
+
+
+def _inspect_now(path, attempt=0):
+    """Load `path` into the inspector DAT, cook it, display the result.
+
+    Retries via the global run() scheduler (not the panel tick) so the
+    display never depends on onFrame being alive.
+    """
     p = panel()
     d = p.op("inspector") if p is not None else None
     if d is None:
-        note("  NO 'inspector' DAT in the panel — rebuild needed "
-             "(exec panel_build_run)")
-        _inspect_item = None
+        note("  NO 'inspector' DAT in the panel — rebuild needed")
         return
-    full = _full_path_for(os.path.basename(item["input"])) or item["input"]
-    note(f"  inspector loading: {full!r}")
-    try:
-        d.par.file = full
-        d.par.reloadpulse.pulse()
-    except Exception as exc:
-        note(f"inspect load failed: {exc}")
-
-
-def _inspect_tick():
-    """onFrame: finish the row inspector once the Media File Info DAT
-    has cooked the clicked file. Field lookup by label VARIANTS (the
-    docs' API names vs possible display labels); the 'valid' row (newer
-    builds) gates readiness. ~2s timeout falls back to whatever is
-    present.
-
-    EVERY tick reports (30-frame heartbeat) — after the 'removed poll'
-    fix, 'the display still doesn't change' with no trace means the tick
-    is invisible. This makes the tick loudly observable.
-    """
-    global _inspect_item, _inspect_ticks
-    if _inspect_item is None:
-        return
-    vals = _inspector_values()
-    _inspect_ticks += 1
-    if _inspect_ticks in (1, 30, 60, 90, 120):
-        p_ = panel()
-        d_ = p_.op("inspector") if p_ is not None else None
-        rows = d_.numRows if d_ is not None else 0
-        cur_file = ""
+    if attempt == 0:
+        note(f"  inspector loading: {path!r}")
         try:
-            cur_file = str(d_.par.file.eval() or "")
-        except Exception:
-            pass
-        note(f"  inspector tick {_inspect_ticks}: dat_rows={rows} "
-             f"vals={len(vals)} file_par={cur_file!r}")
-    if not _noted_table:
-        p_ = panel()
-        d_ = p_.op("inspector") if p_ is not None else None
-        if d_ is None:
-            note("row inspector: no 'inspector' DAT in the panel — "
-                "rebuild (exec panel_build_run)")
-            _noted_table = True
-        elif vals:
-            note(f"inspector DAT table ({d_.numRows} rows): {vals!r}")
-            _noted_table = True
-    if not vals:
-        if _inspect_ticks > 120:
-            _set_output_text(
-                os.path.basename(_inspect_item["input"])
-                + "  |  metadata unavailable")
-            note("  inspector: DAT read timed out (120 ticks, 0 values)")
-            _inspect_item = None
+            d.par.file = path
+            d.par.reloadpulse.pulse()
+        except Exception as exc:
+            note(f"  inspect load failed: {exc}")
+            return
+    try:
+        d.cook(force=True)
+    except Exception:
+        pass
+    vals = _inspector_values()
+    if not vals and attempt < 6:
+        run("args[0](args[1], args[2])", _inspect_now, path, attempt + 1,
+            delayFrames=10, fromOP=me if 'me' in globals() else None)
         return
+    if not vals:
+        note(f"  inspector: DAT returned no rows after {attempt} retries")
+        _set_output_text(os.path.basename(path) + "  |  metadata unavailable")
+        return
+    if attempt == 0 or not _noted_table:
+        _note_table_once(d, vals)
+    _set_output_text(_format_media_info(path, vals))
 
+
+def _note_table_once(d, vals):
+    global _noted_table
+    if not _noted_table:
+        _noted_table = True
+        note(f"  inspector DAT table ({d.numRows} rows): {vals!r}")
+
+
+def _format_media_info(path, vals):
+    """'name | WxH | fps | length | codec' from the DAT's field table."""
     def pick(*names):
         for n in names:
             if n in vals:
                 return vals[n]
         return None
 
-    vcodec = pick("vcodec", "video codec", "videocodec", "codec")
-    vdesc = pick("vcodedesc", "vcodecdesc", "video codec description",
-                 "codec description")
+    parts = [os.path.basename(path)]
     width = pick("width", "video width")
     height = pick("height", "video height")
+    if width and height:
+        parts.append(f"{width}x{height}")
     fps = pick("fps", "frame rate", "framerate")
-    valid = pick("valid")
-    ready = ((vcodec or width or fps) and
-             (valid is None or valid.lower() in ("1", "true", "yes")))
-    _inspect_ticks += 1
-    if ready or _inspect_ticks > 120:
-        parts = [os.path.basename(_inspect_item["input"])]
-        if width and height:
-            parts.append(f"{width}x{height}")
-        if fps:
+    if fps:
+        try:
+            parts.append(f"{float(fps):g} fps")
+        except (TypeError, ValueError):
             parts.append(f"{fps} fps")
-        # LENGTH (JP 2026-09-14): the DAT emits 'duration' (formatted),
-        # 'seconds' (float) and 'frames' — prefer the formatted one
-        dur = pick("duration", "length")
-        if not dur:
-            secs = pick("seconds")
-            dur = f"{secs} s" if secs else None
-        if not dur:
-            frames = pick("frames")
-            dur = f"{frames} frames" if frames else None
-        if dur:
-            parts.append(dur)
-        codec = vdesc or vcodec
-        parts.append(codec if codec else "(codec unavailable)")
-        _set_output_text("  |  ".join(parts))
-        note(f"  inspector: {', '.join(parts)}")
-        _inspect_item = None
+    dur = pick("duration", "length")
+    if not dur:
+        secs = pick("seconds", "numseconds")
+        if secs:
+            try:
+                s = float(secs)
+                dur = f"{int(s // 60)}:{s % 60:04.1f}"
+            except (TypeError, ValueError):
+                dur = f"{secs} s"
+    if not dur:
+        frames = pick("frames")
+        dur = f"{frames} frames" if frames else None
+    if dur:
+        parts.append(dur)
+    codec = pick("vcodecdesc", "vcodedesc", "video codec description",
+                 "vcodec", "video codec", "codec")
+    parts.append(codec if codec else "(codec unavailable)")
+    text = "  |  ".join(parts)
+    note(f"  inspector: {text}")
+    return text
 
 
 def _res_value():
@@ -1318,62 +1302,42 @@ def onFrame():
     directly (no expression needed). The LISTER row shows the current
     file's own progress as a block bar.
     """
-    global _last_src_fps          # without this, block 1b raised
-    try:                          # UnboundLocalError on EVERY frame
+    global _last_src_fps, _tick_alive
+    try:
         e = ext()
     except Exception:
         return
+
+    if not _tick_alive:
+        _tick_alive = True
+        note("panel tick alive (batch feeding + progress active)")
 
     # 1) drive the panel bar with batch progress, every frame
     try:
         fill = panel().op("prog_fill")
         if fill is not None:
             fill.par.w.val = _batch_progress() * 620
-    except Exception:
-        pass
+    except Exception as exc:
+        _tick_err("progress bar", exc)
 
-    # 1b) SOURCE-mode FPS display: follow the loaded movie's rate. When
-    # a new file loads (job start), sample_rate changes — refresh the
-    # (disabled) field so it displays the current source's rate. Cheap
-    # per-frame float compare, only in source mode.
+    # 1b) SOURCE-mode FPS display follows the loaded movie's rate
     try:
         if _fps_source_mode() and _source_fps() != _last_src_fps:
             _last_src_fps = _source_fps()
             if _last_src_fps is not None:
                 SyncFpsField()
-    except Exception:
-        pass
-
-    # 1c) row-click inspector: a clicked queue file loads in the
-    # Media File Info DAT; finish its display in output_l once cooked.
-    # The onSelectRow forwarder (builder-injected, Advancedcallbacks ON)
-    # is the PRIMARY path — confirmed firing in JP's textport log. The
-    # Selectedrows POLL that lived here was REMOVED: it re-called
-    # OnQueueRowSelected every frame (new dict identity failed the
-    # re-click guard), reloading the DAT and resetting _inspect_ticks
-    # to 0 — the DAT never cooked, the tick never reached threshold,
-    # the display never updated. THE ROOT CAUSE of "nothing changes
-    # when clicking on an item."
-    # ERRORS ARE REPORTED, not swallowed.
-    try:
-        if _inspect_item is not None:
-            _inspect_tick()
     except Exception as exc:
-        note(f"inspector tick error: {type(exc).__name__}: {exc}")
+        _tick_err("fps display", exc)
 
-    # 1d) OUTPUT preview refresh when the queue EMPTIES: drops/adds call
-    # PreviewOutput directly, but paths that empty the lister (Stop, the
-    # last job finishing via tick detection) left the label stale. Cheap
-    # per-frame check: only acts when the queue is empty AND rows remain
-    # in the display table (the just-emptied moment); the refresh itself
-    # clears those rows.
+    # 1d) preview refresh for the just-emptied moment (mutation points
+    # call PreviewOutput directly; this catches paths that don't)
     try:
         if not _queue:
             d_ = op.vcon.op("queue_display")
             if d_ is not None and d_.numRows > 1:
                 PreviewOutput()
-    except Exception:
-        pass
+    except Exception as exc:
+        _tick_err("preview refresh", exc)
 
     # 2) feed the loop when idle
     if e.is_busy:
