@@ -799,13 +799,11 @@ def build():
     say("binding progress + status")
     if "status_l" in widgets:
         try:
-            # LIVE-VERIFIED (probe 4): label widgets render their
-            # WIDGETLABEL, not the 'Label' config par. An expression on
-            # Widgetlabel makes the displayed status track the par live.
-            # status_l is a REMOVABLE widget (JP 2026-09-14): absent from
-            # the capture, this block simply skips.
-            widgets["status_l"].par.Widgetlabel.expr = "op.vcon.par.Status"
-            say("  status label bound to Status par (Widgetlabel expr)")
+            # LIVE-VERIFIED (2026-09-13 dump, confirmed by the output_l
+            # fix): label widgets render their LABEL par, NOT the
+            # Widgetlabel — the bind goes on Label.
+            widgets["status_l"].par.Label.expr = "op.vcon.par.Status"
+            say("  status label bound to Status par (Label expr)")
         except Exception as exc:
             say(f"  (status bind: {exc})")
 

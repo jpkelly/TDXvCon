@@ -196,19 +196,15 @@ def PreviewOutput():
     Called on any relevant widget change. Shows the auto-named output the
     next START would create — including ' (2)' collision numbering.
 
-    LIVE-VERIFIED (probe 4): the label widget renders its WIDGETLABEL
-    (title) as the displayed text — writes to the 'Label' config par
-    never showed. Full path: destination folder + derived file name.
+    LIVE-VERIFIED (2026-09-13 dump): the label widget renders the LABEL
+    par, NOT Widgetlabel — writes to Widgetlabel silently don't render
+    on this build ('Output field shows nothing', the SECOND occurrence).
+    Full path: destination folder + derived file name.
     """
     try:
-        out_l = widget("output_l")
-        if out_l is None:
-            return
-        # SOURCE field removed (JP: drops/+ADD are the way in). Derive
-        # from the first QUEUED item — that's what the next encode makes.
         src = _queue[0]["input"] if _queue else None
         if not src or not os.path.isfile(src):
-            out_l.par.Widgetlabel.val = "(queue is empty — add files)"
+            _set_output_text("(queue is empty — add files)")
             return
         dst = _val("destination")
         dst_dir = dst if dst and os.path.isdir(dst) else (
@@ -216,7 +212,7 @@ def PreviewOutput():
         codec = _val("codec_dd") or "notchlc"
         subtype = _validate_choice(codec, "subtype", _val("subtype_dd"))
         out = _unique_output(_derive_output(src, dst_dir, codec, subtype))
-        out_l.par.Widgetlabel.val = out
+        _set_output_text(out)
     except Exception as exc:
         note(f"preview failed: {exc}")
 
@@ -566,14 +562,21 @@ def SyncFpsField():
 
 
 def _set_output_text(text):
-    """Write text to the OUTPUT label (renders Widgetlabel — verified)."""
+    """Write text to the OUTPUT label.
+
+    LIVE-VERIFIED (2026-09-13 dump): label widgets render the LABEL
+    par, NOT Widgetlabel ('Output field shows nothing' — the second
+    occurrence of this bug: Widgetlabel writes silently don't render
+    on this build). The Widgetlabel is the widget's built-in title
+    strip; the renderable text is the body par.
+    """
     w = widget("output_l")
     if w is None:
         return
     try:
-        w.par.Widgetlabel.val = text
+        w.par.Label.val = text
     except Exception as exc:
-        note(f"output text failed: {exc}")
+        note(f"output text failed (Label): {exc}")
 
 
 def _queue_rebuild_from_table():
