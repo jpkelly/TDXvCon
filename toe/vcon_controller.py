@@ -513,9 +513,12 @@ class VconExt:
         resolution = params.get("resolution")
         scale = params.get("scale")
         if scale is not None:
+            # NATIVE movie dimensions: fileWidth/fileHeight (MoviefileinTOP
+            # class, docs). .width/.height are the TOP's output TEXTURE size
+            # — wrong source for scale math.
             try:
-                mw = int(moviein.width)
-                mh = int(moviein.height)
+                mw = int(moviein.fileWidth)
+                mh = int(moviein.fileHeight)
             except Exception:
                 mw = mh = 0
             try:
@@ -527,7 +530,15 @@ class VconExt:
                 resolution = (f"{max(2, int(mw * factor) // 2 * 2)}x"
                               f"{max(2, int(mh * factor) // 2 * 2)}")
             else:
-                resolution = None   # unknowable now — fall back to unscaled
+                # FAIL LOUDLY: the user asked for a scale; silently encoding
+                # unscaled would be the exact wrong-output failure mode this
+                # project exists to prevent.
+                self._fail(
+                    f"could not read source dimensions for scale {scale} "
+                    f"(moviein.fileWidth/fileHeight unavailable)",
+                    "scale-error",
+                )
+                return
         self._apply_resolution(resolution, params.get("fit"))
 
         movieout = self.movieout

@@ -38,24 +38,30 @@ COMP_NAME = "panel"
 REPO = "/Users/jp/Documents/GitHub/vCon"
 
 #: outer-name -> (tox, x, y, w, h)
+#: GEOMETRY (consistent): label column 10-110 (w=100), field column
+#: starts at 110. ROW H=30 for every row; rows spaced 50 apart.
+#: y measured up from the panel bottom.
+_ROW = 30          # uniform widget height
+_STEP = 50         # row pitch
+_X0, _X1, _X2, _X3 = 150, 290, 430, 20   # label x / field x / col2 x / pad
 _WIDGETS = {
-    "source":       ("fieldFileBrowser",   10, 596, 540, 30),
-    "destination":  ("fieldFolderBrowser", 10, 556, 540, 30),
-    "codec_dd":     ("dropDownMenu",       10, 506, 260, 30),
-    "subtype_dd":   ("dropDownMenu",      290, 506, 260, 30),
-    "format_dd":    ("dropDownMenu",       10, 456, 260, 30),
-    "quality_dd":   ("dropDownMenu",      290, 456, 260, 30),
-    "fps_f":        ("fieldString",        10, 406, 160, 30),
-    "resmode_dd":   ("dropDownMenu",      180, 406, 130, 30),
-    "scale_dd":     ("dropDownMenu",      320, 406, 130, 30),
-    "fit_dd":       ("dropDownMenu",      460, 406, 90, 30),
-    "start_b":      ("buttonMomentary",    10, 346, 120, 36),
-    "pause_b":      ("buttonMomentary",   140, 346, 120, 36),
-    "stop_b":       ("buttonMomentary",   270, 346, 120, 36),
-    "output_l":     ("label",             400, 346, 150, 36),
-    "prog_s":       ("sliderHorz",         10, 296, 380, 30),
-    "status_l":     ("label",             400, 296, 150, 30),
-    "queue":        ("lister",             10,  10, 540, 270),
+    "source":       ("fieldFileBrowser",   _X0, 596, 410, _ROW),
+    "destination":  ("fieldFolderBrowser", _X0, 546, 410, _ROW),
+    "codec_dd":     ("dropDownMenu",       _X1, 496, 260, _ROW),
+    "subtype_dd":   ("dropDownMenu",      _X2, 496, 110, _ROW),
+    "format_dd":    ("dropDownMenu",       _X1, 446, 110, _ROW),
+    "quality_dd":   ("dropDownMenu",      _X2, 446, 110, _ROW),
+    "fps_f":        ("fieldString",       _X1, 396, 60, _ROW),
+    "resmode_dd":   ("dropDownMenu",      _X2, 406 - 10, 80, _ROW),
+    "scale_dd":     ("dropDownMenu",      430, 406 - 50, 110, _ROW),
+    "fit_dd":       ("dropDownMenu",      550, 406 - 50, 90, _ROW),
+    "start_b":      ("buttonMomentary",     20, 306, 100, _ROW),
+    "pause_b":      ("buttonMomentary",    130, 306, 100, _ROW),
+    "stop_b":       ("buttonMomentary",    210, 306, 100, _ROW),
+    "output_l":     ("label",             _X0, 306, 220, _ROW),
+    "prog_s":       ("sliderHorz",          20, 256, 300, _ROW),
+    "status_l":     ("label",             330, 256, 230, _ROW),
+    "queue":        ("lister",              20,  20, 540, 220),
 }
 
 #: Field titles via Widgetlabel (LIVE-DUMPED: the widget's title par).
@@ -163,7 +169,7 @@ def build():
     panelcomp = vcon.create(containerCOMP, COMP_NAME)
     panelcomp.nodeX = 300
     panelcomp.nodeY = 260
-    place(panelcomp, 0, 0, 560, 640)
+    place(panelcomp, 0, 0, 660, 640)
 
     # ---- load widgets -----------------------------------------------------
     say("loading widgets")
@@ -197,6 +203,16 @@ def build():
     for name, title in _TITLES.items():
         if name in widgets:
             setp(widgets[name], "Widgetlabel", title)
+    # Uniform label width (Layout lives on the OUTER wrapper; Labelwidth is
+    # the label-area width in panel units — live-dumped par). Small widgets
+    # (w=60-90) get proportionally narrow labels so the field stays visible.
+    _LABEL_W = {"source": 130, "destination": 130, "codec_dd": 100,
+                "subtype_dd": 110, "format_dd": 100, "quality_dd": 110,
+                "fps_f": 45, "resmode_dd": 45, "scale_dd": 70,
+                "fit_dd": 45, "output_l": 110, "status_l": 110}
+    for name, lw in _LABEL_W.items():
+        if name in widgets:
+            setp(widgets[name], "Labelwidth", lw)
     # Buttons' face text (off/on labels, live-dumped) — the title is separate
     for name, text in [("start_b", "START"), ("pause_b", "PAUSE"),
                        ("stop_b", "STOP")]:

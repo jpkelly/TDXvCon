@@ -226,27 +226,26 @@ def UpdateSubtypes():
 
 
 def _update_res_fields():
-    """Show the W/H fields only when RES is set to 'custom'.
+    """Show the SCALE dropdown only when RES is set to 'scaled'.
 
-    Keep (default) hides them; a custom WxH reveals two numeric fields
-    (res_w / res_h). Display uses the widget's display par (panel-level,
-    not enable) so the values survive toggling.
+    Uses the OUTER wrapper's Layout par (display=0 collapses the widget's
+    width/height to nothing in the parent panel — verified: widget config
+    pars live on the INNER, layout on the outer). If display is missing,
+    x-placement is the fallback.
     """
     mode = str(_val("resmode_dd") or "unscaled").strip().lower()
     show = 1 if mode == "scaled" else 0
-    for name in ("scale_dd",):
-        w = widget(name)
-        if w is not None:
-            try:
-                w.outer = None  # placeholder to avoid confusion
-            except Exception:
-                pass
-            outer = panel().op(name)
-            if outer is not None:
-                try:
-                    outer.par.display = show
-                except Exception:
-                    pass
+    outer = panel().op("scale_dd") if panel() is not None else None
+    if outer is not None:
+        try:
+            outer.par.display = show
+            return
+        except Exception:
+            pass
+        try:
+            outer.par.x = 320 if show else 1200   # off-panel when hidden
+        except Exception as exc:
+            note(f"display toggle failed: {exc}")
 
 
 def _res_value():
