@@ -63,13 +63,15 @@ _WIDGETS = {
     "scaled_t":     ("buttonToggle",      170, 420, 130, _ROW),
     "scale_dd":     ("dropDownMenu",      310, 420, 160, _ROW),
     "fit_dd":       ("dropDownMenu",      480, 420, 160, _ROW),
-    # buttons (label disabled) | OUTPUT name
+    # buttons (label disabled)
     "start_b":      ("buttonMomentary",    20, 375, 110, _ROW),
     "pause_b":      ("buttonMomentary",   140, 375, 110, _ROW),
     "stop_b":       ("buttonMomentary",   260, 375, 110, _ROW),
-    "output_l":     ("label",             380, 375, 260, _ROW),
+    # OUTPUT: full-width read-only field BELOW the buttons (JP: the
+    # derived filename is too long for a side slot — give it the row)
+    "output_l":     ("label",              20, 330, 620, _ROW),
     # PROGRESS slider, full width
-    "prog_s":       ("sliderHorz",         20, 330, 620, _ROW),
+    "prog_s":       ("sliderHorz",         20, 285, 620, _ROW),
     # queue, then STATUS at the very bottom
     "queue":        ("lister",             20,  90, 620, 200),
     "status_l":     ("label",              20,  40, 620, _ROW),
