@@ -801,28 +801,28 @@ def _inspect_tick():
     has cooked the clicked file. Field lookup by label VARIANTS (the
     docs' API names vs possible display labels); the 'valid' row (newer
     builds) gates readiness. ~2s timeout falls back to whatever is
-    present."""
+    present.
+
+    EVERY tick reports (30-frame heartbeat) — after the 'removed poll'
+    fix, 'the display still doesn't change' with no trace means the tick
+    is invisible. This makes the tick loudly observable.
+    """
     global _inspect_item, _inspect_ticks
     if _inspect_item is None:
         return
     vals = _inspector_values()
-    # PER-CLICK diagnostics (probe-first): the DAT's real labels dump
-    # to the textport — if the pick() variants ever miss, that dump
-    # shows the true row names. A missing DAT says so plainly (builder
-    # creates it — file-linked module changes go live WITHOUT a
-    # rebuild, the DAT does not). A cook with the FILE PAR UNSET means
-    # the write fell over (par name, pulse, or the file path itself).
-    global _noted_table
-    p_ = panel()
-    d_ = p_.op("inspector") if p_ is not None else None
-    if d_ is not None:
+    _inspect_ticks += 1
+    if _inspect_ticks in (1, 30, 60, 90, 120):
+        p_ = panel()
+        d_ = p_.op("inspector") if p_ is not None else None
+        rows = d_.numRows if d_ is not None else 0
+        cur_file = ""
         try:
             cur_file = str(d_.par.file.eval() or "")
-            if vals and cur_file.lower() in ("", "none"):
-                note("  inspector: DAT has rows but FILE PAR is EMPTY "
-                     "— the file write/pulse didn't land")
         except Exception:
             pass
+        note(f"  inspector tick {_inspect_ticks}: dat_rows={rows} "
+             f"vals={len(vals)} file_par={cur_file!r}")
     if not _noted_table:
         p_ = panel()
         d_ = p_.op("inspector") if p_ is not None else None
@@ -834,11 +834,11 @@ def _inspect_tick():
             note(f"inspector DAT table ({d_.numRows} rows): {vals!r}")
             _noted_table = True
     if not vals:
-        _inspect_ticks += 1
         if _inspect_ticks > 120:
             _set_output_text(
                 os.path.basename(_inspect_item["input"])
                 + "  |  metadata unavailable")
+            note("  inspector: DAT read timed out (120 ticks, 0 values)")
             _inspect_item = None
         return
 
