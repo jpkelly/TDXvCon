@@ -108,11 +108,10 @@ _queue = []
 #: last source-rate seen by the onFrame FPS display (SOURCE mode)
 _last_src_fps = None
 
-#: row-click inspector state: the clicked item, its mdls codec, load
-#: ticks, and a one-shot probe flag (JP 2026-09-14: click a queue row ->
-#: name / resolution / frame rate / codec in output_l)
+#: row-click inspector state: the clicked item + load ticks (the
+#: Media File Info DAT provides the metadata; JP 2026-09-14: click a
+#: queue row -> name / resolution / frame rate / codec in output_l)
 _inspect_item = None
-_inspect_codec = ""
 _inspect_ticks = 0
 _noted_select = False
 
@@ -639,33 +638,41 @@ def _queue_item_from_info(info):
     return None
 
 
-def _mdls_codecs(path):
-    """The SOURCE codec(s) via macOS Spotlight metadata (mdls) — TD
-    exposes no source-codec API, and mdls is the same tool the output
-    codec verification uses. Best-effort: '' on any failure (external
-    or unindexed drives return nothing useful)."""
+def _inspector_values():
+    """The Media File Info DAT's 2-column table as {label: value}.
+
+    The DAT (JP's suggestion — replaces the inspectin/mdls approach)
+    emits one row per field: filename/filepath/vcodec/vcodecDesc/
+    width/height/fps/frames/seconds (+ audio rows, + 'valid' on newer
+    builds). Labels are normalized lowercase; the docs note DISPLAY
+    labels may differ from API names ('Video Codec' vs 'vcodec'), so
+    lookups go through label VARIANTS (see _inspect_tick).
+    """
+    p = panel()
+    d = p.op("inspector") if p is not None else None
+    if d is None:
+        return {}
+    out = {}
     try:
-        import subprocess
-        out = subprocess.run(
-            ["mdls", "-name", "kMDItemCodecs", "-raw", path],
-            capture_output=True, timeout=5)
-        txt = (out.stdout or b"").decode("utf-8", "replace").strip()
-        if txt and txt.lower() not in ("(null)", "none"):
-            return txt
+        for r in range(d.numRows):
+            k = str(d[r, 0] or "").strip().lower()
+            v = str(d[r, 1] or "").strip()
+            if k and v:
+                out[k] = v
     except Exception:
         pass
-    return ""
+    return out
 
 
 def OnQueueRowSelected(info=None):
     """Lister onSelectRow hook (JP 2026-09-14): clicking a queue row
     shows that FILE's info in the OUTPUT label — name, resolution,
-    frame rate, codec. The inspector loads the file in a DEDICATED
-    Movie File In (the encoder's own moviein is never touched); the
-    onFrame tick finishes the display once it loads. The next preview/
-    queue event overwrites the label back, as before.
+    frame rate, codec — via the Media File Info DAT (JP's suggestion:
+    native TD metadata, one op). The onFrame tick finishes the display
+    once the DAT cooks; the next preview/queue event overwrites the
+    label back, as before.
     """
-    global _noted_select, _inspect_item, _inspect_codec, _inspect_ticks
+    global _noted_select, _inspect_item, _inspect_ticks
     info = info or {}
     if not _noted_select:
         _noted_select = True
@@ -674,53 +681,64 @@ def OnQueueRowSelected(info=None):
     if item is None:
         return
     _inspect_item = item
-    _inspect_codec = _mdls_codecs(item["input"])
     _inspect_ticks = 0
     _set_output_text(f"inspecting {os.path.basename(item['input'])} …")
     p = panel()
-    ins = p.op("inspectin") if p is not None else None
-    if ins is not None:
+    d = p.op("inspector") if p is not None else None
+    if d is not None:
         try:
-            ins.par.file = item["input"]
+            d.par.file = item["input"]
+            try:
+                d.par.reloadpulse.pulse()
+            except Exception:
+                pass
         except Exception as exc:
             note(f"inspect load failed: {exc}")
 
 
 def _inspect_tick():
-    """onFrame: finish the row inspector once inspectin has loaded the
-    clicked file (fileWidth/fileHeight > 0 — the verified property
-    names), or give up after ~2s of frames."""
+    """onFrame: finish the row inspector once the Media File Info DAT
+    has cooked the clicked file. Field lookup by label VARIANTS (the
+    docs' API names vs possible display labels); the 'valid' row (newer
+    builds) gates readiness. ~2s timeout falls back to whatever is
+    present."""
     global _inspect_item, _inspect_ticks
-    p = panel()
-    ins = p.op("inspectin") if p is not None else None
-    if ins is None:
-        _inspect_item = None
+    if _inspect_item is None:
         return
+    vals = _inspector_values()
+    if not vals:
+        _inspect_ticks += 1
+        if _inspect_ticks > 120:
+            _set_output_text(
+                os.path.basename(_inspect_item["input"])
+                + "  |  (metadata unavailable)")
+            _inspect_item = None
+        return
+
+    def pick(*names):
+        for n in names:
+            if n in vals:
+                return vals[n]
+        return None
+
+    vcodec = pick("vcodec", "video codec", "videocodec", "codec")
+    vdesc = pick("vcodedesc", "vcodecdesc", "video codec description",
+                 "codec description")
+    width = pick("width", "video width")
+    height = pick("height", "video height")
+    fps = pick("fps", "frame rate", "framerate")
+    valid = pick("valid")
+    ready = ((vcodec or width or fps) and
+             (valid is None or valid.lower() in ("1", "true", "yes")))
     _inspect_ticks += 1
-    w = h = 0
-    try:
-        w = int(ins.fileWidth)
-        h = int(ins.fileHeight)
-    except Exception:
-        pass
-    name = os.path.basename(_inspect_item["input"])
-    if w > 0 and h > 0:
-        fps = 0.0
-        try:
-            fps = float(p.op("inspectinfo")["sample_rate"][0])
-        except Exception:
-            pass
-        parts = [name, f"{w}x{h}"]
-        if fps > 0:
-            parts.append(f"{'%g' % fps} fps")
-        if _inspect_codec:
-            parts.append(_inspect_codec)
-        _set_output_text("  |  ".join(parts))
-        _inspect_item = None
-    elif _inspect_ticks > 120:
-        parts = [name, "(resolution/fps unavailable)"]
-        if _inspect_codec:
-            parts.append(_inspect_codec)
+    if ready or _inspect_ticks > 120:
+        parts = [os.path.basename(_inspect_item["input"])]
+        if width and height:
+            parts.append(f"{width}x{height}")
+        if fps:
+            parts.append(f"{fps} fps")
+        codec = vdesc or vcodec
+        parts.append(codec if codec else "(codec unavailable)")
         _set_output_text("  |  ".join(parts))
         _inspect_item = None
 
@@ -1115,7 +1133,7 @@ def onFrame():
         pass
 
     # 1c) row-click inspector: a clicked queue file loads in the
-    # dedicated inspectin; finish its display in output_l once loaded
+    # Media File Info DAT; finish its display in output_l once cooked
     try:
         if _inspect_item is not None:
             _inspect_tick()

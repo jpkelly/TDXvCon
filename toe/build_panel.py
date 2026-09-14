@@ -451,28 +451,16 @@ def build():
     say(f"loaded {len(widgets)} widgets "
         f"({len(_REMOVED)} removed, {len(_ADDED)} added per capture)")
 
-    # ---- row-click INSPECTOR ops (JP 2026-09-14) -----------------------
-    # A DEDICATED Movie File In (+ its Info CHOP) so clicking a queue
-    # row can read resolution/fps without touching the encoder's own
-    # moviein. playmode=locked (hold on frame 0): the inspector never
-    # plays — it only loads so its dimensions/rate can be read.
-    say("creating row inspector (inspectin + inspectinfo)")
-    ins = panelcomp.create(find_type("moviefileinTOP"), "inspectin")
+    # ---- row-click INSPECTOR (JP 2026-09-14; DAT per JP's suggestion) --
+    # Media File Info DAT: NATIVE TD metadata reader — codec (vcodec/
+    # vcodecDesc), resolution (width/height), fps, duration all from
+    # ONE op. Replaces the earlier inspectin moviein + Info CHOP + mdls
+    # approach (mdls was a workaround for 'TD exposes no source codec' —
+    # wrong; this DAT does it natively).
+    say("creating row inspector (Media File Info DAT)")
+    insdat = panelcomp.create(find_type("mediafileinfoDAT"), "inspector")
     try:
-        ins.par.playmode = "locked"
-        ins.par.display = 0
-    except Exception as exc:
-        say(f"  (inspectin pars: {exc})")
-    iinfo = panelcomp.create(find_type("infoCHOP"), "inspectinfo")
-    try:
-        iinfo.par.op = ins        # object first, path fallback
-    except Exception:
-        try:
-            iinfo.par.op = ins.path
-        except Exception as exc:
-            say(f"  (inspectinfo op: {exc})")
-    try:
-        iinfo.par.display = 0
+        insdat.par.display = 0
     except Exception:
         pass
 
