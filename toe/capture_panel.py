@@ -1,4 +1,4 @@
-"""capture_panel.py v3.1 — full-fidelity snapshot of your hand-tuned panel.
+"""capture_panel.py v4 — full-fidelity snapshot of your hand-tuned panel.
 
 Run in the TD textport AFTER adjusting the panel by hand:
 
@@ -7,44 +7,38 @@ Run in the TD textport AFTER adjusting the panel by hand:
 
 Captures the PANEL CONTAINER ITSELF (a 'panel' entry: its Layout/Look/
 drop settings, diffed against a fresh containerCOMP) plus EVERY widget
-— all 20, including add_b / resw_f / resh_f and the two progress-bar
-containers that v2 silently skipped — diffing EVERY par (custom AND
-builtin: fonts, font choices, sizes, colors, alignment, everything)
-against a freshly loaded copy of each widget's tox.
+— diffing EVERY par (custom AND builtin: fonts, font choices, sizes,
+colors, alignment, everything) against a freshly loaded copy of each
+widget's tox.
 
-v3.1 fixes found by auditing the first v3 run (2026-09-14):
-  - PAR ENUMERATION now goes comp.pages -> page.pars with fallbacks
-    (v3's comp.pars alone did NOT deliver builtin pars — the 'panel'
-    and 'prog_fill' entries came out with 0 changed pars despite the
-    builder-set drop settings and layer=1)
-  - EXPRESSIONS are DIFFED AGAINST STOCK too (v3 recorded ~20 exprs
-    per button: the widget's own internal exprs plus 'None' strings
-    that this TD build returns for unset expressions — baking those
-    would break pars)
-  - BINDS (par.bindExpr) are captured as well — value + expr + bind
-    is the complete parameter state
-  - listerconfig lookup goes through the queue's Configcomp PAR first
-    (canonical — points at the ACTIVE config wherever it lives), with
-    loud diagnostics instead of v3's silent skip
+v4 (JP 2026-09-14): the capture now owns PANEL MEMBERSHIP —
+  - HAND-ADDED widgets are captured with the palette tox they came
+    from ('widgettox' field, read from the widget's own Widgettox
+    par), so future builds RECREATE them from the palette. Unknown
+    widget types (no palette tox) are reported loudly and skipped —
+    the builder can only rebuild what it knows how to make.
+  - BUILDER widgets MISSING from the panel are recorded as removed
+    ('removed' list) — future builds skip creating them. Removing
+    the queue removes the batch UI; the encoder itself (queue_table,
+    panel_callbacks, movieout...) is BUILDER INFRASTRUCTURE and is
+    never treated as removed.
+  - NODE LAYOUT: each entry records nodeX/nodeY — where the COMP sits
+    in the network editor INSIDE the panel operator — so a hand-
+    arranged node layout persists across rebuilds.
 
 Fidelity details:
   - geometry (panel-view x/y/w/h) per widget, in the 'geometry' section
-  - OP-valued pars become PATH STRINGS (v2 wrote TD reprs like
-    'type:tableDAT path:...' which are not valid Python); refs pointing
-    INSIDE a widget are skipped (internal wiring — baking them would
-    reach into the widget's internals), refs to outside ops
-    (queue_display, panel_dnd, ...) are kept as paths
-  - only DIFFS vs stock are recorded — unchanged pars (fonts, colors,
-    sizes matching the stock widget) regenerate from the tox on
-    rebuild, so capture + rebuild reproduces the panel exactly
+  - nodeX/nodeY per widget, in the 'nodelayout' section
+  - OP-valued pars become PATH STRINGS; refs pointing INSIDE a widget
+    are skipped (internal wiring), outside refs are kept as paths
+  - only DIFFS vs stock are recorded — unchanged pars regenerate from
+    the tox on rebuild
   - pulse pars are skipped (they are actions, not state)
-  - the queue entry also carries 'listerconfig': {DAT name: text} —
-    the lister's config COMP holds hand-tuned column settings
+  - the queue entry also carries 'listerconfig': {DAT name: text}
 
 Output: written to toe/panel_layout_captured.py (summary printed).
 The next build_panel.py run applies it automatically — the capture
-is canonical. Hand-broken expressions (typos) are recorded faithfully
-— check the printed summary.
+is canonical.
 """
 
 import os
@@ -75,9 +69,51 @@ _TOX_OF = {
     "status_l": "label", "queue": "lister",
 }
 
+#: Every palette tox we can recreate a hand-added widget from (Basic
+#: Widgets directory — the source of the panel's existing widgets).
+_BASIC_WIDGET_TOXES = {
+    "buttonMomentary", "buttonToggle", "buttonPush", "checkbox",
+    "radioButton", "dropDownMenu", "fieldString", "fieldNumeric",
+    "fieldFileBrowser", "fieldFolderBrowser", "sliderHorz",
+    "sliderVert", "slider2D", "sliderBank", "label", "lister",
+    "masterHeader", "masterButton", "masterLabel", "masterSlider",
+    "masterStringField", "masterNumericField", "masterField",
+    "masterSliderHorz", "masterCheckbox", "masterCheckbox",
+    "masterRadioButton", "masterDropMenu", "masterList",
+    "masterFolderTabs", "masterSection", "masterFooter",
+}
+
 #: builder-made bare containers (no tox — baseline is a fresh
 #: containerCOMP; all their pars are builtin anyway)
 _BARE_CONTAINERS = {"prog_track", "prog_fill"}
+
+#: The panel widgets the BUILDER knows how to make (mirror of
+#: build_panel._WIDGETS). Used to detect (a) hand-ADDED widgets (in the
+#: panel but not here → captured with their palette tox so future
+#: builds recreate them) and (b) builder widgets REMOVED by hand (in
+#: here but missing from the panel → future builds skip them).
+_BUILDER_WIDGETS = {
+    "destination", "codec_dd", "format_dd", "subtype_dd", "quality_s",
+    "fps_f", "scaled_t", "scale_dd", "fit_dd", "resw_f", "resh_f",
+    "start_b", "pause_b", "stop_b", "add_b", "output_l",
+    "prog_track", "prog_fill", "queue", "status_l",
+}
+
+#: BUILDER INFRASTRUCTURE — never treated as 'removed' even if absent
+#: (the panel needs them to function; removal would break the queue,
+#: the status line, the batch progress). Only UI widgets may go.
+_KEEP_ALWAYS = {"queue", "status_l", "prog_track", "prog_fill"}
+
+#: palette tox directory → the tox file names inside it that we know
+#: how to recreate. A hand-added widget reports its palette origin via
+#: its own 'Widgettox' par (e.g. 'buttonMomentary').
+_TOX_DIRS = [
+    ("/Applications/TouchDesigner.app/Contents/Resources/tfs/"
+     "Samples/Palette/UI/Basic Widgets", _BASIC_WIDGET_TOXES),
+    ("/Applications/TouchDesigner.app/Contents/Resources/tfs/"
+     "Samples/Palette/UI", {"lister", "sliderBank", "radioButton",
+                            "button"}),
+]
 
 #: builtin layout pars excluded from the pars diff — geometry lives in
 #: the 'geometry' section, which is authoritative
@@ -214,30 +250,43 @@ def _builtin_geom(comp):
     return out
 
 
-lines = ["#: Full capture of JP's hand-tuned panel (v3.1)",
-         "#: {name: {'geometry': {...}, 'pars': {...},",
-         "#:          'expressions': {...}, 'binds': {...}}} —",
-         "#: OP refs are paths; 'panel' holds the panel CONTAINER's",
+lines = ["#: Full capture of JP's hand-tuned panel (v4)",
+         "#: {name: {'geometry': {...}, 'nodelayout': (x, y),",
+         "#:          'pars': {...}, 'expressions': {...},",
+         "#:          'binds': {...}, 'widgettox': 'palette tox'}}}",
+         "#: — OP refs are paths; 'panel' holds the panel CONTAINER's",
          "#: own settings; 'listerconfig' (queue only) = {DAT: text}.",
+         "#: 'added' = hand-added widgets (rebuilt from 'widgettox');",
+         "#: 'removed' = builder widgets deleted by hand (skipped).",
          "CAPTURED_PANEL = {"]
 scratch = p.create(containerCOMP, '_capture_scratch')
 
 
+def _node_layout(comp):
+    """(nodeX, nodeY) — where the COMP sits in the network editor."""
+    try:
+        return (comp.nodeX, comp.nodeY)
+    except Exception:
+        return None
+
+
 def _capture(name, comp, stock):
-    """One entry: geometry + pars/exprs/binds, each diffed vs stock."""
+    """One entry: geometry + node layout + pars/exprs/binds."""
     geom = _builtin_geom(comp)
     mine_v, mine_e, mine_b = _snapshots(comp)
     if stock is not None:
         stock_v, stock_e, stock_b = _snapshots(stock)
         pars = _diff(mine_v, stock_v)
         # expressions/binds that MATCH stock regenerate from the tox —
-        # only genuine differences are baked (kills the widget-internal
-        # expr flood the first v3 run recorded)
+        # only genuine differences are baked
         exprs = {k: v for k, v in mine_e.items() if stock_e.get(k) != v}
         binds = {k: v for k, v in mine_b.items() if stock_b.get(k) != v}
     else:
         pars, exprs, binds = mine_v, mine_e, mine_b
     entry = {"geometry": geom, "pars": pars}
+    nl = _node_layout(comp)
+    if nl is not None:
+        entry["nodelayout"] = nl
     if exprs:
         entry["expressions"] = exprs
     if binds:
@@ -248,6 +297,10 @@ def _capture(name, comp, stock):
 def _emit(name, entry):
     lines.append(f'    "{name}": {{')
     lines.append(f'        "geometry": {entry["geometry"]!r},')
+    if entry.get("nodelayout"):
+        lines.append(f'        "nodelayout": {entry["nodelayout"]!r},')
+    if entry.get("widgettox"):
+        lines.append(f'        "widgettox": {entry["widgettox"]!r},')
     lines.append(f'        "pars": {entry["pars"]!r},')
     if entry.get("expressions"):
         lines.append(f'        "expressions": '
@@ -260,6 +313,10 @@ def _emit(name, entry):
                      f'{entry["listerconfig"]!r},')
     lines.append('    },')
     extra = ''
+    if entry.get("nodelayout"):
+        extra += ', node layout'
+    if entry.get("widgettox"):
+        extra += f', tox={entry["widgettox"]!r}'
     if entry.get("expressions"):
         extra += f', {len(entry["expressions"])} exprs'
     if entry.get("binds"):
@@ -322,13 +379,46 @@ _emit("panel", _capture("panel", p, _stock_container()))
 # ---- every widget / bare-container child -------------------------------
 for c in sorted(p.children, key=_safe_geom):
     name = c.name
-    if name.startswith('_') or (name not in _TOX_OF
-                                 and name not in _BARE_CONTAINERS):
-        continue        # listerConfig, DATs, scratch, ...
-    # skip the lister's internal nodes (listerConfig etc.)
+    if name.startswith('_'):
+        continue
     try:
         c.par.x.eval()
     except Exception:
+        continue        # DATs, TOPs, scratch, internal nodes
+    known = name in _TOX_OF or name in _BARE_CONTAINERS
+    if not known:
+        # v4 (JP): a hand-ADDED widget. Capture it IF we can identify
+        # its palette tox (its own Widgettox par) — then future builds
+        # recreate it from the palette. Unknown widget types are
+        # reported loudly and skipped (the builder can only make what
+        # it knows). listerConfig (queue's config COMP) is internal
+        # plumbing, not a user widget — excluded.
+        tox = None
+        try:
+            tox = str(c.par.Widgettox.eval() or "")
+        except Exception:
+            tox = ""
+        if not tox or tox == "None":
+            print(f'[capture] !! {name}: hand-added widget with no '
+                  'Widgettox par — cannot recreate; NOT captured '
+                  '(add it to build_panel._WIDGETS manually)')
+            continue
+        # verify the tox exists in our palette dirs
+        toxfile = None
+        for d, allowed in _TOX_DIRS:
+            cand = os.path.join(d, f"{tox}.tox")
+            if os.path.isfile(cand) and (allowed is None
+                                         or tox in allowed):
+                toxfile = cand
+                break
+        if toxfile is None:
+            print(f'[capture] !! {name}: Widgettox={tox!r} not found '
+                  'in the palette directories — NOT captured')
+            continue
+        entry = _capture(name, c, _stock_widget(tox))
+        entry['widgettox'] = tox
+        _emit(name, entry)
+        added.append(name)
         continue
     if name in _BARE_CONTAINERS:
         stock = _stock_container()
@@ -363,14 +453,42 @@ for c in sorted(p.children, key=_safe_geom):
                 entry['listerconfig'] = texts
     _emit(name, entry)
 
+# builder widgets MISSING from the panel = removed by hand (v4).
+# Infrastructure widgets are exempt (the panel breaks without them);
+# only UI widgets may be removed. A removed queue means JP wants no
+# batch UI — the encoder still works via the CLI/TCP.
+_present = set()
+for c in p.children:
+    try:
+        c.par.x.eval()
+        _present.add(c.name)
+    except Exception:
+        continue
+for name in sorted(_BUILDER_WIDGETS):
+    if name in _KEEP_ALWAYS:
+        continue
+    if name not in _present:
+        removed.append(name)
+        print(f'[capture] {name}: builder widget absent — recorded as '
+              'REMOVED (future builds skip it)')
+
 # clean the scratch (all stock copies)
 scratch.destroy()
 
+if added:
+    lines.append(f'    "added": {sorted(added)!r},')
+if removed:
+    lines.append(f'    "removed": {sorted(removed)!r},')
 lines.append('}')
 text = '\n'.join(lines)
 print()
 print(f'[capture] full dump written to {DUMP_PATH} '
       f'({len(lines)} lines)')
+if added:
+    print(f'[capture] hand-added widgets captured (recreated from '
+          f'palette tox): {sorted(added)}')
+if removed:
+    print(f'[capture] builder widgets recorded REMOVED: {sorted(removed)}')
 print('[capture] next build_panel.py run applies it automatically '
       '(the capture is canonical)')
 try:

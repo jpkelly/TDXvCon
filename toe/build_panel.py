@@ -52,6 +52,26 @@ COMP_PARENT = "/project1/vcon"
 COMP_NAME = "panel"
 REPO = "/Users/jp/Documents/GitHub/vCon"
 
+#: JP's hand-tuned capture — the CANONICAL panel state (capture-first
+#: workflow). Read at build START so membership is honored during
+#: creation: 'removed' widgets are skipped, 'added' widgets are
+#: recreated from their palette tox. Soft-fails (pre-v4 dumps without
+#: membership lists simply build everything, as before).
+_CAP_DUMP = f"{REPO}/toe/panel_layout_captured.py"
+_CAPTURE = {}
+if os.path.isfile(_CAP_DUMP):
+    try:
+        _ns = {}
+        exec(compile(open(_CAP_DUMP, encoding='utf-8').read(),
+                     _CAP_DUMP, 'exec'), _ns)
+        _CAPTURE = _ns.get('CAPTURED_PANEL', {})
+    except Exception as _exc:
+        say(f"(capture unreadable: {_exc} — building all widgets)")
+        _CAPTURE = {}
+_REMOVED = set(_CAPTURE.get("removed") or [])
+_ADDED = {k: v for k, v in _CAPTURE.items()
+          if isinstance(v, dict) and v.get("widgettox")}
+
 #: GRID GEOMETRY — computed rows, uniform 30px heights, narrow columns.
 #: Panel is 660x640; STATUS sits at the very bottom (plenty of room).
 #: Row pitch 45; y from panel bottom.
@@ -308,6 +328,10 @@ def build():
     say("loading widgets")
     widgets = {}
     for outer_name, (tox, x, y, w, h) in _WIDGETS.items():
+        if outer_name in _REMOVED:
+            say(f"  {outer_name}: skipped — removed in the capture "
+                f"(JP deleted it by hand)")
+            continue
         if tox == "__bar__":
             # Custom progress bar (no palette widget exists; sliderHorz's
             # numeric field cannot be hidden — probe-verified). A plain
@@ -346,7 +370,47 @@ def build():
         scratch.destroy()
         place(wcomp, x, y, w, h)
         widgets[outer_name] = wcomp
-    say(f"loaded {len(widgets)}/{len(_WIDGETS)} widgets (flat at panel root)")
+    # HAND-ADDED widgets (capture v4): JP added a palette widget by
+    # hand; the capture records its palette tox origin — recreate it
+    # the same flat way, then the bake restores its geometry/pars.
+    for add_name, add_entry in _ADDED.items():
+        if add_name == "panel" or add_name in widgets:
+            continue
+        tox = add_entry["widgettox"]
+        if tox == "lister":
+            path = os.path.join(_UI_TOX_DIR, "lister.tox")
+        else:
+            path = os.path.join(_TOX_DIR, f"{tox}.tox")
+        if not os.path.isfile(path):
+            say(f"  !! added {add_name}: palette tox {tox!r} missing — "
+                f"cannot recreate")
+            continue
+        scratch = panelcomp.create(containerCOMP, "_scratch")
+        ret = scratch.loadTox(path)
+        wrapper = ret if ret is not None else scratch.op(tox)
+        inner = None
+        if wrapper is not None:
+            for c in wrapper.children:
+                if c.name == wrapper.name or c.isPanel:
+                    inner = c
+                    break
+        src_comp = inner if inner is not None else wrapper
+        wcomp = None
+        if src_comp is not None:
+            try:
+                wcomp = panelcomp.copy(src_comp, name=add_name)
+            except Exception as exc:
+                say(f"  !! added {add_name}: copy failed — {exc}")
+        scratch.destroy()
+        if wcomp is None:
+            continue
+        geom = add_entry.get("geometry") or {}
+        place(wcomp, geom.get("x", 20), geom.get("y", 40),
+              geom.get("w", 100), geom.get("h", 30))
+        widgets[add_name] = wcomp
+        say(f"  added {add_name}: recreated from palette {tox!r}")
+    say(f"loaded {len(widgets)} widgets "
+        f"({len(_REMOVED)} removed, {len(_ADDED)} added per capture)")
 
     # ---- queue lister: force geometry + visibility ------------------------
     # The lister's copy historically resisted place() (missing Layout
@@ -640,6 +704,10 @@ def build():
                 say(f"  (display {name}: {exc})")
 
     # ---- buttons -----------------------------------------------------------
+    # ---- per-widget config blocks guard on `in widgets`, so a removed
+    # widget silently skips its wiring. The queue is KEEP-ALWAYS but its
+    # guards stay for safety on pre-v4 captures.
+
     say("wiring buttons")
     for name, fn in [("start_b", "Start"), ("pause_b", "PauseResume"),
                      ("stop_b", "Stop")]:

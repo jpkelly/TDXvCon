@@ -139,6 +139,14 @@ def _apply_entry(name, entry):
                 w.par[pname].val = geom[pname]
             except Exception as exc:
                 print(f"[capture] ( {name}.{pname}: {exc} )")
+    # NODE LAYOUT (v4): where the COMP sits in the network editor —
+    # JP's hand-arranged node arrangement persists across rebuilds
+    nl = entry.get('nodelayout')
+    if nl and len(nl) == 2:
+        try:
+            w.nodeX, w.nodeY = nl
+        except Exception as exc:
+            print(f"[capture] ( {name} nodelayout: {exc} )")
     missed = 0
     exprs = entry.get('expressions') or {}
     binds = entry.get('binds') or {}
@@ -241,8 +249,13 @@ if CAPTURED:
         print("[capture] !! panel missing — run build_panel.py fully")
     else:
         print("=" * 52)
+        _removed = CAPTURED.get('removed') or []
+        _added = [k for k, v in CAPTURED.items()
+                  if isinstance(v, dict) and v.get('widgettox')]
         print(f"[capture] applying captured hand-tuning "
-              f"({len(CAPTURED)} entries)")
+              f"({len(CAPTURED)} entries"
+              + (f", {len(_removed)} removed" if _removed else '')
+              + (f", {len(_added)} added" if _added else '') + ")")
         print("=" * 52)
         # widgets first, panel container LAST (its settings sit above
         # the children and can affect layout passes)
