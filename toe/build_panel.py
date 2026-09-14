@@ -80,7 +80,7 @@ _WIDGETS = {
     "scale_dd":     ("dropDownMenu",      270, 465, 125, _ROW),
     "resw_f":       ("fieldString",       405, 465,  55, _ROW),
     "resh_f":       ("fieldString",       470, 465,  55, _ROW),
-    "fit_dd":       ("dropDownMenu",      520, 465, 120, _ROW),
+    "fit_dd":       ("dropDownMenu",      535, 465, 105, _ROW),
     # buttons (label disabled) — evenly spaced, faces centered
     "start_b":      ("buttonMomentary",    20, 420, 145, _ROW),
     "pause_b":      ("buttonMomentary",   175, 420, 145, _ROW),
