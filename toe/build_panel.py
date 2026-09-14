@@ -294,9 +294,16 @@ def build():
     say("configuring widgets (external pars only)")
     if "fps_f" in widgets:
         setp(widgets["fps_f"], "Value0", "auto")
-    # output label: read-only-ish — the preview callback writes its text
+    # output label: READ-ONLY field showing the full output path
+    # (destination folder + auto-derived file name) — JP: the file name
+    # must be visible before START, not crammed into the folder browser.
     if "output_l" in widgets:
         setp(widgets["output_l"], "Label", "(pick a source)")
+        try:
+            # wide enough for a full path; Labelwordwrap keeps it readable
+            setp(widgets["output_l"], "Labelwordwrap", 1)
+        except Exception:
+            pass
 
     # ---- menus -------------------------------------------------------------
     codec_names = list(mod.CODECS.keys())

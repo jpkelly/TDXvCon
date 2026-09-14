@@ -223,7 +223,9 @@ def PreviewOutput():
         lab = out_l.par.Label
         if lab.mode != ParMode.CONSTANT:
             lab.mode = ParMode.CONSTANT   # expr mode evaluates text as a path
-        lab.val = os.path.basename(out)
+        # Full path: folder (from DESTINATION) + derived file name —
+        # the read-only field shows exactly where the file will land.
+        lab.val = out
     except Exception:
         pass
 
@@ -285,11 +287,9 @@ def UpdateSubtypes():
                 except Exception:
                     pass
             _grey_out(fmt_w, grey)
-        # QUALITY: keep the greying hint (ladder codecs only).
-        q_w = widget("quality_s")
-        if q_w is not None:
-            has_q = bool(meta.get("qualities"))
-            _grey_out(q_w, not has_q)
+        # QUALITY: NEVER greyed (JP) — the slider always affects MvO's
+        # quality par for whatever codec is selected; the per-codec
+        # 'ladder' note is documentation, not a UI state.
         _update_res_fields()
         PreviewOutput()
     except Exception as exc:
@@ -311,9 +311,8 @@ def OnQualityChanged():
     """QUALITY slider dragged -> set MvO's quality slider LIVE.
 
     Wired to the slider's Onvaluechangescript0 (fires on every drag
-    tick). Works for ANY codec (JP: MvO's quality par is general) —
-    the per-codec greying is a UI hint about which codecs have a
-    documented ladder, not a write guard.
+    tick). Works for ANY codec, ALWAYS enabled (JP: never greyed —
+    MvO's quality par is general).
     """
     try:
         v = _val("quality_s")
@@ -671,31 +670,20 @@ def onDragDrop(info):
 
 
 def NormalizeDestination():
-    """DESTINATION shows the OUTPUT FILE path (folder + derived name).
+    """DESTINATION stays a FOLDER path (its browser widget requires it).
 
-    JP: the destination widget should display what the new file will be
-    named, not just the folder. On any relevant change, compute the exact
-    auto-named output path and show it; fall back to just the folder
-    until a source is picked.
+    JP: the derived FILE name should not be crammed into the folder
+    field (the folder browser re-normalizes full paths away — that's
+    why the filename never showed). The filename lives in the
+    read-only OUTPUT field (output_l), updated by PreviewOutput().
     """
     try:
         dst_w = widget("destination")
         if dst_w is None:
             return
-        src = _val("source")
-        codec = _val("codec_dd") or "notchlc"
-        subtype = _val("subtype_dd")
-        if subtype == "none":
-            subtype = None
-        if src and os.path.isfile(src):
-            derived = _unique_output(_derive_output(src, _val("destination"),
-                                                    codec, subtype))
-            dst_w.par.Value0.val = derived
-        else:
-            # no source yet: strip any file back to a folder for display
-            v = dst_w.par.Value0.eval()
-            if v and os.path.isfile(v):
-                dst_w.par.Value0.val = os.path.dirname(v)
+        v = dst_w.par.Value0.eval()
+        if v and os.path.isfile(v):
+            dst_w.par.Value0.val = os.path.dirname(v)
     except Exception as exc:
         note(f"destination display: {exc}")
 
