@@ -376,6 +376,12 @@ def _dat_texts(comp):
 # ---- the panel CONTAINER itself (JP: capture its settings too) --------
 _emit("panel", _capture("panel", p, _stock_container()))
 
+# ---- MEMBERSHIP accumulators (v4) --------------------------------------
+# added:   hand-added widgets (in the panel, unknown to the builder map)
+# removed: builder widgets deleted by hand (absent from the panel)
+added = []
+removed = []
+
 # ---- every widget / bare-container child -------------------------------
 for c in sorted(p.children, key=_safe_geom):
     name = c.name
