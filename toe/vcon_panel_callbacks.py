@@ -646,8 +646,8 @@ def _refresh_queue():
     lister only ever redraws on a complete, valid table.
 
     The RUNNING row's status is a block-character bar that fills as
-    the encode progresses (JP: 'progress bar fills up for each item')
-    — the lister is a text table, so the bar is rendered in-cell.
+    the encode progresses. A 4th 'progress' column (0-1) drives the
+    per-row background TOP (bar behind the file name — JP).
     """
     t = panel().op("queue_table")
     if t is None:
@@ -662,13 +662,17 @@ def _refresh_queue():
         prog = float(op.vcon.par.Progress.eval())
     except Exception:
         prog = 0.0
-    rows = [["#", "file", "status"]]
+    rows = [["#", "file", "status", "progress"]]
     for i, item in enumerate(_queue, 1):
         status = item["status"]
+        row_prog = 0.0
         if status == "running":
             status = _bar_text(prog)
+            row_prog = prog
+        elif status == "done":
+            row_prog = 1.0
         rows.append([str(i), os.path.basename(item["input"]),
-                     status])
+                     status, f"{row_prog:.4f}"])
     # Grow-only writes first (append beyond current size), then shrink:
     # setSize DOWNWARD also cooks mid-state — the lister is off, but be
     # safe: write all cells for the LARGER of current/new, then trim.
@@ -678,19 +682,19 @@ def _refresh_queue():
         cur_r, cur_c = 0, 3
     big = max(cur_r, len(rows))
     try:
-        t.setSize(big, 3)
+        t.setSize(big, 4)
     except Exception:
         pass
     for r in range(big):
-        row = rows[r] if r < len(rows) else ["", "", ""]
-        for c in range(3):
+        row = rows[r] if r < len(rows) else ["", "", "", ""]
+        for c in range(4):
             try:
                 t[r, c] = row[c]
             except Exception:
                 pass
     if big > len(rows):
         try:
-            t.setSize(len(rows), 3)
+            t.setSize(len(rows), 4)
         except Exception:
             pass
     # ONE refresh, on our schedule, on a complete table.

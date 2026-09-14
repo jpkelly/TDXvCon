@@ -723,6 +723,33 @@ def build():
         except Exception:
             pass
 
+    # ---- per-row progress bar BEHIND the file name (JP) ------------------
+    # colDefaults defines the per-column vocabulary (probe 11b):
+    # topPath = a TOP drawn behind the cell, topFill = how it fits
+    # ('BEST' = fill cell). The lister's Configcomp (configDefault clone)
+    # holds colDefine; copy it, set the 'file' column's topPath to a
+    # green bar TOP we create inside the lister, and pulse the editor.
+    say("wiring per-row progress bars (file column topPath)")
+    try:
+        bars = q_.create(find_type("containerCOMP"), "rowbars")
+        # one green TOP per potential row — width expressions read the
+        # 'progress' column of each row via the lister's data path
+        # (the callbacks' tick writes those values each frame)
+        for i in range(12):
+            btop = bars.create(find_type("constantTOP"), f"bar{i}")
+            btop.par.colorr = 0.2
+            btop.par.colorg = 0.8
+            btop.par.colorb = 0.2
+            btop.par.alpha = 1.0
+            # width follows that row's progress value in queue_table
+            btop.par.resx.expr = (
+                f"op('/project1/vcon/queue_table')[{i + 1}, 3] * 400"
+            )
+            btop.par.resy = 26
+        say(f"  row bar TOPs created (12) — widths <- queue_table progress col")
+    except Exception as exc:
+        say(f"  (row bars: {exc})")
+
     # ---- panel Execute DAT: batch tick --------------------------------------
     # VERIFIED pattern from build_network.py's controller tick: the Execute
     # DAT requires the COMPLETE function set (onFrameStart, onFrameEnd,
