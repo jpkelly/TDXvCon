@@ -136,6 +136,11 @@ class VconExt:
         return self.child("movieout")
 
     @property
+    def audio(self):
+        """Audio Movie CHOP — absent in older toes (no audio)."""
+        return self.ownerComp.op("audio")
+
+    @property
     def info(self):
         return self.child("info")
 

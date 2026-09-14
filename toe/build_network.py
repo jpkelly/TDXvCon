@@ -315,6 +315,22 @@ def build():
     safe_set(movieout.par, "stallforopen", 1)   # ensure frame 0 is recorded
     # quality menu is set per job by the controller
 
+    # ---- audio (Audio Movie CHOP -> MvO audio par) ---------------------
+    # Movie File Out TOP writes VIDEO only by default; the audio track
+    # must be fed explicitly. Audio Movie CHOP extracts the audio from
+    # the same Movie File In TOP, and MvO's 'audio' par takes the CHOP.
+    say("creating audio (Audio Movie CHOP -> movieout)")
+    audio = vcon.create(find_type("audiomovieCHOP"), "audio")
+    audio.nodeX = -300
+    audio.nodeY = -200
+    # The Audio Movie CHOP takes a Movie File In TOP reference via
+    # 'moviefileintop' (NOT 'file' — that's a file PATH par on other
+    # CHOPs; this one wants the TOP op). Link MvO's 'audio' par to the
+    # Audio Movie CHOP.
+    set_op_par(audio, "moviefileintop", moviein)
+    # MvO's audio par is 'audiochop' (type=CHOP), NOT 'audio'
+    set_op_par(movieout, "audiochop", audio)
+
     # ---- tcp server ----------------------------------------------------
     say("creating tcpip DAT (server :7999)")
     tcpip = vcon.create(find_type("tcpipDAT"), "tcpip")
