@@ -69,31 +69,31 @@ _WIDGETS = {
     "destination":  ("fieldFolderBrowser", 20, 600, 620, _ROW),
     # settings, two narrow columns (half-width each — no spillover)
     # FORMAT and SUBTYPE swapped per JP — SUBTYPE now reads top-left.
-    "codec_dd":     ("dropDownMenu",       20, 510, 230, _ROW),
-    "format_dd":    ("dropDownMenu",      260, 510, 230, _ROW),
-    "subtype_dd":   ("dropDownMenu",       20, 465, 230, _ROW),
-    "quality_s":    ("sliderHorz",        260, 465, 230, _ROW),
+    "codec_dd":     ("dropDownMenu",       20, 555, 230, _ROW),
+    "format_dd":    ("dropDownMenu",      260, 555, 230, _ROW),
+    "subtype_dd":   ("dropDownMenu",       20, 510, 230, _ROW),
+    "quality_s":    ("sliderHorz",        260, 510, 230, _ROW),
     # row: FPS | SCALING | SCALE(hidden) | FIT — readable sizes
-    "fps_f":        ("fieldString",        20, 420, 140, _ROW),
-    "scaled_t":     ("buttonToggle",      170, 420, 130, _ROW),
-    "scale_dd":     ("dropDownMenu",      310, 420, 160, _ROW),
-    "fit_dd":       ("dropDownMenu",      480, 420, 160, _ROW),
+    "fps_f":        ("fieldString",        20, 465, 140, _ROW),
+    "scaled_t":     ("buttonToggle",      170, 465, 130, _ROW),
+    "scale_dd":     ("dropDownMenu",      310, 465, 160, _ROW),
+    "fit_dd":       ("dropDownMenu",      480, 465, 160, _ROW),
     # buttons (label disabled)
-    "start_b":      ("buttonMomentary",    20, 375, 110, _ROW),
-    "pause_b":      ("buttonMomentary",   140, 375, 110, _ROW),
-    "stop_b":       ("buttonMomentary",   260, 375, 110, _ROW),
-    "add_b":        ("buttonMomentary",   380, 375, 110, _ROW),
+    "start_b":      ("buttonMomentary",    20, 420, 110, _ROW),
+    "pause_b":      ("buttonMomentary",   140, 420, 110, _ROW),
+    "stop_b":       ("buttonMomentary",   260, 420, 110, _ROW),
+    "add_b":        ("buttonMomentary",   380, 420, 110, _ROW),
     # OUTPUT: full-width read-only field BELOW the buttons (JP: the
     # derived filename is too long for a side slot — give it the row)
-    "output_l":     ("label",              20, 330, 620, _ROW),
+    "output_l":     ("label",              20, 375, 620, _ROW),
     # PROGRESS slider, full width
     # PROGRESS: custom bar (no palette widget exists, and sliderHorz's
     # numeric field CANNOT be hidden — probe-verified: 'off' writes
     # succeed but the field persists). A Container track + a fill
     # Container whose width EXPRESSION drives from the Progress par:
     # pure geometry, no number by construction.
-    "prog_track":  ("__bar__",            20, 285, 620, 16),
-    "prog_fill":   ("__bar__",            20, 285, 620, 16),
+    "prog_track":  ("__bar__",            20, 330, 620, 16),
+    "prog_fill":   ("__bar__",            20, 330, 620, 16),
     # queue, then STATUS at the very bottom
     "queue":        ("lister",             20,  90, 620, 200),
     "status_l":     ("label",              20,  40, 620, _ROW),
