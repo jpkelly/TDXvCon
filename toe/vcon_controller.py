@@ -93,6 +93,9 @@ class VconExt:
         #: skips writing frames but keeps cooking so "resume" continues
         #: from the exact next frame. "*" targets whatever is running.
         self._paused = False
+        #: Frame seeked and awaiting its addframe pulse (the audio CHOP
+        #: needs a cook between seek and pulse or its slice is empty).
+        self._seek_pending = None
         #: ORPHAN-CLEANUP ARMING. True only when this TouchDesigner process
         #: was LAUNCHED BY vCon (the front-end sets VCON_LAUNCHED=1 in the
         #: subprocess environment). A session the user opened themselves
@@ -757,6 +760,7 @@ class VconExt:
               f"record=1 pause=1")
 
         self.frame = 0
+        self._seek_pending = None
         self.t0 = time.time()
         self.state = "encoding"
         self._set_status(f"encoding 0/{self.total}")
@@ -786,11 +790,18 @@ class VconExt:
             self._finish()
             return
 
-        # Seek input to this frame (playmode=specify drives via 'index'
-        # param), then pulse addframe to write exactly one frame.
+        # SEEK on one tick, PULSE on the next: the Audio Movie CHOP
+        # produces its time slice when it cooks after the seek, so
+        # pulsing addframe in the same tick writes an EMPTY audio slice
+        # (audio track created but silent). _seek_pending holds the
+        # frame that was seeked and is waiting for its pulse.
         try:
-            moviein.par.index = self.frame
+            if self._seek_pending is None:
+                moviein.par.index = self.frame
+                self._seek_pending = self.frame
+                return
             movieout.par.addframe.pulse()
+            self._seek_pending = None
         except Exception as exc:
             self._fail(f"frame {self.frame} write failed: {exc}", "encode-error")
             return
