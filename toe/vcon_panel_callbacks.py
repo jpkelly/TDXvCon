@@ -1069,11 +1069,16 @@ def _run_next():
         return
     src = nxt["input"]
     base = os.path.basename(src)
+    codec = _val("codec_dd") or "notchlc"
+    subtype = _validate_choice(codec, "subtype", _val("subtype_dd"))
+    # Re-derive the output HERE: the path stored at drop time carries
+    # whatever codec was selected then (a file dropped under NotchLC
+    # then encoded as ProRes came out named '.notchlc.mov').
+    nxt["output"] = _unique_output(
+        _derive_output(src, _dst_dir(), codec, subtype))
     note(f"  submitting: src={src!r}")
     note(f"  output: {nxt['output']!r}")
     note(f"  exists already: {os.path.exists(nxt['output'])}")
-    codec = _val("codec_dd") or "notchlc"
-    subtype = _validate_choice(codec, "subtype", _val("subtype_dd"))
     quality = _val("quality_s")   # 0-1 float straight to MvO
     fmt = _validate_choice(codec, "format", _val("format_dd"))
     # FPS per MODE: SOURCE -> 'auto' (the controller re-resolves from
