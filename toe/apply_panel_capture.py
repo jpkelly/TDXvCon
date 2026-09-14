@@ -134,7 +134,11 @@ def _apply_entry(name, entry):
     """Geometry, pars, expressions for one captured widget."""
     w = _target(name)
     if w is None:
-        print(f"[capture] !! {name} not found in the built panel — skipped")
+        if entry.get('widgettox'):
+            print(f"[capture] !! {name} missing — this script only APPLIES "
+                  f"state; run build_panel.py to recreate added widgets")
+        else:
+            print(f"[capture] !! {name} not found in the built panel — skipped")
         return
     geom = entry.get('geometry') or {}
     for pname in ('x', 'y', 'w', 'h'):

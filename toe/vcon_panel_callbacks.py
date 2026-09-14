@@ -163,6 +163,13 @@ def _val(name):
         return None
 
 
+def _td_container(codec):
+    """CONTAINERS holds file EXTENSIONS ('.mov'); MvO's moviecontainer
+    menu wants bare tokens ('mov')."""
+    ext = CONTAINERS.get(codec)
+    return ext.lstrip(".") if ext else None
+
+
 def _output_name(input_path, codec, subtype=None):
     """clip.mov + prores 422hq -> clip.prores422hq.mov (same folder)."""
     folder = os.path.dirname(input_path)
@@ -380,7 +387,7 @@ def OnSelectionChanged():
             codec=codec,
             subtype=subtype if subtype else None,
             pixel_format=fmt if fmt else None,
-            container=CONTAINERS.get(codec),
+            container=_td_container(codec),
         )
     except Exception as exc:
         note(f"selection sync failed: {exc}")
