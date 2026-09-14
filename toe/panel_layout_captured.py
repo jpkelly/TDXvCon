@@ -16,7 +16,7 @@ CAPTURED_PANEL = {
     "output_l": {
         "geometry": {'x': 20, 'y': 5, 'w': 620, 'h': 30},
         "nodelayout": (0, -2570),
-        "pars": {'resizecomp': '/project1/vcon/panel/output_l', 'repocomp': '/project1/vcon/panel/output_l', 'Widgetlabel': 'PROBE-OUTPUT-L-Widgetlabel', 'Labelwordwrap': True, 'Labelhorizontalmode': 'fill', 'Labelwidth': 110, 'Label': None},
+        "pars": {'resizecomp': '/project1/vcon/panel/output_l', 'repocomp': '/project1/vcon/panel/output_l', 'Widgetlabel': '/Users/jp/Movies/ok go/OK_Go_NG.hap.mov', 'Labelwordwrap': True, 'Labelhorizontalmode': 'fill', 'Labelwidth': 110, 'Label': None},
     },
     "queue": {
         "geometry": {'x': 20, 'y': 30, 'w': 620, 'h': 400},

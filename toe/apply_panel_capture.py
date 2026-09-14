@@ -37,6 +37,10 @@ PANEL_PATH = '/project1/vcon/panel'
 #: widget metadata pars — not bakeable state, silently skipped
 _META_SKIP = {'Version', 'Toxsavebuild', 'Help'}
 
+#: top-level capture keys that are NOT widget entries
+_RESERVED_KEYS = {'panel', 'added', 'removed',
+                  'vconnodelayout', 'panelnodelayout'}
+
 #: BUILDER-OWNED pars — the bake never applies these from a capture.
 #: Menus are GENERATED (codec registry, live fit-TOP mirror); script
 #: pars are WIRED by the builder. A stale capture re-applying them
@@ -274,7 +278,7 @@ if CAPTURED:
         # widgets first, panel container LAST (its settings sit above
         # the children and can affect layout passes)
         for _name, _entry in CAPTURED.items():
-            if _name == 'panel':
+            if _name in _RESERVED_KEYS:
                 continue
             if not isinstance(_entry, dict):
                 continue
