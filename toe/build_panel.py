@@ -77,10 +77,10 @@ _WIDGETS = {
     # tightened per JP: the row overflowed and FIT fell off-panel.
     "fps_f":        ("fieldString",        20, 465, 110, _ROW),
     "scaled_t":     ("buttonToggle",      150, 465, 110, _ROW),
-    "scale_dd":     ("dropDownMenu",      270, 465, 130, _ROW),
-    "resw_f":       ("fieldString",       410, 465,  55, _ROW),
-    "resh_f":       ("fieldString",       475, 465,  55, _ROW),
-    "fit_dd":       ("dropDownMenu",      540, 465, 120, _ROW),
+    "scale_dd":     ("dropDownMenu",      270, 465, 125, _ROW),
+    "resw_f":       ("fieldString",       405, 465,  55, _ROW),
+    "resh_f":       ("fieldString",       470, 465,  55, _ROW),
+    "fit_dd":       ("dropDownMenu",      520, 465, 120, _ROW),
     # buttons (label disabled) — evenly spaced, faces centered
     "start_b":      ("buttonMomentary",    20, 420, 145, _ROW),
     "pause_b":      ("buttonMomentary",   175, 420, 145, _ROW),
