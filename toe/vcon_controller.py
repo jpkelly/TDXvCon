@@ -255,12 +255,18 @@ class VconExt:
         return (self.frame, self.total)
 
     def Transcode(self, input_path, output_path, codec="notchlc",
-                  subtype=None, quality=None, fps="auto"):
-        """Encode one file. The embedder-facing entry point.
+                  subtype=None, quality=None, fps="auto",
+                  pixel_format=None, container=None,
+                  resolution="auto", fit=None):
+        """Encode one file. The embedder/panel-facing entry point.
 
         Promoted (capitalised) so it reads as a method of the component::
 
             op('vcon').Transcode('/in.mov', '/out.mov', 'notchlc')
+
+        All codec arguments are TD MENU TOKENS (the values the registry
+        resolves; e.g. subtype 'prores422hq', not '422hq'). The panel
+        resolves aliases against its embedded codec table before calling.
 
         Returns True if the job was accepted, False if the component is busy.
         Completion is asynchronous — poll `Isbusy` / watch the Status
@@ -269,17 +275,25 @@ class VconExt:
         if self.state != "idle":
             debug(f"vCon: Transcode refused, busy ({self.state})")
             return False
+        params = {
+            "videocodec": codec,
+            "videocodectype": subtype,
+            "quality": quality,
+            "fps": fps or "auto",
+        }
+        if pixel_format:
+            params["moviepixelformat"] = pixel_format
+        if container:
+            params["moviecontainer"] = container
+        if resolution and resolution != "auto":
+            params["resolution"] = resolution
+            params["fit"] = fit or "fitbest"
         self.onReceive(json.dumps({
             "type": "submit",
             "id": f"embed-{int(time.time() * 1000)}",
             "input": str(input_path),
             "output": str(output_path),
-            "params": {
-                "videocodec": codec,
-                "videocodectype": subtype,
-                "quality": quality,
-                "fps": fps or "auto",
-            },
+            "params": params,
         }))
         return True
 
@@ -287,6 +301,14 @@ class VconExt:
         """Abort the active job, if any. Promoted for embedders."""
         if self.job:
             self._cancel(self.job.get("id"))
+
+    def Pause(self):
+        """Pause the active encode. Promoted for embedders and the panel."""
+        self._pause("*")
+
+    def Resume(self):
+        """Resume a paused encode. Promoted for embedders and the panel."""
+        self._resume("*")
 
     # ------------------------------------------------------------------
     # Connection handshake
