@@ -1037,6 +1037,7 @@ def _run_next():
         resolution=res,
         scale=scale,
         fit=fitmode,
+        container=_td_container(codec),
     )
     if ok:
         nxt["status"] = "running"
@@ -1417,9 +1418,21 @@ def onDragDrop(info):
 
 
 def _dst_dir():
-    """The destination folder (or None) from the DESTINATION widget."""
+    """The destination folder from the DESTINATION widget.
+
+    The widget is a FOLDER browser — its Value0 is a folder path, not a
+    file path. os.path.dirname would strip the last component (the actual
+    target folder) and write to its PARENT — the file appears in the
+    wrong place. If the path is a directory, use it directly; if not
+    (e.g. a stale captured file path), fall back to dirname.
+    """
     dst = _val("destination")
-    return os.path.dirname(dst) if dst else None
+    if not dst:
+        return None
+    if os.path.isdir(dst):
+        return dst
+    d = os.path.dirname(dst)
+    return d if d else None
 
 
 def AddFiles():
