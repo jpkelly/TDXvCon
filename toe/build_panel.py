@@ -37,31 +37,48 @@ COMP_PARENT = "/project1/vcon"
 COMP_NAME = "panel"
 REPO = "/Users/jp/Documents/GitHub/vCon"
 
-#: outer-name -> (tox, x, y, w, h)
-#: GEOMETRY (consistent): label column 10-110 (w=100), field column
-#: starts at 110. ROW H=30 for every row; rows spaced 50 apart.
-#: y measured up from the panel bottom.
-_ROW = 30          # uniform widget height
-_STEP = 50         # row pitch
-_X0, _X1, _X2, _X3 = 150, 290, 430, 20   # label x / field x / col2 x / pad
+#: GRID GEOMETRY — the layout is COMPUTED, not hand-placed: rows are
+#: indexed top-down, all heights uniform, two columns with fixed spans.
+#: Column spans guarantee no widget crosses into its neighbor or past
+#: the right edge (x + w <= 640 on a 660-wide panel).
+_ROW = 30            # every widget, every row
+_PITCH = 45          # row spacing
+_TOP = 590           # first row's y (panel origin is bottom-left)
+_X = 20              # left margin
+_W_FULL = 620        # full-width widgets (label 110 + field 510)
+_C1X, _C1W = 20, 290     # settings column 1
+_C2X, _C2W = 330, 310    # settings column 2
+
+
+def _r(n):
+    """Panel y for row n (counted from the top)."""
+    return _TOP - n * _PITCH
+
+
 _WIDGETS = {
-    "source":       ("fieldFileBrowser",   _X0, 596, 410, _ROW),
-    "destination":  ("fieldFolderBrowser", _X0, 546, 410, _ROW),
-    "codec_dd":     ("dropDownMenu",       _X1, 496, 260, _ROW),
-    "subtype_dd":   ("dropDownMenu",      _X2, 496, 110, _ROW),
-    "format_dd":    ("dropDownMenu",       _X1, 446, 110, _ROW),
-    "quality_dd":   ("dropDownMenu",      _X2, 446, 110, _ROW),
-    "fps_f":        ("fieldString",       _X1, 396, 60, _ROW),
-    "resmode_dd":   ("dropDownMenu",      _X2, 406 - 10, 80, _ROW),
-    "scale_dd":     ("dropDownMenu",      430, 406 - 50, 110, _ROW),
-    "fit_dd":       ("dropDownMenu",      550, 406 - 50, 90, _ROW),
-    "start_b":      ("buttonMomentary",     20, 306, 100, _ROW),
-    "pause_b":      ("buttonMomentary",    130, 306, 100, _ROW),
-    "stop_b":       ("buttonMomentary",    210, 306, 100, _ROW),
-    "output_l":     ("label",             _X0, 306, 220, _ROW),
-    "prog_s":       ("sliderHorz",          20, 256, 300, _ROW),
-    "status_l":     ("label",             330, 256, 230, _ROW),
-    "queue":        ("lister",              20,  20, 540, 220),
+    # rows 0-1: browsers (full width)
+    "source":       ("fieldFileBrowser",   _X, _r(0), _W_FULL, _ROW),
+    "destination":  ("fieldFolderBrowser", _X, _r(1), _W_FULL, _ROW),
+    # rows 2-4: settings, two columns
+    "codec_dd":     ("dropDownMenu",      _C1X, _r(2), _C1W, _ROW),
+    "subtype_dd":   ("dropDownMenu",      _C2X, _r(2), _C2W, _ROW),
+    "format_dd":    ("dropDownMenu",      _C1X, _r(3), _C1W, _ROW),
+    "quality_dd":   ("dropDownMenu",      _C2X, _r(3), _C2W, _ROW),
+    "fps_f":        ("fieldString",       _C1X, _r(4), _C1W, _ROW),
+    "resmode_dd":   ("dropDownMenu",      _C2X, _r(4), _C2W, _ROW),
+    # row 5: FIT (left) | SCALE (right, hidden while Unscaled)
+    "fit_dd":       ("dropDownMenu",      _C1X, _r(5), _C1W, _ROW),
+    "scale_dd":     ("dropDownMenu",      _C2X, _r(5), _C2W, _ROW),
+    # row 6: buttons | OUTPUT name
+    "start_b":      ("buttonMomentary",    20, _r(6), 100, _ROW),
+    "pause_b":      ("buttonMomentary",   130, _r(6), 100, _ROW),
+    "stop_b":       ("buttonMomentary",   240, _r(6), 100, _ROW),
+    "output_l":     ("label",             350, _r(6), 290, _ROW),
+    # row 7: progress | STATUS
+    "prog_s":       ("sliderHorz",        20, _r(7), 330, _ROW),
+    "status_l":     ("label",             360, _r(7), 290, _ROW),
+    # queue at the bottom
+    "queue":        ("lister",             20,  20, 620, 200),
 }
 
 #: Field titles via Widgetlabel (LIVE-DUMPED: the widget's title par).
@@ -203,20 +220,22 @@ def build():
     for name, title in _TITLES.items():
         if name in widgets:
             setp(widgets[name], "Widgetlabel", title)
-    # Uniform label width (Layout lives on the OUTER wrapper; Labelwidth is
-    # the label-area width in panel units — live-dumped par). Small widgets
-    # (w=60-90) get proportionally narrow labels so the field stays visible.
-    _LABEL_W = {"source": 130, "destination": 130, "codec_dd": 100,
-                "subtype_dd": 110, "format_dd": 100, "quality_dd": 110,
-                "fps_f": 45, "resmode_dd": 45, "scale_dd": 70,
-                "fit_dd": 45, "output_l": 110, "status_l": 110}
+    # Labelwidth per column: full-width rows get 110; two-column widgets
+    # get 90 so the label never eats the field; small buttons none.
+    _LABEL_W = {"source": 110, "destination": 110, "codec_dd": 90,
+                "subtype_dd": 90, "format_dd": 90, "quality_dd": 90,
+                "fps_f": 60, "resmode_dd": 60, "scale_dd": 70,
+                "fit_dd": 60, "output_l": 110, "status_l": 110,
+                "start_b": 60, "pause_b": 60, "stop_b": 60}
     for name, lw in _LABEL_W.items():
         if name in widgets:
             setp(widgets[name], "Labelwidth", lw)
-    # Buttons' face text (off/on labels, live-dumped) — the title is separate
+    # Buttons' titles were never set in earlier versions (default text
+    # 'Momentary Button' showed) — Widgetlabel covers every widget.
     for name, text in [("start_b", "START"), ("pause_b", "PAUSE"),
                        ("stop_b", "STOP")]:
         if name in widgets:
+            setp(widgets[name], "Widgetlabel", text)
             setp(widgets[name], "Buttonofflabel", text)
             setp(widgets[name], "Buttononlabel", text)
 
