@@ -106,13 +106,14 @@ def inner_of(wrapper):
     return None
 
 
-def place(outer, x, y, w, h):
-    """Panel layout of the OUTER wrapper only.
+def place(outer, x, y, w, h, row=0):
+    """Place a widget: panel-view coords AND network coords.
 
-    The previous version also set the INNER widget's x/y/w/h — wrong:
-    inner coordinates are RELATIVE to the outer, so everything was
-    displaced off-panel (the 'completely empty panel' bug). Outer only.
-    Widgets whose wrapper lacks Layout pars (the lister) just report.
+    - par.x/y/w/h  = where it sits in the PANEL viewer (the UI).
+    - nodeX/nodeY  = where the node sits in the NETWORK editor. Without
+      these every widget lands at the same spot (a card pile). We mirror
+      the panel grid: x maps to nodeX, rows map top-down to nodeY, so the
+      network view roughly sketches the panel's layout.
     """
     try:
         outer.par.x = x
@@ -121,6 +122,11 @@ def place(outer, x, y, w, h):
         outer.par.h = h
     except Exception as exc:
         say(f"  (place {outer.name}: {exc})")
+    try:
+        outer.nodeX = x - 20              # same left-to-right order
+        outer.nodeY = -y - 60             # top rows above bottom rows
+    except Exception:
+        pass
 
 
 def setp(inner, par_name, value):
@@ -208,6 +214,8 @@ def build():
             outer.name = outer_name
             loaded[tox] = outer
         place(outer, x, y, w, h)
+        # Panel-view position doubles as the network position (mirrored
+        # in place()); no separate row bookkeeping needed.
         inner = inner_of(outer)
         if inner is not None:
             widgets[outer_name] = inner
