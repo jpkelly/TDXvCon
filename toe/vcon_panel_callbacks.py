@@ -117,30 +117,15 @@ def panel():
 
 
 def widget(name):
-    """A named panel child — flat first, then wrapper/inner fallback.
-
-    New builder places the actual widget COMP directly in the panel
-    (JP: all widgets on the same level). Older builds wrapped each in a
-    same-named container; the children scan resolves that shape too.
-    """
+    """A named panel child — TOP-LEVEL only (JP rule: configure top-level
+    parameters; the builder now places widget COMPs directly in the
+    panel). No inner-child searching: if the name resolves, that COMP
+    is the widget we configure. Kept as a function so call sites stay
+    stable and any future structural change has one choke point."""
     p = panel()
     if p is None:
         return None
-    child = p.op(name)
-    if child is None:
-        return None
-    # Same-level widget: it has widget custom pars itself (flat child).
-    try:
-        if child.customPages and child.customPages[0].name.lower() in (
-                "widget", "values", "menu", "button", "label", "field"):
-            return child
-    except Exception:
-        pass
-    # Wrapper container: resolve to the inner same-named child.
-    for c in child.children:
-        if c.name == child.name or c.isPanel:
-            return c
-    return child
+    return p.op(name)
 
 
 def _val(name):
