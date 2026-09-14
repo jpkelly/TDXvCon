@@ -557,14 +557,16 @@ def build():
                  ["Quarter (1/4x)", "Half (1/2x)", "Full (1x)",
                   "Two times (2x)", "Three times (3x)"],
                  "1")
-    # SCALE dropdown hidden while Unscaled — _update_res_fields toggles it.
-    if "scale_dd" in widgets:
-        outer = panelcomp.op("scale_dd")
+    # SCALE and FIT dropdowns hidden while Unscaled — scaling OFF means
+    # nothing to configure (fit TOP bypassed), so BOTH vanish
+    # (_update_res_fields toggles them with the SCALED switch).
+    for name in ("scale_dd", "fit_dd"):
+        outer = panelcomp.op(name)
         if outer is not None:
             try:
                 outer.par.display = 0
             except Exception as exc:
-                say(f"  (display scale_dd: {exc})")
+                say(f"  (display {name}: {exc})")
 
     # ---- buttons -----------------------------------------------------------
     say("wiring buttons")

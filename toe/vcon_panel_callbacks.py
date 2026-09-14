@@ -375,9 +375,14 @@ def _update_res_fields():
         ext().Setfitpath(scaled)
     except Exception as exc:
         note(f"fit rewire failed: {exc}")
-    # 2) SCALE dropdown visibility
-    outer = panel().op("scale_dd") if panel() is not None else None
-    if outer is not None:
+    # 2) SCALE and FIT dropdowns show/hide with the toggle. When
+    #    SCALING is OFF there is nothing to configure (fit TOP bypassed,
+    #    source size preserved) — so JP: the FIT menu must vanish too,
+    #    not sit there offering modes that don't apply.
+    for name in ("scale_dd", "fit_dd"):
+        outer = panel().op(name) if panel() is not None else None
+        if outer is None:
+            continue
         try:
             # OUTER-wrapper Layout 'display' is a TOGGLE (TDParameterHelp:
             # containerCOMP.display parType Toggle) — boolean 0/1, NOT a
@@ -387,7 +392,7 @@ def _update_res_fields():
             try:
                 outer.par.x = 270 if scaled else 1200
             except Exception as exc:
-                note(f"display toggle failed: {exc}")
+                note(f"display toggle failed ({name}): {exc}")
 
 
 def _res_value():
