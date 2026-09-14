@@ -432,7 +432,14 @@ def _validate_choice(codec, kind, value, allow_empty=True):
 
 
 def Start():
-    """Submit one job (file source) or a batch (folder source)."""
+    """Run the queue: open the batch gate and let the tick feed items.
+
+    With the source holding a FOLDER, START first enqueues its movies.
+    Either way, encoding begins only on START (JP) — +ADD and drops
+    merely queue.
+    """
+    global _batch_started
+    _batch_started = True
     src = _val("source")
     dst = _val("destination")
     codec = _val("codec_dd") or "notchlc"
@@ -462,8 +469,8 @@ def Start():
             out = _unique_output(_derive_output(inp, dst, codec, subtype))
             _queue.append({"input": inp, "output": out, "status": "queued",
                            "rel": rel})
-        note(f"queued {len(items)} file(s) — press START again to run")
         _refresh_queue()
+        note(f"queued {len(items)} file(s) — batch started")
         return
 
     if not os.path.isfile(src):
@@ -495,11 +502,23 @@ def Start():
         note(f"encoding {os.path.basename(out)}")
 
 
+#: Batch gate: items enqueue freely (via +ADD / drops / folder browse),
+#: but the tick only submits them once START has been pressed (JP:
+#: adding a movie must NOT begin the encode). Set True by Start(),
+#: False by Stop() and when the queue empties.
+_batch_started = False
+
+
 def _run_next():
-    """Dequeue the next batch job and submit it (called when idle)."""
+    """Dequeue the next batch job and submit it (called when idle).
+
+    GATED on _batch_started: queued items sit until START.
+    """
     e = ext()
     if e.is_busy:
         return
+    if not _batch_started:
+        return                      # queue loaded, awaiting START (JP)
     nxt = None
     for item in _queue:
         if item["status"] == "queued":
@@ -556,7 +575,9 @@ def PauseResume():
 
 
 def Stop():
-    """Cancel the active job and clear the batch queue."""
+    """Cancel the active job, stop the batch, clear the queue."""
+    global _batch_started
+    _batch_started = False      # re-close the gate (JP: adds must wait)
     ext().Cancel()
     for item in _queue:
         if item["status"] in ("queued", "running"):
@@ -799,7 +820,7 @@ def onDragDrop(info):
 
     if added:
         _refresh_queue()
-        note(f"dropped {added} file(s) into the queue")
+        note(f"dropped {added} file(s) — press START to encode")
     else:
         note("no movie files in the drop")
 
@@ -836,7 +857,7 @@ def AddFiles():
                        "status": "queued",
                        "rel": os.path.basename(path)})
         _refresh_queue()
-        note(f"added {os.path.basename(path)} to the queue")
+        note(f"added {os.path.basename(path)} — press START to encode")
     elif os.path.isdir(path):
         n = 0
         for inp, rel in _scan_movies(path):
@@ -847,7 +868,7 @@ def AddFiles():
                            "rel": rel})
             n += 1
         _refresh_queue()
-        note(f"added {n} file(s) from folder")
+        note(f"added {n} file(s) from folder — press START to encode")
 
 
 def NormalizeDestination():
