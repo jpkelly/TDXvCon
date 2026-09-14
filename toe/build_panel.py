@@ -281,20 +281,20 @@ def build():
     if "prog_track" in widgets and "prog_fill" in widgets:
         track = widgets["prog_track"]
         fill = widgets["prog_fill"]
-        # track: dark background strip
+        # track: gray background strip
         try:
-            track.par.bgcolor = (0.16, 0.16, 0.18)
+            track.par.bgcolor = (0.5, 0.5, 0.5)
             track.par.bgalpha = 1.0
             track.par.alignallow = "none"      # keep absolute placement
         except Exception as exc:
             say(f"  (track look: {exc})")
-        # fill: same position, width EXPRESSION maps Progress 0..1 to 0..620
+        # fill: green progress, width EXPRESSION maps Progress 0..1 to 0..620
         try:
-            fill.par.bgcolor = (0.12, 0.55, 0.95)
+            fill.par.bgcolor = (0.2, 0.8, 0.2)
             fill.par.bgalpha = 1.0
             fill.par.alignallow = "none"
             fill.par.w.expr = "op.vcon.par.Progress * 620"
-            say("  progress bar: fill width <- Progress par expression")
+            say("  progress bar: gray track, green fill, width <- Progress par")
         except Exception as exc:
             say(f"  (fill bind: {exc})")
 
