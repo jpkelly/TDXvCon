@@ -77,10 +77,10 @@ _WIDGETS = {
     # tightened per JP: the row overflowed and FIT fell off-panel.
     "fps_f":        ("fieldString",        20, 465, 110, _ROW),
     "scaled_t":     ("buttonToggle",      150, 465, 110, _ROW),
-    "scale_dd":     ("dropDownMenu",      270, 465, 125, _ROW),
-    "resw_f":       ("fieldString",       405, 465,  55, _ROW),
-    "resh_f":       ("fieldString",       470, 465,  55, _ROW),
-    "fit_dd":       ("dropDownMenu",      535, 465, 105, _ROW),
+    "scale_dd":     ("dropDownMenu",      270, 465, 115, _ROW),
+    "resw_f":       ("fieldString",       395, 465,  70, _ROW),
+    "resh_f":       ("fieldString",       465, 465,  70, _ROW),
+    "fit_dd":       ("dropDownMenu",      545, 465,  95, _ROW),
     # buttons (label disabled) — evenly spaced, faces centered
     "start_b":      ("buttonMomentary",    20, 420, 145, _ROW),
     "pause_b":      ("buttonMomentary",   175, 420, 145, _ROW),
@@ -468,31 +468,25 @@ def build():
              "op.vcon.op('panel_callbacks').module.AddFiles()")
         say("  add_b: file dialog -> queue wired")
 
-    # Buttons: face text centered within the background. The faces sat
-    # left-of-center because the widget's LABEL AREA (Labelwidth) offset
-    # the face — with titles suppressed, the label area must be zero AND
-    # the label strip hidden, so the face fills the whole background.
+    # Buttons: PROBE 14 VERDICT — the strip renders WIDGETLABEL, and an
+    # earlier fix WROTE 'START' there, doubling with the face ('START |
+    # START' in JP's screenshot). The strip must be BLANKED; the face is
+    # the button's only text, centered via Buttonalignx/y.
     for name, text in [("start_b", "START"), ("pause_b", "PAUSE"),
                        ("stop_b", "STOP"), ("add_b", "+ ADD")]:
         if name in widgets:
             w_ = widgets[name]
-            setp(w_, "Widgetlabel", text)
-            setp(w_, "Buttonofflabel", text)
+            setp(w_, "Widgetlabel", "")          # strip: BLANK (was the dup)
+            setp(w_, "Buttonofflabel", text)     # face: the only text
             setp(w_, "Buttononlabel", text)
-            setp(w_, "Labeldisplay", "off")
-            setp(w_, "Labelwidth", 0)
-            setp(w_, "Labeltop", 1)
-            # face alignment within the button background
+            setp(w_, "Labeldisplay", "off")      # strip display off too
+            setp(w_, "Labelwidth", 1)
             try:
                 w_.par.Buttonalignx = "center"
                 w_.par.Buttonaligny = "center"
             except Exception:
                 pass
-            try:
-                w_.par.Labelhorizontalmode = "fill"
-            except Exception:
-                pass
-            say(f"  {name}: face centered (label area zeroed)")
+            say(f"  {name}: strip blanked, face = {text}")
 
     # ---- defaults ----------------------------------------------------------
     say("configuring widgets (external pars only)")
