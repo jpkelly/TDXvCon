@@ -375,40 +375,57 @@ def _update_res_fields():
         ext().Setfitpath(scaled)
     except Exception as exc:
         note(f"fit rewire failed: {exc}")
-    # 2) SCALE and FIT dropdowns show/hide with the toggle. When
-    #    SCALING is OFF there is nothing to configure (fit TOP bypassed,
-    #    source size preserved) — so JP: the FIT menu must vanish too,
-    #    not sit there offering modes that don't apply.
-    for name in ("scale_dd", "fit_dd"):
+    # 2) SCALE + FIT + W/H fields show/hide. When SCALING is OFF there
+    #    is nothing to configure (fit TOP bypassed) — all hidden. When
+    #    ON: SCALE + FIT show; the W/H fields show ONLY for Custom
+    #    (an absolute output resolution — JP).
+    scaled_on = 1 if scaled else 0
+    for name, show in (("scale_dd", scaled_on), ("fit_dd", scaled_on)):
         outer = panel().op(name) if panel() is not None else None
         if outer is None:
             continue
         try:
-            # OUTER-wrapper Layout 'display' is a TOGGLE (TDParameterHelp:
-            # containerCOMP.display parType Toggle) — boolean 0/1, NOT a
-            # string menu. (The earlier token write did nothing.)
-            outer.par.display.val = 1 if scaled else 0
+            outer.par.display.val = show
         except Exception:
             try:
-                outer.par.x = 270 if scaled else 1200
+                outer.par.x = 270 if show else 1200
+            except Exception as exc:
+                note(f"display toggle failed ({name}): {exc}")
+    custom = (scaled and str(_val("scale_dd") or "") == "custom")
+    for name in ("resw_f", "resh_f"):
+        outer = panel().op(name) if panel() is not None else None
+        if outer is None:
+            continue
+        try:
+            outer.par.display.val = 1 if custom else 0
+        except Exception:
+            try:
+                outer.par.x = 440 if custom else 1200
             except Exception as exc:
                 note(f"display toggle failed ({name}): {exc}")
 
 
 def _res_value():
-    """Resolution args for Transcode(): ('auto', scale) from the panel.
+    """Resolution args for Transcode(): (resolution, scale).
 
-    The SCALED toggle drives everything: unscaled sends nothing (source
-    size preserved); scaled sends the chosen factor — the CONTROLLER
-    computes the final WxH from the movie's real dimensions after load.
-    Returns (resolution, scale)."""
+    SCALING off -> ('auto', None). ON: factor scales send the chosen
+    multiplier (the controller computes WxH from the movie's real
+    dimensions); 'custom' sends an ABSOLUTE WxH from the W/H fields
+    (the controller applies it directly).
+    """
     mode = _val("scaled_t")
-    # buttonToggle Value0 is BOOLEAN (0/1) — not a menu string.
     if not bool(mode):
         return "auto", None
-    factor = str(_val("scale_dd") or "1").strip()
+    choice = str(_val("scale_dd") or "0.5").strip()
+    if choice == "custom":
+        w = str(_val("resw_f") or "").strip()
+        h = str(_val("resh_f") or "").strip()
+        if w.isdigit() and h.isdigit() and int(w) > 0 and int(h) > 0:
+            return f"{int(w)}x{int(h)}", None
+        note("custom resolution needs valid W and H — falling back unscaled")
+        return "auto", None
     try:
-        return "auto", float(factor)
+        return "auto", float(choice)
     except (TypeError, ValueError):
         return "auto", None
 

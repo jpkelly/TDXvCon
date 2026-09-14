@@ -73,11 +73,13 @@ _WIDGETS = {
     "format_dd":    ("dropDownMenu",      260, 555, 230, _ROW),
     "subtype_dd":   ("dropDownMenu",       20, 510, 230, _ROW),
     "quality_s":    ("sliderHorz",        260, 510, 230, _ROW),
-    # row: FPS | SCALING | SCALE(hidden) | FIT — readable sizes
+    # row: FPS | SCALING | SCALE(hidden) | W | H(hidden) | FIT
     "fps_f":        ("fieldString",        20, 465, 140, _ROW),
     "scaled_t":     ("buttonToggle",      170, 465, 130, _ROW),
-    "scale_dd":     ("dropDownMenu",      310, 465, 160, _ROW),
-    "fit_dd":       ("dropDownMenu",      480, 465, 160, _ROW),
+    "scale_dd":     ("dropDownMenu",      310, 465, 120, _ROW),
+    "resw_f":       ("fieldString",       440, 465,  60, _ROW),
+    "resh_f":       ("fieldString",       510, 465,  60, _ROW),
+    "fit_dd":       ("dropDownMenu",      580, 465,  60, _ROW),
     # buttons (label disabled)
     "start_b":      ("buttonMomentary",    20, 420, 110, _ROW),
     "pause_b":      ("buttonMomentary",   140, 420, 110, _ROW),
@@ -110,6 +112,8 @@ _TITLES = {
     "scaled_t": "SCALING",
     "scale_dd": "SCALE",
     "fit_dd": "FIT",
+    "resw_f": "W",
+    "resh_f": "H",
     "output_l": "OUTPUT",
     "status_l": "STATUS",
 }
@@ -552,13 +556,26 @@ def build():
         setp(widgets["scaled_t"], "Buttononlabel", "ON")
         setp(widgets["scaled_t"], "Value0", 0)
     if "scale_dd" in widgets:
+        # JP: Full (1x) removed — redundant with SCALING off. Custom
+        # reveals the W/H fields for an absolute output resolution.
         set_menu(widgets["scale_dd"],
-                 ["0.25", "0.5", "1", "2", "3"],
-                 ["Quarter (1/4x)", "Half (1/2x)", "Full (1x)",
-                  "Two times (2x)", "Three times (3x)"],
-                 "1")
-    # SCALE and FIT dropdowns hidden while Unscaled — scaling OFF means
-    # nothing to configure (fit TOP bypassed), so BOTH vanish
+                 ["0.5", "0.333", "0.25", "2", "3", "4", "custom"],
+                 ["Half (1/2x)", "Third (1/3x)", "Quarter (1/4x)",
+                  "Two times (2x)", "Three times (3x)", "Four times (4x)",
+                  "Custom"],
+                 "0.5")
+    # W/H fields: defaults + hidden (only CUSTOM reveals them)
+    for name, val in (("resw_f", "1920"), ("resh_f", "1080")):
+        if name in widgets:
+            setp(widgets[name], "Value0", val)
+            outer = panelcomp.op(name)
+            if outer is not None:
+                try:
+                    outer.par.display = 0
+                except Exception as exc:
+                    say(f"  (display {name}: {exc})")
+    # SCALE, FIT, and the W/H fields hidden while Unscaled — scaling
+    # OFF means nothing to configure (fit TOP bypassed), so all vanish
     # (_update_res_fields toggles them with the SCALED switch).
     for name in ("scale_dd", "fit_dd"):
         outer = panelcomp.op(name)
@@ -626,11 +643,16 @@ def build():
     if "format_dd" in widgets:
         setp(widgets["format_dd"], "Onvaluechangescript0", selchange)
         say("  format_dd: live MvO sync wired")
-    # SCALED toggle: rewire fit path LIVE + toggle SCALE dropdown visibility
+    # SCALED toggle: rewire fit path LIVE + toggle SCALE/FIT/W-H visibility
     if "scaled_t" in widgets:
         setp(widgets["scaled_t"], "Onvaluechangescript0",
              "op.vcon.op('panel_callbacks').module._update_res_fields()")
         say("  scaled_t: live fit rewire wired")
+    # SCALE menu choice drives W/H visibility too (Custom reveals them)
+    if "scale_dd" in widgets:
+        setp(widgets["scale_dd"], "Onvaluechangescript0",
+             "op.vcon.op('panel_callbacks').module._update_res_fields()")
+        say("  scale_dd: custom W/H visibility wired")
     if "destination" in widgets:
         setp(widgets["destination"], "Valueparexec",
              "op.vcon.op('panel_callbacks').module.NormalizeDestination()")
