@@ -157,6 +157,17 @@ def set_menu(inner, names, labels, default):
     return ok
 
 
+def _grey_out_b(inner, grey=True):
+    """Builder-side grey-out (mirrors the callbacks' _grey_out)."""
+    for cand in ("enable", "Enable"):
+        try:
+            getattr(inner.par, cand).val = 0 if grey else 1
+            return True
+        except Exception:
+            continue
+    return False
+
+
 def build():
     say("=" * 52)
     say("building vCon panel (v4)")
@@ -292,20 +303,19 @@ def build():
     codec_labels = [mod.CODECS[k]["label"] for k in codec_names]
     if "codec_dd" in widgets:
         set_menu(widgets["codec_dd"], codec_names, codec_labels, "notchlc")
-    subs = ["none"] + sorted({s for c in mod.CODECS.values()
-                              for s in c.get("subtypes", [])})
+    # SUBTYPE / FORMAT seed with NotchLC's REAL values (no 'none' — JP
+    # spec: none is never an option). UpdateSubtypes() re-populates them
+    # per codec on every change AND once at build end, so the panel opens
+    # in a fully valid state: NotchLC selected -> SUBTYPE greyed (no
+    # subtypes), FORMAT rgb + rgba with rgb selected.
+    notch = mod.CODECS["notchlc"]
     if "subtype_dd" in widgets:
-        set_menu(widgets["subtype_dd"], subs, subs, "none")
-    fmts = ["none", "rgb", "rgba", "yuv4228bit", "yuv42210bit",
-            "yuv42212bit", "yuv44410bit", "yuva444412bit", "yuv420",
-            "yuv420p10bit", "yuv444p8bit", "yuv444p10bit"]
+        _grey = True     # NotchLC has no subtypes: greyed from the start
+        setp(widgets["subtype_dd"], "Menunames", "")
+        _grey_out_b(widgets["subtype_dd"])
     if "format_dd" in widgets:
-        set_menu(widgets["format_dd"], fmts, fmts, "none")
-    # QUALITY: a NAMED-LEVEL dropdown (JP: no panel slider). Choosing a
-    # level sets MvO's quality FLOAT slider to the mapped value — the
-    # registry converts the name before it reaches the wire (Derivative
-    # guide: good=0.0 very-good=0.285 excellent=0.575 optimal=0.862
-    # best=1.0). Greyed out for codecs without a ladder.
+        set_menu(widgets["format_dd"], list(notch["pixel_formats"]),
+                 list(notch["pixel_formats"]), "rgb")
     # QUALITY is a SLIDER — the same presentation MvO itself uses for
     # NotchLC (a 0-1 float). The named levels from Derivative's guide
     # (good=0.0 very-good=0.285 excellent=0.575 optimal=0.862 best=1.0)
@@ -474,7 +484,14 @@ def build():
 
     say("=" * 52)
     say(f"panel built: {panelcomp.path}")
-    say("titles are Widgetlabel; batch queue = lister + queue_table;")
+    # Fire the per-codec hook ONCE so every dropdown starts valid for the
+    # seeded codec (NotchLC): SUBTYPE greyed, FORMAT rgb+rgba (rgb on),
+    # QUALITY slider live. No 'none' anywhere from the very first frame.
+    try:
+        mod.UpdateSubtypes()
+        say("initial codec state applied (NotchLC defaults)")
+    except Exception as exc:
+        say(f"  (initial UpdateSubtypes: {exc})")
     say("START with a FOLDER in SOURCE enqueues its movies; the panel")
     say("tick feeds them to the encoder one at a time.")
     say("=" * 52)

@@ -26,7 +26,16 @@ CODECS = {
         "label": "Hap",
         "subtypes": ["hap", "hapq", "hapr", "haphdr"],
         "pixel_formats": ["rgb", "rgba"],
+        # VERIFIED LIVE (codec_meta): haphdr offers rgbu/rgbs — NOT rgb/rgba
+        # — and exposes NO alpha format. Per-subtype menus mirror TD.
+        "pixel_formats_by_subtype": {
+            "hap": ["rgb", "rgba"],
+            "hapq": ["rgb", "rgba"],
+            "hapr": ["rgb", "rgba"],
+            "haphdr": ["rgbu", "rgbs"],
+        },
         "alpha_format": "rgba",
+        "alpha_format_by_subtype": {"haphdr": None},
         "qualities": [],
     },
     "cineform": {
@@ -41,6 +50,7 @@ CODECS = {
         "subtypes": ["prores422proxy", "prores422lt", "prores422",
                      "prores422hq", "prores4444", "prores4444xq"],
         "pixel_formats": [],
+        "default_subtype": "prores4444",   # JP spec
         "qualities": [],
     },
     "h264": {"label": "H.264", "subtypes": [], "qualities": [],
@@ -199,52 +209,62 @@ def PreviewOutput():
 
 
 def UpdateSubtypes():
-    """Re-populate SUBTYPE (and FORMAT) for the selected codec.
+    """Re-populate SUBTYPE and FORMAT for the selected codec — no 'none'.
 
-    The subtype menu must only offer subtypes VALID for the chosen codec
-    (Hap's menu has no ProRes entries; ProRes has no 'hapq') — the same
-    per-codec filtering the CLI's registry enforces. FORMAT follows the
-    same rule: ProRes menus differ PER SUBTYPE (verified live), and only
-    NotchLC/Hap/CineForm expose rgb/rgba.
-
-    Wired to the codec dropdown's Onvaluechangescript0 by the builder.
+    JP spec: 'none' is never offered. Every codec with subtypes defaults
+    to its FIRST real subtype (Hap -> hap, ProRes -> prores422proxy);
+    codecs without subtypes (NotchLC, CineForm, delivery codecs) grey the
+    dropdown out — the same 'empty menu = grey' rule MvO uses. FORMAT
+    offers the codec's real pixel formats with the first as default
+    (Hap: rgb + rgba, rgb selected; NotchLC: rgb + rgba; CineForm: rgba;
+    ProRes: per-SUBTYPE menus, 422 set while no subtype is finer).
     """
     try:
         codec = _val("codec_dd") or "notchlc"
         meta = CODECS.get(codec, {})
         sub_w = widget("subtype_dd")
         fmt_w = widget("format_dd")
-        # Mirrors Movie File Out's OWN parameter behavior: menus that are
-        # EMPTY for the selected codec grey out rather than offering junk
-        # (builder-verified: movieout.videocodectype = [] for NotchLC).
+        # ---- SUBTYPE: real options only; grey out when there are none.
         if sub_w is not None:
-            subs = ["none"] + list(meta.get("subtypes", []))
-            setp_par(sub_w, "Menunames", " ".join(subs))
-            setp_par(sub_w, "Menulabels", " ".join(subs))
-            try:
-                sub_w.par.Value0.val = "none"
-            except Exception:
-                pass
-            _grey_out(sub_w, not subs[1:])
+            subs = list(meta.get("subtypes", []))
+            if subs:
+                setp_par(sub_w, "Menunames", " ".join(subs))
+                setp_par(sub_w, "Menulabels", " ".join(subs))
+                try:
+                    default = meta.get("default_subtype", subs[0])
+                    if sub_w.par.Value0.val not in subs:
+                        sub_w.par.Value0.val = default
+                except Exception:
+                    pass
+                _grey_out(sub_w, False)
+            else:
+                _grey_out(sub_w, True)
+        # ---- FORMAT: per-subtype when the codec defines them (Hap's
+        # haphdr offers rgbu/rgbs — verified live), else the codec's
+        # list. First entry is the default. Grey out only if empty.
         if fmt_w is not None:
-            if codec == "prores":
-                fmts = PRORES_PIXEL_FORMATS.get("prores422",
-                                                ["yuv4228bit"])
+            by_sub = meta.get("pixel_formats_by_subtype", {})
+            cur_sub = _val("subtype_dd")
+            if by_sub and cur_sub in by_sub:
+                fmts = list(by_sub[cur_sub])
+                grey = False
+            elif codec == "prores":
+                fmts = list(PRORES_PIXEL_FORMATS.get(
+                    cur_sub, PRORES_PIXEL_FORMATS.get("prores422", [])))
                 grey = False
             else:
-                fmts = ["none"] + list(meta.get("pixel_formats", []))
-                grey = not fmts[1:]
-            setp_par(fmt_w, "Menunames", " ".join(fmts))
-            setp_par(fmt_w, "Menulabels", " ".join(fmts))
-            try:
-                fmt_w.par.Value0.val = "none"
-            except Exception:
-                pass
+                fmts = list(meta.get("pixel_formats", []))
+                grey = not fmts
+            if fmts:
+                setp_par(fmt_w, "Menunames", " ".join(fmts))
+                setp_par(fmt_w, "Menulabels", " ".join(fmts))
+                try:
+                    if fmt_w.par.Value0.val not in fmts:
+                        fmt_w.par.Value0.val = fmts[0]
+                except Exception:
+                    pass
             _grey_out(fmt_w, grey)
-        # QUALITY is a SLIDER — MvO's own presentation for NotchLC
-        # (a 0-1 float; named levels per Derivative guide). Grey out for
-        # codecs with no ladder; leave the value untouched otherwise
-        # (the registry passes the float straight to MvO's slider).
+        # QUALITY: keep the greying hint (ladder codecs only).
         q_w = widget("quality_s")
         if q_w is not None:
             has_q = bool(meta.get("qualities"))
@@ -345,26 +365,50 @@ def setp_par(inner, par_name, value):
 # Buttons
 # ---------------------------------------------------------------------
 
+def _validate_choice(codec, kind, value, allow_empty=True):
+    """Widget values must be VALID for the current codec before submit.
+
+    A greyed widget keeps whatever Value0 it last held — a stale subtype
+    from a previous codec selection. Filter it here so junk can never
+    reach the encoder: return the value if legal for this codec, else
+    None (or the codec default when allow_empty=False).
+    """
+    meta = CODECS.get(codec, {})
+    if kind == "subtype":
+        legal = list(meta.get("subtypes", []))
+    else:
+        by_sub = meta.get("pixel_formats_by_subtype", {})
+        if by_sub:
+            cur = _val("subtype_dd")
+            legal = list(by_sub.get(cur,
+                                    list(meta.get("pixel_formats", []))))
+        elif codec == "prores":
+            cur = _val("subtype_dd")
+            legal = list(PRORES_PIXEL_FORMATS.get(
+                cur, PRORES_PIXEL_FORMATS.get("prores422", [])))
+        else:
+            legal = list(meta.get("pixel_formats", []))
+    if value in legal:
+        return value
+    return legal[0] if (not allow_empty and legal) else None
+
+
 def Start():
     """Submit one job (file source) or a batch (folder source)."""
     src = _val("source")
     dst = _val("destination")
     codec = _val("codec_dd") or "notchlc"
-    subtype = _val("subtype_dd")
+    subtype = _validate_choice(codec, "subtype", _val("subtype_dd"))
     quality = _val("quality_s")   # 0-1 float straight to MvO
-    fmt = _val("format_dd")
+    fmt = _validate_choice(codec, "format", _val("format_dd"))
     fps = str(_val("fps_f") or "auto").strip().lower()
     fitmode = _val("fit_dd")
     res, scale = _res_value()
 
     if fps in ("", "keep", "auto"):
         fps = "auto"
-    if fmt == "none":
-        fmt = None
-    if subtype == "none":
-        subtype = None
     if codec != "notchlc":
-        quality = None          # only NotchLC has a quality slider in MvO
+        quality = None          # only NotchLC documents a quality ladder
 
     if not src:
         note("pick a source file or folder first")
@@ -431,18 +475,14 @@ def _run_next():
     # destination widget holds a full output path — its folder is the target
     dst = os.path.dirname(dst) if dst else None
     codec = _val("codec_dd") or "notchlc"
-    subtype = _val("subtype_dd")
-    if subtype == "none":
-        subtype = None
+    subtype = _validate_choice(codec, "subtype", _val("subtype_dd"))
     quality = _val("quality_s")   # 0-1 float straight to MvO
-    fmt = _val("format_dd")
+    fmt = _validate_choice(codec, "format", _val("format_dd"))
     fps = str(_val("fps_f") or "auto").strip().lower()
     fitmode = _val("fit_dd")
     res, scale = _res_value()
     if fps in ("", "keep", "auto"):
         fps = "auto"
-    if fmt == "none":
-        fmt = None
     if codec != "notchlc":
         quality = None          # only NotchLC has a quality slider in MvO
     ok = e.Transcode(
