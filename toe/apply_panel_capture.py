@@ -263,6 +263,15 @@ def _restore_listerconfig(entry):
         except Exception as exc:
             print(f"[capture] ( listerConfig {dname}: {exc} )")
     print(f"[capture] listerConfig: {len(texts)} DATs restored")
+    # Pulse the lister's Refresh AFTER the colDefine text changes —
+    # without this the lister keeps its old column widths (the DAT
+    # text changed but the lister didn't re-read its config)
+    try:
+        q_ = _target('queue')
+        if q_ is not None:
+            q_.par.Refresh.pulse()
+    except Exception:
+        pass
 
 
 if CAPTURED:
