@@ -544,30 +544,23 @@ def build():
              "op.vcon.op('panel_callbacks').module.NormalizeDestination()")
 
     # ---- queue lister points at queue_table --------------------------------
-    # Widgets are now FLAT children: the lister COMP IS the panel child
-    # (no wrapper to descend). Its source par wasn't found under 'source'
-    # before — dump candidates and try each (docsHelper error showed the
-    # old path resolved inside the lister, where par names differ).
+    # LIVE-VERIFIED (probe 9): the lister's source par is INPUTTABLEDAT
+    # (style=DAT, currently its own defaultInput). Object-or-path link
+    # via the proven _link_op pattern; headers on (queue_table has them).
     say("wiring batch queue lister")
     q = panelcomp.op("queue")
     if q is not None:
-        wired = False
-        for cand in ("sourcedat", "Sourcedat", "source", "Source",
-                     "dat", "Dat"):
-            par = getattr(q.par, cand, None)
-            if par is not None:
-                try:
-                    par.val = qt
-                    say(f"  lister source via '{cand}' -> queue_table")
-                    wired = True
-                    break
-                except Exception:
-                    continue
-        if not wired:
-            names = [p.name for p in q.customPars if "ourc" in p.name
-                     or p.name.lower().startswith("dat")]
-            say(f"  !! lister source par not found. Candidates: "
-                f"{', '.join(names) or 'none'}")
+        if _link_op(q, "Inputtabledat", qt):
+            say("  lister Inputtabledat -> queue_table")
+        try:
+            q.par.Inputtablehasheaders = True
+        except Exception:
+            pass
+        try:
+            # redraw when the table changes (stock default, but explicit)
+            q.par.Refreshoninputchange = True
+        except Exception:
+            pass
 
     # ---- panel Execute DAT: batch tick --------------------------------------
     # VERIFIED pattern from build_network.py's controller tick: the Execute
