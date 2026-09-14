@@ -251,8 +251,9 @@ def build():
             say(f"  (status bind: {exc})")
 
     # ---- live 'will create:' preview -------------------------------------
-    # Onvaluechangescript0 fires whenever the widget's value changes; the
-    # callbacks module recomputes the auto-named output and shows it.
+    # Onvaluechangescript0 fires whenever the widget's value changes —
+    # LIVE-CONFIRMED on fieldFileBrowser / fieldFolderBrowser /
+    # dropDownMenu (no separate 'set completed' par exists on browsers).
     say("wiring live output-name preview")
     preview = ("op.vcon.op('panel_callbacks').module.PreviewOutput()")
     for name in ("source", "destination", "codec_dd", "subtype_dd",
@@ -260,9 +261,10 @@ def build():
         if name in widgets:
             if setp(widgets[name], "Onvaluechangescript0", preview):
                 say(f"  {name}: preview wired")
-    # Destination shows only the selected FOLDER (strip an appended file).
+    # Destination: same hook normalizes the shown path to just the folder
+    # (PreviewOutput's companion; runs on the same change event).
     if "destination" in widgets:
-        setp(widgets["destination"], "Onvaluesetcompletedscript0",
+        setp(widgets["destination"], "Valueparexec",
              "op.vcon.op('panel_callbacks').module.NormalizeDestination()")
 
     say("=" * 52)
