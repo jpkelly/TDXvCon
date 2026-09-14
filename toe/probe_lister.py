@@ -1,57 +1,47 @@
-"""Probe 10: inspect the lister's internal error + our table state.
+"""Probe 11: why is the lister invisible in the panel?
 
 Paste in the TD textport:
 
     exec(open('/Users/jp/Documents/GitHub/vCon/toe/probe_lister.py',
               encoding='utf-8').read())
 
-Prints:
-  1. queue_table's full contents (header + rows) as the lister sees them
-  2. the lister's Inputtabledat link and header setting
-  3. any errors reported on the lister's operators (error() flags)
-  4. ListerExt's colDefine — the lister auto-generates columns from the
-     header; if col 0's header isn't a clean string, it chokes.
+Checks the queue widget's existence, panel placement, and the
+lister-specific visibility question: widget COMPs that render TABLES
+have a different look than containers — the lister's own internal
+rendering handles the background. Prints geometry, children count (a
+live lister has ~30 internals; a dead copy has few), and the
+Inputtabledat link, plus a quick cell dump of queue_table.
 """
 
 p = op('/project1/vcon/panel')
-t = p.op('queue_table')
 q = p.op('queue')
+if q is None:
+    print('[probe] queue NOT FOUND. panel children:',
+          [c.name for c in p.children])
+    raise SystemExit
 
-print('[probe] queue_table contents:')
-if t is None:
-    print('  MISSING')
-else:
-    try:
-        print(f'  rows={t.numRows} cols={t.numCols}')
-        for r in range(t.numRows):
-            print(f'  row {r}: {[t[r, c].val for c in range(t.numCols)]!r}')
-    except Exception as exc:
-        print(f'  read failed: {exc}')
-
-print('[probe] lister link state:')
-if q is not None:
-    try:
-        v = q.par.Inputtabledat.eval()
-        print(f'  Inputtabledat = {v!r}')
-        print(f'  Inputtablehasheaders = {q.par.Inputtablehasheaders.eval()!r}')
-    except Exception as exc:
-        print(f'  par read failed: {exc}')
-
-print('[probe] errors on the queue subtree:')
 try:
-    errs = []
-    for c in q.ops('*'):
-        e = c.error()
-        if e:
-            errs.append(f'  {c.path}: {e}')
-    print('\n'.join(errs) if errs else '  (no operator errors)')
+    print(f'[probe] queue: x={q.par.x.eval()} y={q.par.y.eval()} '
+          f'w={q.par.w.eval()} h={q.par.h.eval()}')
 except Exception as exc:
-    print(f'  error scan failed: {exc}')
+    print(f'[probe] geometry read failed: {exc}')
 
-print('[probe] ListerExt colDefine (auto columns from header):')
+kids = [c.name for c in q.children]
+print(f'[probe] queue internal children ({len(kids)}): '
+      f'{kids[:12]}{"..." if len(kids) > 12 else ""}')
+print('[probe] (a LIVE lister has ~30 internals — parExec, select2,')
+print('[probe]  ListerExt, out_table, etc. Few = dead wrapper copy.)')
+
 try:
-    ext = q.op('ListerExt')
-    raw = ext.GetRawData()
-    print(f'  raw rows: {len(raw) if raw else 0}')
+    print(f'[probe] Inputtabledat = {q.par.Inputtabledat.eval()!r}')
 except Exception as exc:
-    print(f'  GetRawData failed: {exc}')
+    print(f'[probe] Inputtabledat read failed: {exc}')
+
+t = op.vcon.op('queue_table')
+print(f'[probe] queue_table at vcon level: {"FOUND" if t else "MISSING"}')
+if t is not None:
+    try:
+        print(f'[probe]   rows={t.numRows} cols={t.numCols} '
+              f'row0={[t[0, c].val for c in range(t.numCols)]!r}')
+    except Exception as exc:
+        print(f'[probe]   table read failed: {exc}')
