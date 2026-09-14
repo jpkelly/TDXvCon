@@ -842,3 +842,16 @@ def build():
 
 
 build()
+
+# ---- bake JP's captured hand-tuning (capture-first workflow) ----------
+# If toe/panel_layout_captured.py exists (capture_panel.py v3), apply
+# it AFTER the build: the capture — JP's hand-tuned canonical state —
+# wins over the defaults above. A stale pre-v3 dump fails the compile
+# guard inside with a clear "re-capture with v3" message.
+_CAP_DUMP = f"{REPO}/toe/panel_layout_captured.py"
+if os.path.isfile(_CAP_DUMP):
+    exec(open(f"{REPO}/toe/apply_panel_capture.py",
+              encoding='utf-8').read())
+else:
+    print("[panel] no capture file — defaults only "
+          "(run capture_panel.py after hand-tuning)")
