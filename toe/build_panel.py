@@ -1109,6 +1109,18 @@ try:
     print("[panel] fps field seeded per mode")
 except Exception as exc:
     print(f"[panel] (fps seed: {exc})")
+# Re-run the OUTPUT preview AFTER the bake: the capture's output_l
+# Widgetlabel is a STALE runtime value (a path from whenever JP last
+# captured — the bake faithfully restores it over the seed). The queue
+# is always empty at build time (queue_table is recreated fresh), so
+# this recomputes the honest '(queue is empty — add files)' message.
+# (This is why the empty-queue text 'stopped working a while ago' —
+# it broke the day the capture bake landed.)
+try:
+    op.vcon.op('panel_callbacks').module.PreviewOutput()
+    print("[panel] output preview re-seeded (queue state)")
+except Exception as exc:
+    print(f"[panel] (preview re-seed: {exc})")
 # If the FPS MODE toggle is present (capture-recreated), fire its hook
 # once so the field's enable state + display match the mode from the
 # captured Value0 (grey-out is a live par write, not captured state).
