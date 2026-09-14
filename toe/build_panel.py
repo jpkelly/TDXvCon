@@ -378,6 +378,12 @@ def build():
         if name in widgets:
             if setp(widgets[name], "Onvaluechangescript0", preview):
                 say(f"  {name}: preview wired")
+    # QUALITY slider: every drag tick sets MvO's quality slider LIVE
+    # (Setquality promoted hook — same pattern as Setfitpath).
+    if "quality_s" in widgets:
+        setp(widgets["quality_s"], "Onvaluechangescript0",
+             "op.vcon.op('panel_callbacks').module.OnQualityChanged()")
+        say("  quality_s: live MvO sync wired")
     # CODEC drives subtype/format menu repopulation (+ preview refresh)
     if "codec_dd" in widgets:
         setp(widgets["codec_dd"], "Onvaluechangescript0",

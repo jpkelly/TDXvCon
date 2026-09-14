@@ -337,6 +337,44 @@ class VconExt:
             debug(f"vCon: Setfitpath failed: {exc}")
             return False
 
+    def Setquality(self, value):
+        """Promoted panel hook: drag the panel's quality slider, MvO's
+        quality slider follows LIVE.
+
+        Matches Setfitpath's philosophy: the panel control IS the TD
+        parameter. Idle or encoding — quality changes only affect frames
+        written AFTER the change, so mid-encode adjustment is allowed
+        (unlike wiring changes); the per-job params re-apply at each job
+        start, so the panel stays authoritative between jobs.
+
+        Returns True when applied, False when the current codec exposes
+        no quality slider (greyed-out case — never a silent no-op).
+        """
+        try:
+            q = float(value)
+        except (TypeError, ValueError):
+            return False
+        try:
+            par = self.movieout.par.quality
+        except Exception:
+            return False
+        # Only NotchLC exposes the quality slider; a different codec's
+        # MvO has the par but it is not the active encoder control.
+        codec = "notchlc"
+        try:
+            codec = self.movieout.par.videocodec.eval()
+        except Exception:
+            pass
+        if codec != "notchlc":
+            return False
+        try:
+            par.val = q
+            debug(f"vCon: MvO quality <- {q}")
+            return True
+        except Exception as exc:
+            debug(f"vCon: Setquality failed: {exc}")
+            return False
+
     # ------------------------------------------------------------------
     # Connection handshake
     # ------------------------------------------------------------------

@@ -266,6 +266,23 @@ def _grey_out(inner, grey):
             pass
 
 
+def OnQualityChanged():
+    """QUALITY slider dragged -> set MvO's quality slider LIVE.
+
+    Wired to the slider's Onvaluechangescript0 (fires on every drag
+    tick). NotchLC-only: the hook is a no-op when the codec greys the
+    slider out (Setquality refuses non-NotchLC codecs, never silently).
+    """
+    try:
+        codec = _val("codec_dd") or "notchlc"
+        if codec != "notchlc":
+            return                       # greyed out — nothing to do
+        v = _val("quality_s")
+        ext().Setquality(v)
+    except Exception as exc:
+        note(f"quality sync failed: {exc}")
+
+
 def _update_res_fields():
     """Live-fit wiring + SCALE visibility, driven by the SCALED toggle.
 
