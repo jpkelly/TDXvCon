@@ -24,8 +24,15 @@ Layout (y measured up from the panel bottom):
 
 import os
 
+#: Widget tox roots: most Basic Widgets live in the Basic Widgets folder,
+#: but the lister (batch queue) sits at the UI palette ROOT (live-checked).
 _TOX_DIR = ("/Applications/TouchDesigner.app/Contents/Resources/tfs/"
             "Samples/Palette/UI/Basic Widgets")
+_UI_TOX_DIR = ("/Applications/TouchDesigner.app/Contents/Resources/tfs/"
+               "Samples/Palette/UI")
+_TOX_PATHS = {
+    "lister": os.path.join(_UI_TOX_DIR, "lister.tox"),
+}
 COMP_PARENT = "/project1/vcon"
 COMP_NAME = "panel"
 REPO = "/Users/jp/Documents/GitHub/vCon"
@@ -167,7 +174,8 @@ def build():
                 say(f"!! copy for {outer_name} returned None")
                 continue
         else:
-            path = os.path.join(_TOX_DIR, f"{tox}.tox")
+            path = _TOX_PATHS.get(tox,
+                                  os.path.join(_TOX_DIR, f"{tox}.tox"))
             outer = panelcomp.loadTox(path)
             if outer is None:
                 say(f"!! loadTox({tox}) returned None")
@@ -281,17 +289,26 @@ def build():
                 say(f"  (lister source: {exc})")
 
     # ---- panel Execute DAT: batch tick --------------------------------------
+    # VERIFIED pattern from build_network.py: an Execute DAT's callback is
+    # its TEXT (a def), and the pars are framestart/frameend/active — there
+    # is no par.frame collection (that raised tdAttributeError live).
     say("creating panel Execute DAT (batch tick)")
     ex = vcon.create(executeDAT, "panel_tick")
     ex.nodeX = 300
     ex.nodeY = 30
-    ex.par.frame.execute = (
-        "op.vcon.op('panel_callbacks').module.onFrame()"
+    ex.text = (
+        "# Panel tick: feed the batch queue when the encoder is idle.\n"
+        "def onFrameStart(frame):\n"
+        "    try:\n"
+        "        op.vcon.op('panel_callbacks').module.onFrame()\n"
+        "    except Exception:\n"
+        "        pass\n"
     )
-    try:
-        ex.par.frame = 1
-    except Exception:
-        pass
+    for p in ("framestart", "frameend", "active"):
+        try:
+            getattr(ex.par, p).val = 1
+        except Exception as exc:
+            say(f"  (exec {p}: {exc})")
 
     say("=" * 52)
     say(f"panel built: {panelcomp.path}")
