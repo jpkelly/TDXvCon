@@ -40,10 +40,17 @@ def load_widget(parent, name, x, y, w=240, h=28):
     if not os.path.isfile(path):
         say(f"!! widget tox not found: {path}")
         return None
+    before = [c.name for c in parent.children]
     wcomp = parent.loadTox(path)
     if wcomp is None:
-        say(f"!! loadTox returned None for {name}")
-        return None
+        # loadTox may return None even on success; adopt the new child.
+        after = [c.name for c in parent.children]
+        new = [n for n in after if n not in before]
+        if not new:
+            say(f"!! loadTox returned None and no new child appeared ({name})")
+            return None
+        wcomp = parent.op(new[0])
+        say(f"  (loadTox returned None; adopted child {new[0]})")
     wcomp.name = name
     wcomp.nodeX = x
     wcomp.nodeY = y
@@ -122,9 +129,14 @@ def build():
     panelcomp = vcon.create(containerCOMP, COMP_NAME)
     panelcomp.nodeX = 300
     panelcomp.nodeY = 240
-    panelcomp.par.w = 560
-    panelcomp.par.h = 500
-    panelcomp.par.bgcolor = (0.09, 0.09, 0.11)
+    # Base/Widget COMPs may not expose Container Look pars (bgcolor raised
+    # tdAttributeError live). Width/height only; the panel's look comes
+    # from the widgets' theme anyway.
+    try:
+        panelcomp.par.w = 560
+        panelcomp.par.h = 500
+    except Exception as exc:
+        say(f"  (w/h: {exc})")
 
     # ---- widget rows (reference-transcoder layout) -----------------------
     # Row 1: source + destination browsers
