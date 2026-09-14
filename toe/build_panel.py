@@ -240,7 +240,7 @@ def build():
         say(f"(opshortcut: {exc})")
 
     for stale in (COMP_NAME, "panel_callbacks", "queue_table",
-                  "queue_display", "panel_tick"):
+                  "queue_display", "panel_tick", "panel_capture_run"):
         if vcon.op(stale) is not None:
             say(f"removing existing {stale}")
             vcon.op(stale).destroy()
@@ -295,6 +295,16 @@ def build():
     )
     # file-linked? no — this DAT is generated; the callbacks module holds
     # the real logic (onDragDrop).
+
+    # ---- capture runner DAT (JP: re-capture with one exec, no repo
+    # path) — file-linked to toe/capture_run.py, swept on every rebuild
+    # like the other DATs so it can never go stale -----------------------
+    say("creating panel_capture_run DAT (file-linked)")
+    crun = vcon.create(textDAT, "panel_capture_run")
+    crun.nodeX = 360
+    crun.nodeY = 90
+    crun.par.file = f"{REPO}/toe/capture_run.py"
+    crun.par.syncfile = 1
 
     # ---- queue table DAT (lister source) ---------------------------------
     say("creating queue_table DAT (batch list)")
@@ -724,6 +734,8 @@ def build():
             # LIVE-VERIFIED (probe 4): label widgets render their
             # WIDGETLABEL, not the 'Label' config par. An expression on
             # Widgetlabel makes the displayed status track the par live.
+            # status_l is a REMOVABLE widget (JP 2026-09-14): absent from
+            # the capture, this block simply skips.
             widgets["status_l"].par.Widgetlabel.expr = "op.vcon.par.Status"
             say("  status label bound to Status par (Widgetlabel expr)")
         except Exception as exc:

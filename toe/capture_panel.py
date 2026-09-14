@@ -43,6 +43,20 @@ is canonical.
 
 import os
 
+
+def _find_container_comp():
+    """The containerCOMP type constant — from the td module first, the
+    textport globals second. TD injects op-type constants into contexts
+    IT runs (textport) but NOT into imported DAT modules, so a DAT-based
+    runner needs this indirection (the find_type pattern from
+    build_network.py / build_panel.py)."""
+    try:
+        import td
+        return td.containerCOMP
+    except Exception:
+        return globals()["containerCOMP"]
+
+
 _TOX_DIR = ("/Applications/TouchDesigner.app/Contents/Resources/tfs/"
             "Samples/Palette/UI/Basic Widgets")
 _UI_TOX_DIR = ("/Applications/TouchDesigner.app/Contents/Resources/tfs/"
@@ -100,9 +114,12 @@ _BUILDER_WIDGETS = {
 }
 
 #: BUILDER INFRASTRUCTURE — never treated as 'removed' even if absent
-#: (the panel needs them to function; removal would break the queue,
-#: the status line, the batch progress). Only UI widgets may go.
-_KEEP_ALWAYS = {"queue", "status_l", "prog_track", "prog_fill"}
+#: (the panel breaks without them). NOTE (JP, 2026-09-14): status_l is
+#: NOT in this set — the status line is a removable UI widget (the
+#: Status par + textport notes carry the state; the label is display
+#: only). Only the batch queue plumbing + the progress bar are
+#: structural.
+_KEEP_ALWAYS = {"queue", "prog_track", "prog_fill"}
 
 #: palette tox directory → the tox file names inside it that we know
 #: how to recreate. A hand-added widget reports its palette origin via
@@ -259,7 +276,8 @@ lines = ["#: Full capture of JP's hand-tuned panel (v4)",
          "#: 'added' = hand-added widgets (rebuilt from 'widgettox');",
          "#: 'removed' = builder widgets deleted by hand (skipped).",
          "CAPTURED_PANEL = {"]
-scratch = p.create(containerCOMP, '_capture_scratch')
+_containerCOMP = _find_container_comp()
+scratch = p.create(_containerCOMP, '_capture_scratch')
 
 
 def _node_layout(comp):
@@ -329,7 +347,7 @@ def _emit(name, entry):
 
 def _stock_container():
     """Fresh bare containerCOMP — baseline for panel + bar containers."""
-    return scratch.create(containerCOMP, '_stock_base')
+    return scratch.create(_containerCOMP, '_stock_base')
 
 
 def _stock_widget(toxname):
