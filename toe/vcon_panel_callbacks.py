@@ -189,20 +189,20 @@ def PreviewOutput():
     never showed. Full path: destination folder + derived file name.
     """
     try:
-        src = _val("source")
         out_l = widget("output_l")
         if out_l is None:
             return
+        # SOURCE field removed (JP: drops/+ADD are the way in). Derive
+        # from the first QUEUED item — that's what the next encode makes.
+        src = _queue[0]["input"] if _queue else None
         if not src or not os.path.isfile(src):
-            out_l.par.Widgetlabel.val = "(pick a source)"
+            out_l.par.Widgetlabel.val = "(queue is empty — add files)"
             return
         dst = _val("destination")
         dst_dir = dst if dst and os.path.isdir(dst) else (
             os.path.dirname(dst) if dst else None)
         codec = _val("codec_dd") or "notchlc"
-        subtype = _val("subtype_dd")
-        if subtype == "none":
-            subtype = None
+        subtype = _validate_choice(codec, "subtype", _val("subtype_dd"))
         out = _unique_output(_derive_output(src, dst_dir, codec, subtype))
         out_l.par.Widgetlabel.val = out
     except Exception as exc:
@@ -434,72 +434,17 @@ def _validate_choice(codec, kind, value, allow_empty=True):
 def Start():
     """Run the queue: open the batch gate and let the tick feed items.
 
-    With the source holding a FOLDER, START first enqueues its movies.
-    Either way, encoding begins only on START (JP) — +ADD and drops
-    merely queue.
+    SOURCE field removed (JP): the queue IS the input — files arrive via
+    +ADD, drag/drop, or a folder drop. Encoding begins only on START.
     """
     global _batch_started
+    if not _queue:
+        note("queue is empty — add files first")
+        return
     _batch_started = True
-    src = _val("source")
-    dst = _val("destination")
-    codec = _val("codec_dd") or "notchlc"
-    subtype = _validate_choice(codec, "subtype", _val("subtype_dd"))
-    quality = _val("quality_s")   # 0-1 float straight to MvO
-    fmt = _validate_choice(codec, "format", _val("format_dd"))
-    fps = str(_val("fps_f") or "auto").strip().lower()
-    fitmode = _val("fit_dd")
-    res, scale = _res_value()
-
-    if fps in ("", "keep", "auto"):
-        fps = "auto"
-    if codec != "notchlc":
-        quality = None          # only NotchLC documents a quality ladder
-
-    if not src:
-        note("pick a source file or folder first")
-        return
-
-    # ---- folder source: enqueue every movie in the tree -----------------
-    if os.path.isdir(src):
-        items = _scan_movies(src)
-        if not items:
-            note("no movie files found in that folder")
-            return
-        for inp, rel in items:
-            out = _unique_output(_derive_output(inp, dst, codec, subtype))
-            _queue.append({"input": inp, "output": out, "status": "queued",
-                           "rel": rel})
-        _refresh_queue()
-        note(f"queued {len(items)} file(s) — batch started")
-        return
-
-    if not os.path.isfile(src):
-        note("source not found")
-        return
-
-    # DESTINATION may hold either a folder OR the previous output path
-    # (we write the derived file path into it for display). Take its
-    # directory as the real destination.
-    dst_dir = dst if dst and os.path.isdir(dst) else (
-        os.path.dirname(dst) if dst else None)
-    out = _unique_output(_derive_output(src, dst_dir, codec, subtype))
-    ok = ext().Transcode(
-        input_path=src,
-        output_path=out,
-        codec=codec,
-        subtype=subtype,
-        quality=quality,
-        fps=fps,
-        pixel_format=fmt,
-        resolution=res,
-        scale=scale,
-        fit=fitmode,
-    )
-    if not ok:
-        note("busy — job refused")
-    else:
-        _mark_running(out)
-        note(f"encoding {os.path.basename(out)}")
+    _refresh_queue()
+    n = sum(1 for it in _queue if it["status"] == "queued")
+    note(f"batch started — {n} file(s) queued")
 
 
 #: Batch gate: items enqueue freely (via +ADD / drops / folder browse),
@@ -817,10 +762,7 @@ def onDragDrop(info):
                            "status": "queued",
                            "rel": os.path.basename(path)})
             added += 1
-            # mirror the first file into SOURCE for the OUTPUT preview
-            w = widget("source")
-            if w is not None and added == 1:
-                w.par.Value0.val = path
+            PreviewOutput()      # refresh from the first queued item
 
     if added:
         _refresh_queue()

@@ -64,9 +64,9 @@ def _r(n):
 
 
 _WIDGETS = {
-    # browsers, full width
-    "source":       ("fieldFileBrowser",   20, 600, 620, _ROW),
-    "destination":  ("fieldFolderBrowser", 20, 555, 620, _ROW),
+    # destination browser, full width (SOURCE field removed — JP:
+    # drops / +ADD into the queue are the way files get added)
+    "destination":  ("fieldFolderBrowser", 20, 600, 620, _ROW),
     # settings, two narrow columns (half-width each — no spillover)
     # FORMAT and SUBTYPE swapped per JP — SUBTYPE now reads top-left.
     "codec_dd":     ("dropDownMenu",       20, 510, 230, _ROW),
@@ -101,7 +101,6 @@ _WIDGETS = {
 
 #: Field titles via Widgetlabel (LIVE-DUMPED: the widget's title par).
 _TITLES = {
-    "source": "SOURCE",
     "destination": "DESTINATION",
     "codec_dd": "CODEC",
     "subtype_dd": "SUBTYPE",
@@ -428,7 +427,7 @@ def build():
             setp(widgets[name], "Widgetlabel", title)
     # Labelwidth per row type; buttons get NO label area (their titles were
     # doubled-up with face text — label disabled per JP's note).
-    _LABEL_W = {"source": 110, "destination": 110, "codec_dd": 90,
+    _LABEL_W = {"destination": 110, "codec_dd": 90,
                 "subtype_dd": 90, "format_dd": 90, "quality_s": 90,
                 "fps_f": 45, "scaled_t": 60, "scale_dd": 60,
                 "fit_dd": 45, "output_l": 110, "status_l": 110,
@@ -583,7 +582,7 @@ def build():
 
     say("wiring live output-name preview")
     preview = "op.vcon.op('panel_callbacks').module.PreviewOutput()"
-    for name in ("source", "destination"):
+    for name in ("destination",):
         if name in widgets:
             if setp(widgets[name], "Onvaluechangescript0", preview):
                 say(f"  {name}: preview wired")
