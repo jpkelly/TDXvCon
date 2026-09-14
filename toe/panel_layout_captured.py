@@ -78,7 +78,7 @@ CAPTURED_PANEL = {
     "resw_f": {
         "geometry": {'x': 309, 'y': 510, 'w': 100, 'h': 30},
         "nodelayout": (810, -1870),
-        "pars": {'resizecomp': '/project1/vcon/panel/resw_f', 'repocomp': '/project1/vcon/panel/resw_f', 'Value0': '1000', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFitChanged()", 'Widgetlabel': 'W', 'Labelwidth': 20},
+        "pars": {'resizecomp': '/project1/vcon/panel/resw_f', 'repocomp': '/project1/vcon/panel/resw_f', 'Value0': '1920', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFitChanged()", 'Widgetlabel': 'W', 'Labelwidth': 20},
     },
     "resh_f": {
         "geometry": {'x': 409, 'y': 510, 'w': 100, 'h': 30},
@@ -88,7 +88,7 @@ CAPTURED_PANEL = {
     "fit_dd": {
         "geometry": {'x': 507, 'y': 510, 'w': 131, 'h': 30},
         "nodelayout": (1220, -1870),
-        "pars": {'resizecomp': '/project1/vcon/panel/fit_dd', 'repocomp': '/project1/vcon/panel/fit_dd', 'Value0': 'fithorz', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFitChanged()", 'Widgetlabel': 'FIT', 'Labelwidth': 26, 'Menunames': 'fitbest fill fithorz fitvert fitoutside', 'Menulabels': "'Fit Best' Stretch 'Fit Width' 'Fit Height' Cover/Crop"},
+        "pars": {'resizecomp': '/project1/vcon/panel/fit_dd', 'repocomp': '/project1/vcon/panel/fit_dd', 'Value0': 'fitbest', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFitChanged()", 'Widgetlabel': 'FIT', 'Labelwidth': 26, 'Menunames': 'fitbest fill fithorz fitvert fitoutside', 'Menulabels': "'Fit Best' Stretch 'Fit Width' 'Fit Height' Cover/Crop"},
     },
     "subtype_dd": {
         "geometry": {'x': 20, 'y': 540, 'w': 230, 'h': 30},
@@ -98,7 +98,7 @@ CAPTURED_PANEL = {
     "quality_s": {
         "geometry": {'x': 250, 'y': 540, 'w': 230, 'h': 30},
         "nodelayout": (350, -1650),
-        "pars": {'resizecomp': '/project1/vcon/panel/quality_s', 'repocomp': '/project1/vcon/panel/quality_s', 'Value0': 1.0, 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnQualityChanged()", 'Widgetlabel': 'QUALITY', 'Labelwidth': 90, 'Sliderlabelnames': "'0.0 Good' '0.285 Very Good' '0.575 Excellent' '0.862 Optimal' '1.0 Best'"},
+        "pars": {'resizecomp': '/project1/vcon/panel/quality_s', 'repocomp': '/project1/vcon/panel/quality_s', 'Value0': 0.0, 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnQualityChanged()", 'Widgetlabel': 'QUALITY', 'Labelwidth': 90, 'Sliderlabelnames': "'0.0 Good' '0.285 Very Good' '0.575 Excellent' '0.862 Optimal' '1.0 Best'"},
     },
     "codec_dd": {
         "geometry": {'x': 20, 'y': 570, 'w': 230, 'h': 30},

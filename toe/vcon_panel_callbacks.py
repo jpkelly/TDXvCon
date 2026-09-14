@@ -494,10 +494,19 @@ def OnFpsModeChanged():
     w = widget("fps_f")
     if w is None:
         return
-    _grey_out(w, source)
+    # LIVE-VERIFIED (JP 2026-09-14): the FPS field is a fieldString —
+    # its interaction disable is STRINGFIELDREADONLY (a Boolean: writes
+    # are ints 0/1, NEVER the string 'off', which coerces True on
+    # Toggles). The generic enable par does NOT stop typing in a
+    # string field (first attempt: field stayed editable).
+    try:
+        w.par.Stringfieldreadonly.val = 1 if source else 0
+    except Exception as exc:
+        note(f"fps field readonly failed: {exc}")
+        _grey_out(w, source)      # legacy fallback (enable par)
     if source:
         # MvO follows the source's rate; the field displays it
-        # (disabled — the grey-out above makes it display-only)
+        # (readonly — display-only until the mode flips back)
         SyncFpsField()
     else:
         # CUSTOM: the field is the authority — push it to MvO now
