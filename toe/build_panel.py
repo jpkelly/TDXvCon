@@ -607,13 +607,22 @@ def build():
         setp(widgets["add_b"], "Offtoonscript0",
              "op.vcon.op('panel_callbacks').module.AddFiles()")
         say("  add_b: file dialog -> queue wired")
+    # remove_b (JP's hand-added button, capture-recreated): removes the
+    # SELECTED queue row (click a row first — RemoveSelected guards:
+    # no selection / running rows refuse, queue rebuilds from the table
+    # if the module recompiled)
+    if "remove_b" in widgets:
+        setp(widgets["remove_b"], "Offtoonscript0",
+             "op.vcon.op('panel_callbacks').module.RemoveSelected()")
+        say("  remove_b: selected-row removal wired")
 
     # Buttons: PROBE 14 VERDICT — the strip renders WIDGETLABEL, and an
     # earlier fix WROTE 'START' there, doubling with the face ('START |
     # START' in JP's screenshot). The strip must be BLANKED; the face is
     # the button's only text, centered via Buttonalignx/y.
     for name, text in [("start_b", "START"), ("pause_b", "PAUSE"),
-                       ("stop_b", "STOP"), ("add_b", "+ ADD")]:
+                       ("stop_b", "STOP"), ("add_b", "+ ADD"),
+                       ("remove_b", "REMOVE")]:
         if name in widgets:
             w_ = widgets[name]
             setp(w_, "Widgetlabel", "")          # strip: BLANK (was the dup)

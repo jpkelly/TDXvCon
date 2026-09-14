@@ -115,6 +115,7 @@ _inspect_item = None
 _inspect_ticks = 0
 _noted_table = False   # one-shot raw-table dump for label verification
 _last_sel = ""         # last lister Selectedrows seen (poll fallback)
+_selected_path = None  # input path of the last clicked row (remove_b target)
 
 
 def ext():
@@ -757,6 +758,11 @@ def OnQueueRowSelected(info=None):
         return
     _inspect_item = item
     _inspect_ticks = 0
+    # REMOVAL TRACKING (JP's remove_b 2026-09-14): the selected item is
+    # stored BY PATH — dict identity dies with every module recompile
+    # (the queue list rebuilds from the table), a path survives.
+    global _selected_path
+    _selected_path = item["input"]
     # no intermediate 'inspecting …' text (JP: not needed) — output_l
     # keeps its current content until the metadata lands
     p = panel()
@@ -1189,6 +1195,48 @@ def _mark_running(output_path):
             item["status"] = "running"
             break
     _refresh_queue()
+
+
+def RemoveSelected():
+    """remove_b (JP 2026-09-14): remove the SELECTED queue row.
+
+    The selection is tracked by input PATH (set on every row click —
+    and by the onFrame poll fallback; a module recompile wipes the
+    module globals, so the path also rebuilds from the table first if
+    the queue list is empty). Guards:
+      - a RUNNING row is never removed (the controller owns it; the
+        job would finish writing to an output the queue no longer
+        tracks) — STOP cancels instead
+      - no selection: said so in the textport, nothing happens
+    """
+    global _queue, _selected_path
+    if not _queue:
+        _queue_rebuild_from_table()
+    if not _queue:
+        note("nothing to remove — the queue is empty")
+        return
+    if not _selected_path:
+        note("no row selected — click a file first")
+        return
+    tgt = None
+    for it in _queue:
+        if it["input"] == _selected_path:
+            tgt = it
+            break
+    if tgt is None:
+        note(f"selected item no longer in the queue: "
+             f"{os.path.basename(_selected_path)}")
+        _selected_path = None
+        return
+    if tgt["status"] == "running":
+        note(f"{os.path.basename(_selected_path)} is encoding — "
+             "STOP cancels it; removing mid-encode is refused")
+        return
+    _queue.remove(tgt)
+    _selected_path = None
+    _refresh_queue()
+    PreviewOutput()          # the preview follows queue state
+    note(f"removed {os.path.basename(tgt['input'])}")
 
 
 def _mark_done(output_path):
