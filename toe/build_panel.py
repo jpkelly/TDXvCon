@@ -789,6 +789,15 @@ def build():
         setp(widgets["fps_f"], "Onvaluechangescript0",
              "op.vcon.op('panel_callbacks').module.OnFpsChanged()")
         say("  fps_f: live MvO fps sync wired")
+    # FPS MODE toggle (JP's hand-added fps_t, capture-recreated): OFF =
+    # SOURCE (field disabled, displays the loaded file's rate, MvO
+    # follows it, jobs encode at each file's own rate); ON = CUSTOM
+    # (field enabled, two-way with MvO's fps par). Wired ONLY when the
+    # capture recreated the toggle — absent toggle = legacy behavior.
+    if "fps_t" in widgets:
+        setp(widgets["fps_t"], "Onvaluechangescript0",
+             "op.vcon.op('panel_callbacks').module.OnFpsModeChanged()")
+        say("  fps_t: FPS mode hook wired (off=source, on=custom)")
     # CODEC: repopulates subtype/format menus, previews, AND applies the
     # codec to MvO LIVE (JP: dropdown changes must show in MvO now).
     # The combined hook chain fires: UpdateSubtypes re-filters menus,
@@ -1030,13 +1039,22 @@ else:
     print("[panel] no capture file — defaults only "
           "(run capture_panel.py after hand-tuning)")
 
-# Seed the FPS field from MvO's fps par (JP: the field READS the par's
-# current setting). Runs AFTER the bake so the read wins over any
-# captured field text. Both paths (capture / no capture) land here.
-# The write fires OnFpsChanged -> Setfps with the same value —
+# Seed the FPS field per MODE (JP: SOURCE mode displays the source's
+# rate; CUSTOM mode the MvO par). Runs AFTER the bake so the read wins
+# over any captured field text. Both paths (capture / no capture) land
+# here. The write fires OnFpsChanged -> Setfps with the same value —
 # idempotent, no loop.
 try:
     op.vcon.op('panel_callbacks').module.SyncFpsField()
-    print("[panel] fps field seeded from MvO fps par")
+    print("[panel] fps field seeded per mode")
 except Exception as exc:
     print(f"[panel] (fps seed: {exc})")
+# If the FPS MODE toggle is present (capture-recreated), fire its hook
+# once so the field's enable state + display match the mode from the
+# captured Value0 (grey-out is a live par write, not captured state).
+try:
+    if op.vcon.op('panel').op('fps_t') is not None:
+        op.vcon.op('panel_callbacks').module.OnFpsModeChanged()
+        print("[panel] fps mode applied (grey-out + display)")
+except Exception as exc:
+    print(f"[panel] (fps mode apply: {exc})")

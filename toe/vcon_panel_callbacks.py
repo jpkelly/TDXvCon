@@ -105,6 +105,9 @@ MOVIE_EXTS = {".m4v", ".mkv", ".mov", ".mp4", ".hsp", ".notchlc", ".mpeg",
 #: Batch queue: list of dicts {input, output, status, rel}
 _queue = []
 
+#: last source-rate seen by the onFrame FPS display (SOURCE mode)
+_last_src_fps = None
+
 
 def ext():
     """The vCon extension (Global OP Shortcut 'vcon' — set by the builder)."""
@@ -453,26 +456,93 @@ def OnFpsChanged():
         note(f"fps set failed: {exc}")
 
 
+def _fps_source_mode():
+    """True when the FPS mode toggle is OFF: use the SOURCE's own rate.
+
+    fps_t (JP's hand-added toggle): ON = CUSTOM (the field drives MvO's
+    fps par), OFF = SOURCE. No toggle in this build (pre-capture):
+    False — the field stays a free custom editor, exactly as before.
+    """
+    v = _val("fps_t")
+    if v is None:
+        return False
+    return not bool(v)
+
+
+def _source_fps():
+    """The loaded source's frame rate — the Info CHOP's sample_rate
+    channel (the verified source: Movie File In has no fps par).
+    None when nothing is loaded / the channel is unreadable."""
+    try:
+        sr = float(ext().info["sample_rate"][0])
+        if sr > 0:
+            return sr
+    except Exception:
+        pass
+    return None
+
+
+def OnFpsModeChanged():
+    """fps_t toggle hook (JP 2026-09-14):
+      OFF = SOURCE: the FPS field is DISABLED and displays the loaded
+             source's rate (Info CHOP sample_rate); MvO's fps par
+             follows it; every job encodes at its own file's rate.
+      ON  = CUSTOM: the FPS field is ENABLED and two-way with MvO's
+             fps par (the live-editor pattern).
+    """
+    source = _fps_source_mode()
+    w = widget("fps_f")
+    if w is None:
+        return
+    _grey_out(w, source)
+    if source:
+        # MvO follows the source's rate; the field displays it
+        # (disabled — the grey-out above makes it display-only)
+        SyncFpsField()
+    else:
+        # CUSTOM: the field is the authority — push it to MvO now
+        OnFpsChanged()
+
+
 def SyncFpsField():
-    """Seed the FPS field FROM MvO's fps par (JP: the field reads the
-    par's current setting). Runs once at build end, AFTER the capture
-    bake, so the read wins over any captured field text. 'auto' can be
-    re-typed any time to follow each source's own rate at job time
-    (the seed write fires OnFpsChanged -> Setfps with the same value —
-    idempotent, no loop).
+    """Seed the FPS field per MODE (runs at build end, AFTER the capture
+    bake, and whenever the mode/source rate changes):
+      SOURCE mode — display the loaded source's rate (sample_rate) and
+        push MvO's par to follow it (JP: 'move out parameter with the
+        FPS of the source'). Best available when nothing is loaded:
+        MvO's current par.
+      CUSTOM mode — display MvO's fps par (the field IS the par's editor).
+    The field write fires OnFpsChanged -> Setfps with the same value —
+    idempotent, no loop.
     """
     w = widget("fps_f")
     if w is None:
         return
-    try:
-        v = float(ext().movieout.par.fps.eval())
-    except Exception as exc:
-        note(f"fps read failed: {exc}")
-        return
+    if _fps_source_mode():
+        v = _source_fps()
+        if v is None:
+            try:
+                v = float(ext().movieout.par.fps.eval())
+            except Exception as exc:
+                note(f"fps read failed: {exc}")
+                return
+        try:
+            # MvO follows the source rate (JP spec for SOURCE mode)
+            ext().Setfps(str(v))
+        except Exception as exc:
+            note(f"fps source push failed: {exc}")
+        label = "source rate"
+    else:
+        try:
+            v = float(ext().movieout.par.fps.eval())
+        except Exception as exc:
+            note(f"fps read failed: {exc}")
+            return
+        label = "MvO par"
     text = str(int(v)) if v == int(v) else ('%g' % v)
     try:
         w.par.Value0.val = text
-        note(f"FPS field <- {text} (MvO par)")
+        note(f"FPS field <- {text} ({label})")
     except Exception as exc:
         note(f"fps field write failed: {exc}")
 
@@ -599,7 +669,13 @@ def _run_next():
     subtype = _validate_choice(codec, "subtype", _val("subtype_dd"))
     quality = _val("quality_s")   # 0-1 float straight to MvO
     fmt = _validate_choice(codec, "format", _val("format_dd"))
-    fps = str(_val("fps_f") or "auto").strip().lower()
+    # FPS per MODE: SOURCE -> 'auto' (the controller re-resolves from
+    # each loaded movie's sample_rate, so batch files with different
+    # rates each encode at their own); CUSTOM -> the field's value
+    if _fps_source_mode():
+        fps = "auto"
+    else:
+        fps = str(_val("fps_f") or "auto").strip().lower()
     fitmode = _val("fit_dd")
     res, scale = _res_value()
     if fps in ("", "keep", "auto"):
@@ -845,6 +921,18 @@ def onFrame():
         fill = panel().op("prog_fill")
         if fill is not None:
             fill.par.w.val = _batch_progress() * 620
+    except Exception:
+        pass
+
+    # 1b) SOURCE-mode FPS display: follow the loaded movie's rate. When
+    # a new file loads (job start), sample_rate changes — refresh the
+    # (disabled) field so it displays the current source's rate. Cheap
+    # per-frame float compare, only in source mode.
+    try:
+        if _fps_source_mode() and _source_fps() != _last_src_fps:
+            _last_src_fps = _source_fps()
+            if _last_src_fps is not None:
+                SyncFpsField()
     except Exception:
         pass
 
