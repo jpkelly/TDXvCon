@@ -255,8 +255,10 @@ def _update_res_fields():
       - UNSCALED-> controller rewires moviein -> movieout NOW
     Plus: the SCALE dropdown shows/hides with the toggle.
     """
-    mode = str(_val("scaled_t") or "unscaled").strip().lower()
-    scaled = mode == "scaled"
+    mode = _val("scaled_t")
+    # buttonToggle's Value0 is a BOOLEAN (0/1), not a string — comparing
+    # to 'scaled' never matched, so the toggle silently did nothing.
+    scaled = bool(mode)
     # 1) rewire NOW through the extension (toggle state is advisory; the
     #    controller re-applies per job, so a busy encoder is unaffected).
     try:
@@ -282,8 +284,9 @@ def _res_value():
     size preserved); scaled sends the chosen factor — the CONTROLLER
     computes the final WxH from the movie's real dimensions after load.
     Returns (resolution, scale)."""
-    mode = str(_val("scaled_t") or "unscaled").strip().lower()
-    if mode != "scaled":
+    mode = _val("scaled_t")
+    # buttonToggle Value0 is BOOLEAN (0/1) — not a menu string.
+    if not bool(mode):
         return "auto", None
     factor = str(_val("scale_dd") or "1").strip()
     try:

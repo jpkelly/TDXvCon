@@ -83,7 +83,7 @@ _TITLES = {
     "format_dd": "FORMAT",
     "quality_dd": "QUALITY",
     "fps_f": "FPS",
-    "scaled_t": "SCALED",
+    "scaled_t": "SCALING",
     "scale_dd": "SCALE",
     "fit_dd": "FIT",
     "output_l": "OUTPUT",
@@ -301,7 +301,7 @@ def build():
     # dimensions after load, even-dimension clamped). The toggle ALSO
     # rewires the fit path LIVE via the extension's Setfitpath().
     if "scaled_t" in widgets:
-        setp(widgets["scaled_t"], "Widgetlabel", "SCALED")
+        setp(widgets["scaled_t"], "Widgetlabel", "SCALING")
         setp(widgets["scaled_t"], "Buttonofflabel", "OFF")
         setp(widgets["scaled_t"], "Buttononlabel", "ON")
         setp(widgets["scaled_t"], "Value0", 0)
