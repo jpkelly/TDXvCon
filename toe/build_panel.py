@@ -200,29 +200,41 @@ def build():
 
     # ---- load widgets -----------------------------------------------------
     say("loading widgets")
-    loaded = {}
     widgets = {}
     for outer_name, (tox, x, y, w, h) in _WIDGETS.items():
-        if tox in loaded:
-            outer = panelcomp.copy(loaded[tox], name=outer_name)
-            if outer is None:
-                say(f"!! copy for {outer_name} returned None")
-                continue
-        else:
-            path = _TOX_PATHS.get(tox,
-                                  os.path.join(_TOX_DIR, f"{tox}.tox"))
-            outer = panelcomp.loadTox(path)
-            if outer is None:
-                say(f"!! loadTox({tox}) returned None")
-                continue
-            outer.name = outer_name
-            loaded[tox] = outer
-        place(outer, x, y, w, h)
-        # Panel-view position doubles as the network position (mirrored
-        # in place()); no separate row bookkeeping needed.
-        inner = inner_of(outer)
-        if inner is not None:
-            widgets[outer_name] = inner
+        # Load the tox into a SCRATCH COMP, then copy the INNER widget
+        # itself to the panel level and destroy the scratch — the widget
+        # ends up a direct child of the panel (JP: no wrapper containers;
+        # all widgets on the same level). Config/layout pars live on that
+        # same COMP, so everything downstream stays identical.
+        path = _TOX_PATHS.get(tox,
+                              os.path.join(_TOX_DIR, f"{tox}.tox"))
+        scratch = panelcomp.create(containerCOMP, "_scratch")
+        ret = scratch.loadTox(path)
+        wrapper = ret if ret is not None else scratch.op(tox)
+        if wrapper is None:
+            say(f"!! loadTox({tox}) failed in scratch")
+            scratch.destroy()
+            continue
+        inner = inner_of(wrapper)
+        if inner is None:
+            say(f"!! no inner widget in {tox}")
+            scratch.destroy()
+            continue
+        # Copy the INNER widget up to the panel level, named for its role.
+        try:
+            wcomp = panelcomp.copy(inner, name=outer_name)
+        except Exception as exc:
+            say(f"!! copy inner {tox} -> {outer_name}: {exc}")
+            scratch.destroy()
+            continue
+        if wcomp is None:
+            say(f"!! copy inner {tox} returned None")
+            scratch.destroy()
+            continue
+        scratch.destroy()
+        place(wcomp, x, y, w, h)
+        widgets[outer_name] = wcomp
     say(f"loaded {len(widgets)}/{len(_WIDGETS)} widgets")
 
     mod = cb.module
