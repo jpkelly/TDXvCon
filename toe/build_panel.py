@@ -107,8 +107,13 @@ def inner_of(wrapper):
 
 
 def place(outer, x, y, w, h):
-    """Panel layout of the wrapper. The lister's wrapper lacks Layout
-    pars (different structure from Basic Widgets) — skip gracefully."""
+    """Panel layout of the OUTER wrapper only.
+
+    The previous version also set the INNER widget's x/y/w/h — wrong:
+    inner coordinates are RELATIVE to the outer, so everything was
+    displaced off-panel (the 'completely empty panel' bug). Outer only.
+    Widgets whose wrapper lacks Layout pars (the lister) just report.
+    """
     try:
         outer.par.x = x
         outer.par.y = y
@@ -116,16 +121,6 @@ def place(outer, x, y, w, h):
         outer.par.h = h
     except Exception as exc:
         say(f"  (place {outer.name}: {exc})")
-    # The inner widget may carry the actual panel layout instead.
-    try:
-        inner = inner_of(outer)
-        if inner is not None:
-            inner.par.x = x
-            inner.par.y = y
-            inner.par.w = w
-            inner.par.h = h
-    except Exception:
-        pass
 
 
 def setp(inner, par_name, value):
