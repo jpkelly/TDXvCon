@@ -557,8 +557,10 @@ def build():
         except Exception:
             pass
         try:
-            # redraw when the table changes (stock default, but explicit)
-            q.par.Refreshoninputchange = True
+            # CRITICAL (two live tracebacks): refresh-on-input-change
+            # fires mid-write and dies on any incomplete table. OFF —
+            # the callbacks pulse Refresh explicitly on complete tables.
+            q.par.Refreshoninputchange = "off"
         except Exception:
             pass
 
