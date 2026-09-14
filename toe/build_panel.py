@@ -268,7 +268,8 @@ def build():
     # sweep by PREFIX so every rebuild leaves exactly one of each.
     for _pref in ("panel_dnd", "panel_build_run", "panel_capture_run"):
         for ch in list(vcon.children):
-            if ch.name == _pref or ch.name.startswith(_pref + "1"):
+            suffix = ch.name[len(_pref):] if ch.name.startswith(_pref) else None
+            if suffix == "" or (suffix is not None and suffix.isdigit()):
                 say(f"removing existing {ch.name}")
                 ch.destroy()
 
