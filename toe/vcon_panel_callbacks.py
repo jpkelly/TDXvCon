@@ -77,6 +77,26 @@ CONTAINERS = {
     "h264": ".mp4", "h265": ".mp4", "av1": ".mp4",
 }
 
+#: Human-readable labels for the FORMAT dropdown — Menunames keep TD's
+#: exact menu tokens (what the encoder needs); Menulabels carry the
+#: description (what the user needs). The 'a' in yuva = ALPHA — the entry
+#: ProRes 4444 users are looking for (JP: "alpha not apparent").
+FORMAT_LABELS = {
+    "rgb": "RGB",
+    "rgba": "RGB + Alpha",
+    "rgbu": "RGB (HDR)",
+    "rgbs": "RGB (HDR scRGB)",
+    "yuv4228bit": "YUV 4:2:2 8-bit",
+    "yuv42210bit": "YUV 4:2:2 10-bit",
+    "yuv42212bit": "YUV 4:2:2 12-bit",
+    "yuv44410bit": "YUV 4:4:4 10-bit",
+    "yuva444412bit": "YUVA 4:4:4 12-bit + Alpha",
+    "yuv420": "YUV 4:2:0 8-bit",
+    "yuv420p10bit": "YUV 4:2:0 10-bit",
+    "yuv444p8bit": "YUV 4:4:4 8-bit",
+    "yuv444p10bit": "YUV 4:4:4 10-bit",
+}
+
 #: Movie extensions TD imports (docs.derivative.ca File_Types, verified).
 MOVIE_EXTS = {".m4v", ".mkv", ".mov", ".mp4", ".hsp", ".notchlc", ".mpeg",
               ".mpg", ".avi", ".flv", ".m2ts", ".wmv", ".h265", ".vp8",
@@ -257,7 +277,8 @@ def UpdateSubtypes():
                 grey = not fmts
             if fmts:
                 setp_par(fmt_w, "Menunames", " ".join(fmts))
-                setp_par(fmt_w, "Menulabels", " ".join(fmts))
+                setp_par(fmt_w, "Menulabels",
+                         " ".join(f"'{FORMAT_LABELS.get(f, f)}'" for f in fmts))
                 try:
                     if fmt_w.par.Value0.val not in fmts:
                         fmt_w.par.Value0.val = fmts[0]

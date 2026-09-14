@@ -314,8 +314,9 @@ def build():
         setp(widgets["subtype_dd"], "Menunames", "")
         _grey_out_b(widgets["subtype_dd"])
     if "format_dd" in widgets:
-        set_menu(widgets["format_dd"], list(notch["pixel_formats"]),
-                 list(notch["pixel_formats"]), "rgb")
+        notch_fmts = list(notch["pixel_formats"])
+        set_menu(widgets["format_dd"], notch_fmts,
+                 [mod.FORMAT_LABELS.get(f, f) for f in notch_fmts], "rgb")
     # QUALITY is a SLIDER — the same presentation MvO itself uses for
     # NotchLC (a 0-1 float). The named levels from Derivative's guide
     # (good=0.0 very-good=0.285 excellent=0.575 optimal=0.862 best=1.0)
