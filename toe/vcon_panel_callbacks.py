@@ -361,16 +361,15 @@ def _update_res_fields():
     outer = panel().op("scale_dd") if panel() is not None else None
     if outer is not None:
         try:
-            # display is a STRING MENU par — tokens, not booleans
-            outer.par.display.val = "on" if scaled else "off"
+            # OUTER-wrapper Layout 'display' is a TOGGLE (TDParameterHelp:
+            # containerCOMP.display parType Toggle) — boolean 0/1, NOT a
+            # string menu. (The earlier token write did nothing.)
+            outer.par.display.val = 1 if scaled else 0
         except Exception:
             try:
-                outer.par.display = 1 if scaled else 0
-            except Exception:
-                try:
-                    outer.par.x = 270 if scaled else 1200
-                except Exception as exc:
-                    note(f"display toggle failed: {exc}")
+                outer.par.x = 270 if scaled else 1200
+            except Exception as exc:
+                note(f"display toggle failed: {exc}")
 
 
 def _res_value():

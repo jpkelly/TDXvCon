@@ -71,7 +71,13 @@ _WIDGETS = {
     # derived filename is too long for a side slot — give it the row)
     "output_l":     ("label",              20, 330, 620, _ROW),
     # PROGRESS slider, full width
-    "prog_s":       ("sliderHorz",         20, 285, 620, _ROW),
+    # PROGRESS: custom bar (no palette widget exists, and sliderHorz's
+    # numeric field CANNOT be hidden — probe-verified: 'off' writes
+    # succeed but the field persists). A Container track + a fill
+    # Container whose width EXPRESSION drives from the Progress par:
+    # pure geometry, no number by construction.
+    "prog_track":  ("__bar__",            20, 285, 620, 16),
+    "prog_fill":   ("__bar__",            20, 285, 620, 16),
     # queue, then STATUS at the very bottom
     "queue":        ("lister",             20,  90, 620, 200),
     "status_l":     ("label",              20,  40, 620, _ROW),
@@ -231,6 +237,14 @@ def build():
     say("loading widgets")
     widgets = {}
     for outer_name, (tox, x, y, w, h) in _WIDGETS.items():
+        if tox == "__bar__":
+            # Custom progress bar (no palette widget exists; sliderHorz's
+            # numeric field cannot be hidden — probe-verified). A plain
+            # Container; the fill gets its width bind below.
+            wcomp = panelcomp.create(containerCOMP, outer_name)
+            place(wcomp, x, y, w, h)
+            widgets[outer_name] = wcomp
+            continue
         path = _TOX_PATHS.get(tox,
                               os.path.join(_TOX_DIR, f"{tox}.tox"))
         scratch = panelcomp.create(containerCOMP, "_scratch")
@@ -263,6 +277,27 @@ def build():
         widgets[outer_name] = wcomp
     say(f"loaded {len(widgets)}/{len(_WIDGETS)} widgets (flat at panel root)")
 
+    # ---- progress bar: track + fill, width-driven from Progress par ----
+    if "prog_track" in widgets and "prog_fill" in widgets:
+        track = widgets["prog_track"]
+        fill = widgets["prog_fill"]
+        # track: dark background strip
+        try:
+            track.par.bgcolor = (0.16, 0.16, 0.18)
+            track.par.bgalpha = 1.0
+            track.par.alignallow = "none"      # keep absolute placement
+        except Exception as exc:
+            say(f"  (track look: {exc})")
+        # fill: same position, width EXPRESSION maps Progress 0..1 to 0..620
+        try:
+            fill.par.bgcolor = (0.12, 0.55, 0.95)
+            fill.par.bgalpha = 1.0
+            fill.par.alignallow = "none"
+            fill.par.w.expr = "op.vcon.par.Progress * 620"
+            say("  progress bar: fill width <- Progress par expression")
+        except Exception as exc:
+            say(f"  (fill bind: {exc})")
+
     mod = cb.module
 
     # ---- titles (Widgetlabel — the live-dumped title par) ----------------
@@ -288,15 +323,9 @@ def build():
                     pass
             else:
                 setp(widgets[name], "Labelwidth", lw)
-    # PROGRESS slider: hide the numeric readout. The display pars are
-    # STRING MENUS (probe 3 dump: menus=['off','on']), not booleans —
-    # writing int 0 selects MENU INDEX 0 which can be 'on' (why "turning
-    # it off didn't turn it off"). Write the token 'off' directly.
-    if "prog_s" in widgets:
-        setp(widgets["prog_s"], "Numericfielddisplay", "off")
-    # (PROGRESS title only — other titles come from the module-level
-    # _TITLES dict, which the earlier loop applies.)
-    _LOCAL_TITLES = {"prog_s": "PROGRESS"}
+    # PROGRESS bar title via the status-style label — a plain Container
+    # has no Widgetlabel, so skip the title loop entry below.
+    _LOCAL_TITLES = {}
     for name, title in _LOCAL_TITLES.items():
         if name in widgets:
             setp(widgets[name], "Widgetlabel", title)
@@ -400,12 +429,6 @@ def build():
 
     # ---- binds + preview hooks --------------------------------------------
     say("binding progress + status")
-    if "prog_s" in widgets:
-        try:
-            widgets["prog_s"].par.Value0.bindExpr = "op.vcon.par.Progress"
-            say("  progress slider bound to Progress par")
-        except Exception as exc:
-            say(f"  (progress bind: {exc})")
     if "status_l" in widgets:
         try:
             # LIVE-VERIFIED (probe 4): label widgets render their
