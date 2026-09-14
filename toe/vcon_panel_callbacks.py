@@ -1006,9 +1006,9 @@ def _run_next():
         return
     src = nxt["input"]
     base = os.path.basename(src)
-    dst = _val("destination")
-    # destination widget holds a full output path — its folder is the target
-    dst = os.path.dirname(dst) if dst else None
+    note(f"  submitting: src={src!r}")
+    note(f"  output: {nxt['output']!r}")
+    note(f"  exists already: {os.path.exists(nxt['output'])}")
     codec = _val("codec_dd") or "notchlc"
     subtype = _validate_choice(codec, "subtype", _val("subtype_dd"))
     quality = _val("quality_s")   # 0-1 float straight to MvO
@@ -1026,6 +1026,9 @@ def _run_next():
         fps = "auto"
     if codec != "notchlc":
         quality = None          # only NotchLC has a quality slider in MvO
+    note(f"  codec={codec} sub={subtype} fmt={fmt} fps={fps} "
+         f"res={res} scale={scale} fit={fitmode} "
+         f"container={_td_container(codec)}")
     ok = e.Transcode(
         input_path=src,
         output_path=nxt["output"],

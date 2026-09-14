@@ -738,6 +738,7 @@ class VconExt:
                 return
 
         movieout = self.movieout
+        debug(f"vCon: MvO file <- {self.job['output']!r}")
         movieout.par.file = self.job["output"]
         # Stop-frame recording, per the documented sequence:
         #   record = 1  (start recording)
@@ -747,6 +748,8 @@ class VconExt:
         # this closes/flushes the file).
         movieout.par.record = 1
         movieout.par.pause = 1
+        debug(f"vCon: encode starting — {self.total} frames, "
+              f"record=1 pause=1")
 
         self.frame = 0
         self.t0 = time.time()
@@ -788,6 +791,8 @@ class VconExt:
             return
 
         self.frame += 1
+        if self.frame == 1:
+            debug(f"vCon: first frame written (addframe pulsed)")
         if self.frame % 10 == 0 or self.frame == self.total:
             self._set_status(f"encoding {self.frame}/{self.total}")
             # Progress par: 0..1 fraction, for a panel slider. Seeded at 0
@@ -807,6 +812,8 @@ class VconExt:
         self.state = "finishing"
         self._finishing_ticks = 0
         self.seconds_taken = round(time.time() - self.t0, 3)
+        debug(f"vCon: finishing — record=0, {self.frame}/{self.total} "
+              f"frames written, output={self.job['output']!r}")
         try:
             self.movieout.par.record = 0
         except Exception as exc:
@@ -830,6 +837,8 @@ class VconExt:
                     "path": self.job["output"],
                     "total_frames": frames, "seconds": seconds})
         out = self.job["output"]
+        debug(f"vCon: closed — output={out!r}, exists={os.path.exists(out)}, "
+              f"size={os.path.getsize(out) if os.path.exists(out) else 0}")
         self._set_status(f"idle — last: {os.path.basename(out)} "
                          f"({frames} frames, {seconds}s)")
         # Reset the slider-bound Progress par so the next job starts at 0.
