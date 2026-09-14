@@ -767,14 +767,18 @@ def OnQueueRowSelected(info=None):
     # keeps its current content until the metadata lands
     p = panel()
     d = p.op("inspector") if p is not None else None
-    if d is not None:
-        full = _full_path_for(os.path.basename(item["input"])) or item["input"]
-        note(f"  inspector loading: {full!r}")
-        try:
-            d.par.file = full
-            d.par.reloadpulse.pulse()
-        except Exception as exc:
-            note(f"inspect load failed: {exc}")
+    if d is None:
+        note("  NO 'inspector' DAT in the panel — rebuild needed "
+             "(exec panel_build_run)")
+        _inspect_item = None
+        return
+    full = _full_path_for(os.path.basename(item["input"])) or item["input"]
+    note(f"  inspector loading: {full!r}")
+    try:
+        d.par.file = full
+        d.par.reloadpulse.pulse()
+    except Exception as exc:
+        note(f"inspect load failed: {exc}")
 
 
 def _inspect_tick():
@@ -787,12 +791,23 @@ def _inspect_tick():
     if _inspect_item is None:
         return
     vals = _inspector_values()
-    # ONE-SHOT DIAGNOSTICS (probe-first, not guess): the DAT's real
-    # labels dump to the textport on the first read — if the pick()
-    # variants ever miss, that dump shows the true row names. A missing
-    # DAT says so plainly (builder creates it — file-linked module
-    # changes go live WITHOUT a rebuild, the DAT does not).
+    # PER-CLICK diagnostics (probe-first): the DAT's real labels dump
+    # to the textport — if the pick() variants ever miss, that dump
+    # shows the true row names. A missing DAT says so plainly (builder
+    # creates it — file-linked module changes go live WITHOUT a
+    # rebuild, the DAT does not). A cook with the FILE PAR UNSET means
+    # the write fell over (par name, pulse, or the file path itself).
     global _noted_table
+    p_ = panel()
+    d_ = p_.op("inspector") if p_ is not None else None
+    if d_ is not None:
+        try:
+            cur_file = str(d_.par.file.eval() or "")
+            if vals and cur_file.lower() in ("", "none"):
+                note("  inspector: DAT has rows but FILE PAR is EMPTY "
+                     "— the file write/pulse didn't land")
+        except Exception:
+            pass
     if not _noted_table:
         p_ = panel()
         d_ = p_.op("inspector") if p_ is not None else None
