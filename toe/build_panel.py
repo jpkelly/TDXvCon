@@ -56,7 +56,7 @@ _WIDGETS = {
     "codec_dd":     ("dropDownMenu",       20, 510, 230, _ROW),
     "subtype_dd":   ("dropDownMenu",      260, 510, 230, _ROW),
     "format_dd":    ("dropDownMenu",       20, 465, 230, _ROW),
-    "quality_dd":   ("dropDownMenu",      260, 465, 230, _ROW),
+    "quality_s":    ("sliderHorz",        260, 465, 230, _ROW),
     # row: FPS | SCALING | SCALE(hidden) | FIT — readable sizes
     "fps_f":        ("fieldString",        20, 420, 140, _ROW),
     "scaled_t":     ("buttonToggle",      170, 420, 130, _ROW),
@@ -81,7 +81,7 @@ _TITLES = {
     "codec_dd": "CODEC",
     "subtype_dd": "SUBTYPE",
     "format_dd": "FORMAT",
-    "quality_dd": "QUALITY",
+    "quality_s": "QUALITY",
     "fps_f": "FPS",
     "scaled_t": "SCALING",
     "scale_dd": "SCALE",
@@ -247,7 +247,7 @@ def build():
     # Labelwidth per row type; buttons get NO label area (their titles were
     # doubled-up with face text — label disabled per JP's note).
     _LABEL_W = {"source": 110, "destination": 110, "codec_dd": 90,
-                "subtype_dd": 90, "format_dd": 90, "quality_dd": 90,
+                "subtype_dd": 90, "format_dd": 90, "quality_s": 90,
                 "fps_f": 45, "scaled_t": 60, "scale_dd": 60,
                 "fit_dd": 45, "output_l": 110, "status_l": 110,
                 "start_b": 0, "pause_b": 0, "stop_b": 0}
@@ -305,9 +305,17 @@ def build():
     # registry converts the name before it reaches the wire (Derivative
     # guide: good=0.0 very-good=0.285 excellent=0.575 optimal=0.862
     # best=1.0). Greyed out for codecs without a ladder.
-    qual = mod.CODECS["notchlc"]["qualities"]
-    if "quality_dd" in widgets:
-        set_menu(widgets["quality_dd"], qual, qual, "optimal")
+    # QUALITY is a SLIDER — the same presentation MvO itself uses for
+    # NotchLC (a 0-1 float). The named levels from Derivative's guide
+    # (good=0.0 very-good=0.285 excellent=0.575 optimal=0.862 best=1.0)
+    # mark the track via Sliderlabelnames (live-dumped par). Greys out
+    # for codecs with no ladder.
+    if "quality_s" in widgets:
+        setp(widgets["quality_s"], "Value0", 0.862)      # optimal
+        setp(widgets["quality_s"], "Numericfielddisplay", 1)   # show value
+        setp(widgets["quality_s"], "Sliderlabelnames",
+             "'0.0 Good' '0.285 Very Good' '0.575 Excellent' "
+             "'0.862 Optimal' '1.0 Best'")
     if "fit_dd" in widgets:
         set_menu(widgets["fit_dd"],
                  ["fitbest", "fill", "fithorz", "fitvert", "fitoutside"],
@@ -366,7 +374,7 @@ def build():
 
     say("wiring live output-name preview")
     preview = "op.vcon.op('panel_callbacks').module.PreviewOutput()"
-    for name in ("source", "destination", "quality_dd"):
+    for name in ("source", "destination", "quality_s"):
         if name in widgets:
             if setp(widgets[name], "Onvaluechangescript0", preview):
                 say(f"  {name}: preview wired")

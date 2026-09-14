@@ -241,25 +241,14 @@ def UpdateSubtypes():
             except Exception:
                 pass
             _grey_out(fmt_w, grey)
-        # QUALITY: a NAMED-LEVEL dropdown, per codec. Only codecs with a
-        # ladder get options (NotchLC); everything else greys out — same
-        # "empty menu = grey" rule as MvO's own parameter dialog. The
-        # chosen NAME maps to MvO's quality FLOAT slider value in the
-        # registry (good=0.0 ... best=1.0, Derivative guide).
-        q_w = widget("quality_dd")
+        # QUALITY is a SLIDER — MvO's own presentation for NotchLC
+        # (a 0-1 float; named levels per Derivative guide). Grey out for
+        # codecs with no ladder; leave the value untouched otherwise
+        # (the registry passes the float straight to MvO's slider).
+        q_w = widget("quality_s")
         if q_w is not None:
-            quals = list(meta.get("qualities", []))
-            if quals:
-                setp_par(q_w, "Menunames", " ".join(quals))
-                setp_par(q_w, "Menulabels", " ".join(quals))
-                try:
-                    if q_w.par.Value0.val not in quals:
-                        q_w.par.Value0.val = quals[-2] if len(quals) > 1 else quals[0]
-                except Exception:
-                    pass
-                _grey_out(q_w, False)
-            else:
-                _grey_out(q_w, True)
+            has_q = bool(meta.get("qualities"))
+            _grey_out(q_w, not has_q)
         _update_res_fields()
         PreviewOutput()
     except Exception as exc:
@@ -347,7 +336,7 @@ def Start():
     dst = _val("destination")
     codec = _val("codec_dd") or "notchlc"
     subtype = _val("subtype_dd")
-    quality = _val("quality_dd")
+    quality = _val("quality_s")   # 0-1 float straight to MvO
     fmt = _val("format_dd")
     fps = str(_val("fps_f") or "auto").strip().lower()
     fitmode = _val("fit_dd")
@@ -359,8 +348,8 @@ def Start():
         fmt = None
     if subtype == "none":
         subtype = None
-    if quality and not CODECS.get(codec, {}).get("qualities"):
-        quality = None          # codec has no quality ladder
+    if codec != "notchlc":
+        quality = None          # only NotchLC has a quality slider in MvO
 
     if not src:
         note("pick a source file or folder first")
@@ -430,7 +419,7 @@ def _run_next():
     subtype = _val("subtype_dd")
     if subtype == "none":
         subtype = None
-    quality = _val("quality_dd")
+    quality = _val("quality_s")   # 0-1 float straight to MvO
     fmt = _val("format_dd")
     fps = str(_val("fps_f") or "auto").strip().lower()
     fitmode = _val("fit_dd")
@@ -439,8 +428,8 @@ def _run_next():
         fps = "auto"
     if fmt == "none":
         fmt = None
-    if quality and not CODECS.get(codec, {}).get("qualities"):
-        quality = None          # codec has no quality ladder
+    if codec != "notchlc":
+        quality = None          # only NotchLC has a quality slider in MvO
     ok = e.Transcode(
         input_path=src,
         output_path=nxt["output"],
