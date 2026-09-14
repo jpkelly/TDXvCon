@@ -320,18 +320,18 @@ def build():
     # must be fed explicitly. Audio Movie CHOP extracts the audio from
     # the same Movie File In TOP, and MvO's 'audio' par takes the CHOP.
     say("creating audio (Audio Movie CHOP -> movieout)")
+    # Sweep stray audiomovie* CHOPs — a leftover one can steal MvO's
+    # audiochop link and silence the output.
+    for ch in list(vcon.children):
+        if ch.name.startswith("audiomovie"):
+            say(f"  removing stray {ch.name}")
+            ch.destroy()
     audio = vcon.create(find_type("audiomovieCHOP"), "audio")
     audio.nodeX = -300
     audio.nodeY = -200
     set_op_par(audio, "moviefileintop", moviein)
     # Play MUST be ON or the CHOP outputs no audio (stock default: off)
     safe_set(audio.par, "play", 1)
-    # Pre-read the FULL audio into cache (not time-sliced): stop-frame
-    # video advances frame by frame via addframe.pulse(), but the audio
-    # needs the complete track available so MvO writes it whole. A
-    # large pre-read covers long movies; 3600s = 1 hour max.
-    safe_set(audio.par, "prereadlength", 3600)
-    safe_set(audio.par, "prereadlengthunit", "seconds")
     # MvO's audio par is 'audiochop' (type=CHOP)
     set_op_par(movieout, "audiochop", audio)
 
