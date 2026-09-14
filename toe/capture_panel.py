@@ -22,18 +22,29 @@ if p is None:
 DUMP_PATH = ('/Users/jp/Documents/GitHub/vCon/toe/'
              'panel_layout_captured.py')
 
+def _safe_geom(c):
+    """(y, x) for sorting; non-panel children (e.g. lister's config DAT)
+    have no Layout pars and sort to the end instead of crashing."""
+    try:
+        return (c.par.y.eval(), c.par.x.eval())
+    except Exception:
+        return (float('inf'), float('inf'))
+
+
 rows = []
-for c in sorted(p.children, key=lambda o: (o.par.y.eval(), o.par.x.eval())):
+for c in sorted(p.children, key=_safe_geom):
     name = c.name
     if name.startswith('_'):
         continue
+    # Skip anything without panel Layout pars — listerConfig and friends
+    # are the lister's internal DATs, not widgets to capture.
     try:
         x = c.par.x.eval()
         y = c.par.y.eval()
         w = c.par.w.eval()
         h = c.par.h.eval()
     except Exception:
-        continue          # not a panel-positioned widget (e.g. DATs)
+        continue
     try:
         lw = c.par.Labelwidth.eval()
     except Exception:
