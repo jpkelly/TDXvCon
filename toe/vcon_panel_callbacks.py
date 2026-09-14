@@ -175,15 +175,25 @@ def PreviewOutput():
         if out_l is None:
             return
         if not src or not os.path.isfile(src):
-            out_l.par.Label.val = ""
+            lab = out_l.par.Label
+            if lab.mode != ParMode.CONSTANT:
+                lab.mode = ParMode.CONSTANT
+            lab.val = ""
             return
         dst = _val("destination")
+        # destination holds a full output path after first preview — its
+        # folder is the real destination for derivation
+        dst_dir = dst if dst and os.path.isdir(dst) else (
+            os.path.dirname(dst) if dst else None)
         codec = _val("codec_dd") or "notchlc"
         subtype = _val("subtype_dd")
         if subtype == "none":
             subtype = None
-        out = _unique_output(_derive_output(src, dst, codec, subtype))
-        out_l.par.Label.val = os.path.basename(out)
+        out = _unique_output(_derive_output(src, dst_dir, codec, subtype))
+        lab = out_l.par.Label
+        if lab.mode != ParMode.CONSTANT:
+            lab.mode = ParMode.CONSTANT   # expr mode evaluates text as a path
+        lab.val = os.path.basename(out)
     except Exception:
         pass
 
@@ -363,7 +373,12 @@ def Start():
         note("source not found")
         return
 
-    out = _unique_output(_derive_output(src, dst, codec, subtype))
+    # DESTINATION may hold either a folder OR the previous output path
+    # (we write the derived file path into it for display). Take its
+    # directory as the real destination.
+    dst_dir = dst if dst and os.path.isdir(dst) else (
+        os.path.dirname(dst) if dst else None)
+    out = _unique_output(_derive_output(src, dst_dir, codec, subtype))
     ok = ext().Transcode(
         input_path=src,
         output_path=out,
@@ -398,6 +413,8 @@ def _run_next():
     src = nxt["input"]
     base = os.path.basename(src)
     dst = _val("destination")
+    # destination widget holds a full output path — its folder is the target
+    dst = os.path.dirname(dst) if dst else None
     codec = _val("codec_dd") or "notchlc"
     subtype = _val("subtype_dd")
     if subtype == "none":
@@ -553,13 +570,33 @@ def onDragDrop(info):
 
 
 def NormalizeDestination():
-    """Show only the selected FOLDER in the destination widget."""
-    w = widget("destination")
-    if w is None:
-        return
-    v = w.par.Value0.eval()
-    if v and os.path.isfile(v):
-        w.par.Value0.val = os.path.dirname(v)
+    """DESTINATION shows the OUTPUT FILE path (folder + derived name).
+
+    JP: the destination widget should display what the new file will be
+    named, not just the folder. On any relevant change, compute the exact
+    auto-named output path and show it; fall back to just the folder
+    until a source is picked.
+    """
+    try:
+        dst_w = widget("destination")
+        if dst_w is None:
+            return
+        src = _val("source")
+        codec = _val("codec_dd") or "notchlc"
+        subtype = _val("subtype_dd")
+        if subtype == "none":
+            subtype = None
+        if src and os.path.isfile(src):
+            derived = _unique_output(_derive_output(src, _val("destination"),
+                                                    codec, subtype))
+            dst_w.par.Value0.val = derived
+        else:
+            # no source yet: strip any file back to a folder for display
+            v = dst_w.par.Value0.eval()
+            if v and os.path.isfile(v):
+                dst_w.par.Value0.val = os.path.dirname(v)
+    except Exception as exc:
+        note(f"destination display: {exc}")
 
 
 def note(text):

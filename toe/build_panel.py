@@ -57,16 +57,16 @@ _WIDGETS = {
     "subtype_dd":   ("dropDownMenu",      260, 510, 230, _ROW),
     "format_dd":    ("dropDownMenu",       20, 465, 230, _ROW),
     "quality_dd":   ("dropDownMenu",      260, 465, 230, _ROW),
-    # row: FPS | RES | SCALE(hidden) | FIT — all narrow
-    "fps_f":        ("fieldString",        20, 420, 120, _ROW),
-    "scaled_t":     ("buttonToggle",      150, 420, 90, _ROW),
-    "scale_dd":     ("dropDownMenu",      270, 420, 110, _ROW),
-    "fit_dd":       ("dropDownMenu",      390, 420, 120, _ROW),
+    # row: FPS | SCALING | SCALE(hidden) | FIT — readable sizes
+    "fps_f":        ("fieldString",        20, 420, 140, _ROW),
+    "scaled_t":     ("buttonToggle",      170, 420, 130, _ROW),
+    "scale_dd":     ("dropDownMenu",      310, 420, 160, _ROW),
+    "fit_dd":       ("dropDownMenu",      480, 420, 160, _ROW),
     # buttons (label disabled) | OUTPUT name
-    "start_b":      ("buttonMomentary",    20, 375, 70, _ROW),
-    "pause_b":      ("buttonMomentary",   130, 375, 70, _ROW),
-    "stop_b":       ("buttonMomentary",   240, 375, 70, _ROW),
-    "output_l":     ("label",             330, 375, 310, _ROW),
+    "start_b":      ("buttonMomentary",    20, 375, 110, _ROW),
+    "pause_b":      ("buttonMomentary",   140, 375, 110, _ROW),
+    "stop_b":       ("buttonMomentary",   260, 375, 110, _ROW),
+    "output_l":     ("label",             380, 375, 260, _ROW),
     # PROGRESS slider, full width
     "prog_s":       ("sliderHorz",         20, 330, 620, _ROW),
     # queue, then STATUS at the very bottom
@@ -261,20 +261,10 @@ def build():
                     pass
             else:
                 setp(widgets[name], "Labelwidth", lw)
-    # PROGRESS slider: hide the numeric readout + rename the title.
-    # Par names for the value-label are not live-verified — print them.
+    # PROGRESS slider: hide the numeric readout — par LIVE-DUMPED from
+    # JP's build: Numericfielddisplay (the '0.000' box beside the slider).
     if "prog_s" in widgets:
-        names = [p.name for p in widgets["prog_s"].customPars]
-        say(f"  slider pars: {', '.join(names)}")
-        for cand in ("Valuedisplay", "Showvalue", "Valuenumberdisplay",
-                     "Numbershow", "Value0display"):
-            par = getattr(widgets["prog_s"].par, cand, None)
-            if par is not None:
-                try:
-                    par.val = 0
-                    say(f"  slider readout hidden via '{cand}'")
-                except Exception:
-                    pass
+        setp(widgets["prog_s"], "Numericfielddisplay", 0)
     # (PROGRESS title only — other titles come from the module-level
     # _TITLES dict, which the earlier loop applies.)
     _LOCAL_TITLES = {"prog_s": "PROGRESS"}
@@ -395,21 +385,30 @@ def build():
              "op.vcon.op('panel_callbacks').module.NormalizeDestination()")
 
     # ---- queue lister points at queue_table --------------------------------
+    # Widgets are now FLAT children: the lister COMP IS the panel child
+    # (no wrapper to descend). Its source par wasn't found under 'source'
+    # before — dump candidates and try each (docsHelper error showed the
+    # old path resolved inside the lister, where par names differ).
     say("wiring batch queue lister")
     q = panelcomp.op("queue")
     if q is not None:
-        for c in q.children:
-            if c.name == "lister" or c.isPanel:
-                qinner = c
-                break
-        else:
-            qinner = None
-        if qinner is not None:
-            try:
-                qinner.par.source.dat = qt
-                say("  lister source -> queue_table")
-            except Exception as exc:
-                say(f"  (lister source: {exc})")
+        wired = False
+        for cand in ("sourcedat", "Sourcedat", "source", "Source",
+                     "dat", "Dat"):
+            par = getattr(q.par, cand, None)
+            if par is not None:
+                try:
+                    par.val = qt
+                    say(f"  lister source via '{cand}' -> queue_table")
+                    wired = True
+                    break
+                except Exception:
+                    continue
+        if not wired:
+            names = [p.name for p in q.customPars if "ourc" in p.name
+                     or p.name.lower().startswith("dat")]
+            say(f"  !! lister source par not found. Candidates: "
+                f"{', '.join(names) or 'none'}")
 
     # ---- panel Execute DAT: batch tick --------------------------------------
     # VERIFIED pattern from build_network.py's controller tick: the Execute

@@ -821,11 +821,22 @@ class VconExt:
                 f"fit mode {mode!r} not in Fit TOP menu {menu}"
             )
         f.par.fit = mode
-        # Common page: Custom Resolution + explicit W H (par.resolution is
-        # a 2-tuple). Token LIVE-VERIFIED by the builder: the menu value is
-        # 'custom' (NOT the docs-style 'customresolution').
+        # Common page: Custom Resolution + explicit W H. LIVE-GOTCHA: this
+        # build's fit TOP has NO par named 'resolution' (raised
+        # tdAttributeError, killing scaled jobs at load). resx/resy are
+        # the Common-page fields; try 'resolution' first (tuple form) and
+        # fall back to resx/resy — whichever this build exposes.
         f.par.outputresolution = "custom"
-        f.par.resolution = (w, h)
+        try:
+            f.par.resolution = (w, h)
+        except Exception:
+            try:
+                f.par.resx = w
+                f.par.resy = h
+            except Exception as exc:
+                raise ValueError(
+                    f"cannot set fit TOP resolution to {w}x{h}: {exc}"
+                )
         # Switch the data path: moviein -> fit -> movieout. moviein feeds
         # fit permanently (builder); only MvO's input source changes here.
         self._switch_mvo_input(f)
