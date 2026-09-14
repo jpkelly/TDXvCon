@@ -53,9 +53,10 @@ _WIDGETS = {
     "source":       ("fieldFileBrowser",   20, 600, 620, _ROW),
     "destination":  ("fieldFolderBrowser", 20, 555, 620, _ROW),
     # settings, two narrow columns (half-width each — no spillover)
+    # FORMAT and SUBTYPE swapped per JP — SUBTYPE now reads top-left.
     "codec_dd":     ("dropDownMenu",       20, 510, 230, _ROW),
-    "subtype_dd":   ("dropDownMenu",      260, 510, 230, _ROW),
-    "format_dd":    ("dropDownMenu",       20, 465, 230, _ROW),
+    "format_dd":    ("dropDownMenu",      260, 510, 230, _ROW),
+    "subtype_dd":   ("dropDownMenu",       20, 465, 230, _ROW),
     "quality_s":    ("sliderHorz",        260, 465, 230, _ROW),
     # row: FPS | SCALING | SCALE(hidden) | FIT — readable sizes
     "fps_f":        ("fieldString",        20, 420, 140, _ROW),
