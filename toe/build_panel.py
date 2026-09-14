@@ -723,17 +723,64 @@ def build():
             pass
 
     # ---- per-row progress bar BEHIND the file name (JP) ------------------
-    # colDefaults defines the per-column vocabulary (probe 11b):
-    # topPath = a TOP drawn behind the cell, topFill = how it fits
-    # ('BEST' = fill cell). The lister's Configcomp (configDefault clone)
-    # holds colDefine; copy it, set the 'file' column's topPath to a
-    # green bar TOP we create inside the lister, and pulse the editor.
-    say("wiring per-row progress bars (file column topPath)")
+    # colDefaults vocabulary (probe 11b) + LIVE colDefine format (probe 12:
+    # 19 rows per column, key rows: column/columnLabel/sourceData/width/
+    # stretch/topPath). We REPLACE the auto-defined columns with an
+    # explicit colDefine: '#' narrow (30), 'file' wide (stretch), 'status'
+    # fixed — NO progress column (the bar TOPs read queue_table's 4th
+    # column directly; the lister doesn't display it).
+    say("configuring lister columns (explicit colDefine)")
+    try:
+        # The lister's config COMP (Configcomp par — probe 12 confirmed
+        # /project1/vcon/panel/listerConfig). Turn auto-define OFF so
+        # our column definitions rule.
+        q_.par.Autodefinecols = "off"
+        cfg = None
+        try:
+            cfg = q_.par.Configcomp.eval()
+        except Exception:
+            pass
+        if cfg is None:
+            cfg = panelcomp.op("listerConfig")
+        if cfg is None:
+            say("  !! listerConfig not found — columns stay auto")
+        else:
+            cd = cfg.op("colDefine")
+            if cd is None:
+                say("  !! colDefine table missing in config")
+            else:
+                # 3 columns x 19 rows: header column + one per data col.
+                # Rows (probe 12): column, columnLabel, sourceData,
+                # sourceDataMode, textFormat, cellLook, topPath, topFill,
+                # help, width, stretch, sizable, editable, selectRow,
+                # justify, draggable, clickOnDrag, fontBold, fontItalic.
+                cols = [
+                    ["#", "#", "#", "constant", "", "", "", "BEST", "",
+                     "30", "0", "0", "0", "1", "CENTER", "0", "0", "0", "0"],
+                    ["file", "file", "file", "string", "", "", "", "BEST",
+                     "", "500", "1", "1", "0", "1", "CENTERLEFT",
+                     "0", "0", "0", "0"],
+                    ["status", "status", "status", "string", "", "", "",
+                     "BEST", "", "150", "0", "1", "0", "1", "CENTERLEFT",
+                     "0", "0", "0", "0"],
+                ]
+                cd.setSize(19, 1 + len(cols))
+                for ci, col in enumerate(cols, 1):
+                    for ri, val in enumerate(col):
+                        cd[ri, ci] = val
+                say("  colDefine: # (30) | file (500 stretch) | status (150)"
+                    " — no progress col")
+                # apply: pulse the lister's refresh
+                try:
+                    q_.par.Refresh.pulse()
+                except Exception:
+                    pass
+    except Exception as exc:
+        say(f"  (colDefine: {exc})")
+
+    # bar TOPs read the table's 4th column directly (one per row)
     try:
         bars = q_.create(find_type("containerCOMP"), "rowbars")
-        # one green TOP per potential row — width expressions read the
-        # 'progress' column of each row via the lister's data path
-        # (the callbacks' tick writes those values each frame)
         for i in range(12):
             btop = bars.create(find_type("constantTOP"), f"bar{i}")
             btop.par.colorr = 0.2
@@ -745,7 +792,7 @@ def build():
                 f"op('/project1/vcon/queue_table')[{i + 1}, 3] * 400"
             )
             btop.par.resy = 26
-        say(f"  row bar TOPs created (12) — widths <- queue_table progress col")
+        say("  row bar TOPs created (12) — widths <- queue_table progress col")
     except Exception as exc:
         say(f"  (row bars: {exc})")
 
