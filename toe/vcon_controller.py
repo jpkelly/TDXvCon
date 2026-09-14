@@ -294,6 +294,7 @@ class VconExt:
             "input": str(input_path),
             "output": str(output_path),
             "params": params,
+            "origin": "panel",
         }))
         return True
 
@@ -315,14 +316,16 @@ class VconExt:
     # ------------------------------------------------------------------
 
     def onConnect(self):
-        """Front-end connected — recover from any stale state and announce.
+        """Front-end connected — recover from any stale TCP-owned state.
 
-        A NEW connection means the previous client is gone (it crashed, was
-        Ctrl-C'd, or the socket dropped), so any job it had in flight is dead.
-        Without this reset the controller would stay 'busy' forever and refuse
-        every subsequent job until TouchDesigner was restarted.
+        A NEW TCP connection means the previous FRONT-END is gone (it
+        crashed, was Ctrl-C'd, or the socket dropped), so a job it owns is
+        dead. But PANEL jobs (submitted via the extension, no TCP client)
+        must survive: any TCP connect — even a harmless `vcon -doctor`
+        probe — must NOT kill an in-flight panel encode. (Caught live: a
+        doctor probe aborted a panel job mid-encode.)
         """
-        if self.state != "idle":
+        if self.state != "idle" and (self.job or {}).get("origin") == "tcp":
             self._abort_active_job("client reconnected")
         self.last_activity = time.time()
         self._send({
@@ -415,6 +418,10 @@ class VconExt:
             "input": msg.get("input", ""),
             "output": msg.get("output", ""),
             "params": msg.get("params", {}) or {},
+            #: Who submitted this: "tcp" (CLI front-end over the wire) or
+            #: "panel" (embedded extension call). Only tcp jobs are aborted
+            #: when a new TCP client connects — panel jobs outlive probes.
+            "origin": msg.get("origin", "tcp"),
         }
         if not os.path.isfile(job["input"]):
             self._send({"type": "error", "id": job["id"],
