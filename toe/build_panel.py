@@ -907,6 +907,10 @@ def build():
             q.par.Inputtablehasheaders = True
         except Exception:
             pass
+        try:
+            q.par.Savecolresizes = True
+        except Exception as exc:
+            say(f"  (Savecolresizes: {exc})")
         if _link_op(q, "Inputtabledat", qd):
             say("  lister Inputtabledat -> queue_display (file, status only)")
         try:
