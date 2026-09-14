@@ -586,15 +586,32 @@ def _scan_movies(folder, recursive=True):
 
 
 def _refresh_queue():
-    """Redraw the batch queue table (the lister widget's source DAT)."""
+    """Redraw the batch queue table (the lister widget's source DAT).
+
+    RACE-GOTCHA (live traceback): the lister's refreshOnInputChange
+    fires on EVERY table write — a clear() then appendRow() sequence
+    let it refresh on the EMPTY table and throw 'Blank header in col 0'.
+    Fix: build the new rows, then SET the table in place via setSize +
+    cell writes — the table always has a valid header row.
+    """
     t = panel().op("queue_table")
     if t is None:
         return
-    t.clear()
-    t.appendRow(["#", "file", "status"])
+    rows = [["#", "file", "status"]]
     for i, item in enumerate(_queue, 1):
-        t.appendRow([str(i), os.path.basename(item["input"]),
+        rows.append([str(i), os.path.basename(item["input"]),
                      item["status"]])
+    # in-place resize: never empty, header always present
+    try:
+        t.setSize(len(rows), 3)
+    except Exception:
+        pass
+    for r, row in enumerate(rows):
+        for c, val in enumerate(row):
+            try:
+                t[r, c] = val
+            except Exception:
+                pass
 
 
 def _mark_running(output_path):
