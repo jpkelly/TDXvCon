@@ -575,6 +575,65 @@ def _set_output_text(text):
         note(f"output text failed: {exc}")
 
 
+def _queue_rebuild_from_table():
+    """Reconstruct the in-memory _queue from queue_table (the durable
+    copy) when the module was recompiled.
+
+    GOTCHA (live-diagnosed 2026-09-14): TD recompiles file-linked DAT
+    modules on EVERY file change — module-level state (_queue) resets,
+    while the lister keeps showing rows from the table DAT. Without
+    this, clicks say 'no matching queue item' and START silently
+    encodes NOTHING though rows are right there. The table is the
+    source of truth; the list is the cache.
+
+    Col 3 holds the FULL input path (the lister never sees it — it
+    reads queue_display, cols 0-1). Outputs are re-derived (the cached
+    paths were lost with the list). Old tables without col 3 fall back
+    to the basename (best effort — the inspector may then fail to load
+    the file, and it says so).
+    """
+    global _queue
+    t = op.vcon.op("queue_table")
+    if t is None:
+        return 0
+    rows = []
+    try:
+        ncols = t.numCols
+        for r in range(1, t.numRows):          # row 0 = header
+            base = str(t[r, 0] or "").strip()
+            s = str(t[r, 1] or "").strip()
+            full = (str(t[r, 3] or "").strip()
+                    if ncols > 3 else "")
+            if not base:
+                continue
+            if not full:
+                full = base                   # legacy table: basename only
+            # a running row's status is a block bar — treat as queued
+            # (the controller is the authority on what's actually
+            # encoding; re-submitting after a recompile is safe because
+            # _run_next's is_busy gate serializes it)
+            if s.startswith(chr(0x2588)):
+                s = "queued"
+            rows.append({"input": full, "output": "", "status": s,
+                         "rel": base})
+    except Exception:
+        pass
+    if not rows:
+        return 0
+    # re-derive outputs (the cached ones died with the old list)
+    codec = _val("codec_dd") or "notchlc"
+    sub = _validate_choice(codec, "subtype", _val("subtype_dd"))
+    for it in rows:
+        try:
+            it["output"] = _unique_output(_derive_output(
+                it["input"], _dst_dir(), codec, sub))
+        except Exception:
+            it["output"] = it["input"]      # _run_next will fail loudly
+    _queue = rows
+    note(f"queue rebuilt from table: {len(rows)} item(s)")
+    return len(rows)
+
+
 def _queue_item_from_info(info):
     """Map a lister selection to its _queue item.
 
@@ -661,6 +720,11 @@ def OnQueueRowSelected(info=None):
     note(f"lister onSelectRow: {info.get('callbackName')} "
          f"row={info.get('row')} "
          f"file={(info.get('rowData') or {}).get('file')}")
+    if not _queue:
+        # module recompiled (TD recompiles file-linked DATs on every
+        # file change — the queue list reset; the lister still shows
+        # the table's rows). Rebuild from the durable table copy.
+        _queue_rebuild_from_table()
     item = _queue_item_from_info(info)
     if item is None:
         note("  no matching queue item — inspect skipped")
@@ -855,6 +919,12 @@ def _run_next():
         return
     if not _batch_started:
         return                      # queue loaded, awaiting START (JP)
+    # DURABLE QUEUE: a module recompile (file-linked DATs recompile on
+    # every file change) resets the in-memory _queue — rebuild from the
+    # table BEFORE iterating, or START silently encodes nothing.
+    if not _queue:
+        if _queue_rebuild_from_table() == 0:
+            return
     nxt = None
     for item in _queue:
         if item["status"] == "queued":
@@ -1004,7 +1074,7 @@ def _refresh_queue():
         prog = float(op.vcon.par.Progress.eval())
     except Exception:
         prog = 0.0
-    rows = [["file", "status", "progress"]]
+    rows = [["file", "status", "progress", "path"]]
     for i, item in enumerate(_queue, 1):
         status = item["status"]
         row_prog = 0.0
@@ -1014,29 +1084,32 @@ def _refresh_queue():
         elif status == "done":
             row_prog = 1.0
         rows.append([os.path.basename(item["input"]),
-                     status, f"{row_prog:.4f}"])
+                     status, f"{row_prog:.4f}",
+                     item["input"]])
     # DRIVER table (3 cols: file, status, progress — progress is the
     # bar-TOP driver read by INDEX from col 2; the lister reads the
-    # DISPLAY table below, so progress never shows).
+    # DISPLAY table below, so progress never shows. Col 3 = FULL PATH
+    # — the durable copy the module rebuilds _queue from after a
+    # recompile; the lister never sees it.)
     try:
         cur_r, cur_c = t.numRows, t.numCols
     except Exception:
         cur_r, cur_c = 0, 3
     big = max(cur_r, len(rows))
     try:
-        t.setSize(big, 3)
+        t.setSize(big, 4)
     except Exception:
         pass
     for r in range(big):
-        row = rows[r] if r < len(rows) else ["", "", ""]
-        for c in range(3):
+        row = rows[r] if r < len(rows) else ["", "", "", ""]
+        for c in range(4):
             try:
                 t[r, c] = row[c]
             except Exception:
                 pass
     if big > len(rows):
         try:
-            t.setSize(len(rows), 3)
+            t.setSize(len(rows), 4)
         except Exception:
             pass
 
