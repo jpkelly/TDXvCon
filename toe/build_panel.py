@@ -299,8 +299,13 @@ def build():
     # output field: READ-ONLY display of the full output path
     # (destination folder + auto-derived file name). Renders via
     # Widgetlabel (probe 4) — PreviewOutput writes it live.
+    # Labelhorizontalmode='fill' is the fix for the early-wrap JP saw:
+    # in 'fixed' mode the text area was clamped to Labelwidth (110px),
+    # wrapping at 1/6 of the field. 'fill' spans the whole widget width.
     if "output_l" in widgets:
         setp(widgets["output_l"], "Widgetlabel", "(pick a source)")
+        setp(widgets["output_l"], "Labelhorizontalmode", "fill")
+        setp(widgets["output_l"], "Labelverticalmode", "fill")
         try:
             setp(widgets["output_l"], "Labelwordwrap", 1)
         except Exception:
