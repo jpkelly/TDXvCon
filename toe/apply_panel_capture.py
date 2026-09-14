@@ -241,6 +241,11 @@ def _restore_listerconfig(entry):
         print("[capture] !! listerConfig not found — column tuning skipped")
         return
     for dname, text in texts.items():
+        if dname == 'callbacks':
+            # BUILDER-OWNED (row-click forwarder lives here): restoring
+            # a pre-inspector capture would wipe it. The capture still
+            # owns the OTHER config DATs (column tuning).
+            continue
         d = cfg.op(dname)
         if d is None:
             print(f"[capture] ( listerConfig DAT {dname} missing )")

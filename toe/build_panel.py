@@ -451,6 +451,31 @@ def build():
     say(f"loaded {len(widgets)} widgets "
         f"({len(_REMOVED)} removed, {len(_ADDED)} added per capture)")
 
+    # ---- row-click INSPECTOR ops (JP 2026-09-14) -----------------------
+    # A DEDICATED Movie File In (+ its Info CHOP) so clicking a queue
+    # row can read resolution/fps without touching the encoder's own
+    # moviein. playmode=locked (hold on frame 0): the inspector never
+    # plays — it only loads so its dimensions/rate can be read.
+    say("creating row inspector (inspectin + inspectinfo)")
+    ins = panelcomp.create(find_type("moviefileinTOP"), "inspectin")
+    try:
+        ins.par.playmode = "locked"
+        ins.par.display = 0
+    except Exception as exc:
+        say(f"  (inspectin pars: {exc})")
+    iinfo = panelcomp.create(find_type("infoCHOP"), "inspectinfo")
+    try:
+        iinfo.par.op = ins        # object first, path fallback
+    except Exception:
+        try:
+            iinfo.par.op = ins.path
+        except Exception as exc:
+            say(f"  (inspectinfo op: {exc})")
+    try:
+        iinfo.par.display = 0
+    except Exception:
+        pass
+
     # ---- queue lister: force geometry + visibility ------------------------
     # The lister's copy historically resisted place() (missing Layout
     # pars on its wrapper). Write each geometry par individually and
@@ -917,14 +942,6 @@ def build():
         pass
 
     # ---- the LISTER as its own drop target (JP: drop onto the queue) -----
-    # Docs (Palette:lister + Drag-and-Drop): the lister accepts drops via
-    # the same Drag/Drop callback system — onHoverStartGetAccept /
-    # onDropGetResults in a callbacks DAT, Drophighlight for the row
-    # highlight. The lister's 'drop' par defaults to 'inherit' (use
-    # parent's settings) — but our PANEL callbacks live on the panel
-    # COMP, and the lister sits INSIDE it, so inheritance may stop at
-    # the first ancestor with explicit callbacks. Wire the lister
-    # EXPLICITLY to the same callbacks DAT, and enable row highlight.
     q_ = widgets.get("queue")
     if q_ is not None:
         try:
@@ -945,6 +962,31 @@ def build():
             q_.par.Drophighlight = "Row"
         except Exception:
             pass
+
+    # ---- lister ROW-CLICK forwarder (JP 2026-09-14) --------------------
+    # The listerConfig callbacks DAT ships with a commented-out
+    # onSelectRow template — its OWN select handling must stay intact,
+    # only OUR forwarder appends. Builder-OWNED text (code, like menus)
+    # — the bake no longer restores the callbacks DAT (the capture keeps
+    # owning the column tuning in the OTHER config DATs).
+    say("injecting onSelectRow forwarder into listerConfig callbacks")
+    if q is not None:
+        try:
+            cbdat = q.par.Configcomp.eval().op("callbacks")
+            txt = cbdat.text or ""
+            fwd = (
+                "\n\n\n# --- vCon queue row-click inspector (builder-injected) ---\n"
+                "def onSelectRow(info):\n"
+                "    op.vcon.op('panel_callbacks').module."
+                "OnQueueRowSelected(info)\n")
+            marker = "vCon queue row-click inspector"
+            if marker in txt:
+                say("  forwarder already present")
+            else:
+                cbdat.text = txt + fwd
+                say("  onSelectRow -> OnQueueRowSelected wired")
+        except Exception as exc:
+            say(f"  !! row-click forwarder: {exc}")
 
     # ---- per-row progress bar BEHIND the file name (JP) ------------------
     # colDefaults vocabulary (probe 11b) + LIVE colDefine format (probe 12:
