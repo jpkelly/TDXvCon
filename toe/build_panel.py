@@ -1024,10 +1024,28 @@ def build():
     # fixed — NO progress column (the bar TOPs read queue_table's 4th
     # column directly; the lister doesn't display it).
     say("lister columns: auto-define over queue_display (file, status)")
-    # Auto-define wins (Autodefinecols writes did not stick — probe 13),
-    # so we control its INPUT instead: queue_display has only the two
-    # columns JP wants. Sizing: '#' gone; file stretches (it's the
-    # first/widest), status takes its content width.
+    # Auto-define was left ON because probe 13 said the write didn't
+    # stick — but with auto-define ON, the colDefine DAT is IGNORED
+    # (the lister generates columns from the input table, sizing them
+    # automatically). So the colDefine width=80 we restore never takes.
+    # Try turning it OFF here; if it sticks, the colDefine (restored by
+    # the bake with the wider status column) finally takes effect.
+    try:
+        q.par.Autodefinecols.val = False
+        say("  Autodefinecols OFF — colDefine takes effect")
+    except Exception as exc:
+        say(f"  (Autodefinecols: {exc}) — colDefine ignored, auto sizing")
+    # Also try the lister's built-in column width pars (if they exist)
+    for pname in ("Colwidth0", "Colwidth1"):
+        try:
+            par = getattr(q.par, pname, None)
+            if par is not None:
+                if "1" in pname:
+                    par.val = 80       # status column
+                    say(f"  {pname} = 80 (status column)")
+                # Colwidth0 (file) left at default — it stretches
+        except Exception:
+            pass
 
     # ---- per-row progress bars: PARKED (probe 11b/12 — the colDefine
     # topPath per-row mechanism was never proven). The row-bars code that
