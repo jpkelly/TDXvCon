@@ -1028,6 +1028,7 @@ def Stop():
         if item["status"] in ("queued", "running"):
             item["status"] = "cancelled"
     _refresh_queue()
+    PreviewOutput()      # the preview follows queue state (JP 2026-09-14)
     note("cancelled")
 
 
@@ -1200,6 +1201,14 @@ def _mark_done(output_path):
     if done:
         _refresh_queue()
         _run_next()
+        # Preview refresh (JP 2026-09-14): when this was the LAST job,
+        # the queue is all-done — the preview must fall back to the
+        # empty-queue message, not keep showing the finished file's
+        # derived output.
+        try:
+            PreviewOutput()
+        except Exception:
+            pass
 
 
 def _on_job_done(output_path):
@@ -1270,6 +1279,20 @@ def onFrame():
                         break
                 except (TypeError, ValueError):
                     continue
+    except Exception:
+        pass
+
+    # 1d) OUTPUT preview refresh when the queue EMPTIES: drops/adds call
+    # PreviewOutput directly, but paths that empty the lister (Stop, the
+    # last job finishing via tick detection) left the label stale. Cheap
+    # per-frame check: only acts when the queue is empty AND rows remain
+    # in the display table (the just-emptied moment); the refresh itself
+    # clears those rows.
+    try:
+        if not _queue:
+            d_ = op.vcon.op("queue_display")
+            if d_ is not None and d_.numRows > 1:
+                PreviewOutput()
     except Exception:
         pass
 
@@ -1375,6 +1398,7 @@ def AddFiles():
                        "status": "queued",
                        "rel": os.path.basename(path)})
         _refresh_queue()
+        PreviewOutput()   # the preview follows queue state (JP 2026-09-14)
         note(f"added {os.path.basename(path)} — press START to encode")
     elif os.path.isdir(path):
         n = 0
@@ -1386,6 +1410,7 @@ def AddFiles():
                            "rel": rel})
             n += 1
         _refresh_queue()
+        PreviewOutput()   # the preview follows queue state (JP 2026-09-14)
         note(f"added {n} file(s) from folder — press START to encode")
 
 
