@@ -630,6 +630,11 @@ def _refresh_queue():
     """
     t = panel().op("queue_table")
     if t is None:
+        # The builder creates queue_table at the VCON level (next to the
+        # panel), not inside the panel — a path-lookup here silently
+        # returned None, which is why the queue table never redrew.
+        t = op.vcon.op("queue_table")
+    if t is None:
         return
     # current encode progress, if a job is running
     try:
@@ -643,16 +648,30 @@ def _refresh_queue():
             status = _bar_text(prog)
         rows.append([str(i), os.path.basename(item["input"]),
                      status])
+    # Grow-only writes first (append beyond current size), then shrink:
+    # setSize DOWNWARD also cooks mid-state — the lister is off, but be
+    # safe: write all cells for the LARGER of current/new, then trim.
     try:
-        t.setSize(len(rows), 3)
+        cur_r, cur_c = t.numRows, t.numCols
+    except Exception:
+        cur_r, cur_c = 0, 3
+    big = max(cur_r, len(rows))
+    try:
+        t.setSize(big, 3)
     except Exception:
         pass
-    for r, row in enumerate(rows):
-        for c, val in enumerate(row):
+    for r in range(big):
+        row = rows[r] if r < len(rows) else ["", "", ""]
+        for c in range(3):
             try:
-                t[r, c] = val
+                t[r, c] = row[c]
             except Exception:
                 pass
+    if big > len(rows):
+        try:
+            t.setSize(len(rows), 3)
+        except Exception:
+            pass
     # ONE refresh, on our schedule, on a complete table.
     q = panel().op("queue")
     if q is not None:

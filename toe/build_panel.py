@@ -547,23 +547,27 @@ def build():
              "op.vcon.op('panel_callbacks').module.NormalizeDestination()")
 
     # ---- queue lister points at queue_table --------------------------------
-    # LIVE-VERIFIED (probe 9): the lister's source par is INPUTTABLEDAT
-    # (style=DAT, currently its own defaultInput). Object-or-path link
-    # via the proven _link_op pattern; headers on (queue_table has them).
+    # LIVE-VERIFIED (probe 9): source par is INPUTTABLEDAT (style=DAT).
+    # ORDER IS CRITICAL: set Refreshoninputchange=off BEFORE linking —
+    # the link's internal switch produces one transient empty cook, and
+    # the change-hook called Refresh on it -> 'Blank header in col 0'
+    # (live traceback, twice). Config first, link LAST, then ONE
+    # explicit Refresh pulse on the settled table.
     say("wiring batch queue lister")
     q = panelcomp.op("queue")
     if q is not None:
-        if _link_op(q, "Inputtabledat", qt):
-            say("  lister Inputtabledat -> queue_table")
+        try:
+            q.par.Refreshoninputchange = "off"
+        except Exception:
+            pass
         try:
             q.par.Inputtablehasheaders = True
         except Exception:
             pass
+        if _link_op(q, "Inputtabledat", qt):
+            say("  lister Inputtabledat -> queue_table")
         try:
-            # CRITICAL (two live tracebacks): refresh-on-input-change
-            # fires mid-write and dies on any incomplete table. OFF —
-            # the callbacks pulse Refresh explicitly on complete tables.
-            q.par.Refreshoninputchange = "off"
+            q.par.Refresh.pulse()      # one clean refresh, settled state
         except Exception:
             pass
 
