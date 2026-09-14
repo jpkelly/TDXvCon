@@ -176,6 +176,105 @@ def PreviewOutput():
         pass
 
 
+def UpdateSubtypes():
+    """Re-populate SUBTYPE (and FORMAT) for the selected codec.
+
+    The subtype menu must only offer subtypes VALID for the chosen codec
+    (Hap's menu has no ProRes entries; ProRes has no 'hapq') — the same
+    per-codec filtering the CLI's registry enforces. FORMAT follows the
+    same rule: ProRes menus differ PER SUBTYPE (verified live), and only
+    NotchLC/Hap/CineForm expose rgb/rgba.
+
+    Wired to the codec dropdown's Onvaluechangescript0 by the builder.
+    """
+    try:
+        codec = _val("codec_dd") or "notchlc"
+        meta = CODECS.get(codec, {})
+        sub_w = widget("subtype_dd")
+        fmt_w = widget("format_dd")
+        if sub_w is not None:
+            subs = ["none"] + list(meta.get("subtypes", []))
+            ok = setp_par(sub_w, "Menunames", " ".join(subs))
+            ok &= setp_par(sub_w, "Menulabels", " ".join(subs))
+            if ok:
+                sub_w.par.Value0.val = "none"
+        if fmt_w is not None:
+            if codec == "prores":
+                # subtype not chosen yet: 422 defaults (the common case)
+                fmts = PRORES_PIXEL_FORMATS.get("prores422",
+                                                ["yuv4228bit"])
+            else:
+                fmts = ["none"] + list(meta.get("pixel_formats", []))
+            ok = setp_par(fmt_w, "Menunames", " ".join(fmts))
+            ok &= setp_par(fmt_w, "Menulabels", " ".join(fmts))
+            if ok:
+                fmt_w.par.Value0.val = "none"
+        # QUALITY is NotchLC-only: grey it out (label + value) for others
+        q_w = widget("quality_dd")
+        if q_w is not None:
+            has_q = bool(meta.get("qualities"))
+            try:
+                q_w.par.enable = 1 if has_q else 0
+            except Exception:
+                pass
+        # RESOLUTION switch: show custom fields only for 'custom'
+        _update_res_fields()
+        # refresh the OUTPUT preview for the new codec context
+        PreviewOutput()
+    except Exception as exc:
+        note(f"subtype update failed: {exc}")
+
+
+def _update_res_fields():
+    """Show the W/H fields only when RES is set to 'custom'.
+
+    Keep (default) hides them; a custom WxH reveals two numeric fields
+    (res_w / res_h). Display uses the widget's display par (panel-level,
+    not enable) so the values survive toggling.
+    """
+    mode = str(_val("resmode_dd") or "keep").strip().lower()
+    show = 1 if mode == "custom" else 0
+    for name in ("res_w", "res_h"):
+        w = widget(name)
+        if w is not None:
+            try:
+                w.outer = None  # placeholder to avoid confusion
+            except Exception:
+                pass
+            outer = panel().op(name)
+            if outer is not None:
+                try:
+                    outer.par.display = show
+                except Exception:
+                    pass
+
+
+def _res_value():
+    """The resolution string for Transcode(): 'auto' or 'WxH'."""
+    mode = str(_val("resmode_dd") or "keep").strip().lower()
+    if mode != "custom":
+        return "auto"
+    w = _val("res_w")
+    h = _val("res_h")
+    try:
+        wi = int(float(w))
+        hi = int(float(h))
+    except (TypeError, ValueError):
+        return "auto"
+    if wi < 1 or hi < 1:
+        return "auto"
+    return f"{wi}x{hi}"
+
+
+def setp_par(inner, par_name, value):
+    """setp without the noisy miss-print (used for menu re-population)."""
+    try:
+        getattr(inner.par, par_name).val = value
+        return True
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------
 # Buttons
 # ---------------------------------------------------------------------
@@ -189,13 +288,11 @@ def Start():
     quality = _val("quality_dd")
     fmt = _val("format_dd")
     fps = str(_val("fps_f") or "auto").strip().lower()
-    res = str(_val("res_f") or "auto").strip().lower()
     fitmode = _val("fit_dd")
+    res = _res_value()
 
     if fps in ("", "keep", "auto"):
         fps = "auto"
-    if res in ("", "keep", "auto"):
-        res = "auto"
     if fmt == "none":
         fmt = None
     if subtype == "none":
@@ -266,12 +363,10 @@ def _run_next():
     quality = _val("quality_dd")
     fmt = _val("format_dd")
     fps = str(_val("fps_f") or "auto").strip().lower()
-    res = str(_val("res_f") or "auto").strip().lower()
     fitmode = _val("fit_dd")
+    res = _res_value()
     if fps in ("", "keep", "auto"):
         fps = "auto"
-    if res in ("", "keep", "auto"):
-        res = "auto"
     if fmt == "none":
         fmt = None
     if quality and not CODECS.get(codec, {}).get("qualities"):

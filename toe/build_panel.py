@@ -46,8 +46,10 @@ _WIDGETS = {
     "format_dd":    ("dropDownMenu",       10, 456, 260, 30),
     "quality_dd":   ("dropDownMenu",      290, 456, 260, 30),
     "fps_f":        ("fieldString",        10, 406, 160, 30),
-    "res_f":        ("fieldString",       180, 406, 160, 30),
-    "fit_dd":       ("dropDownMenu",      350, 406, 200, 30),
+    "resmode_dd":   ("dropDownMenu",      180, 406, 130, 30),
+    "res_w":        ("fieldString",       320, 406, 75, 30),
+    "res_h":        ("fieldString",       405, 406, 75, 30),
+    "fit_dd":       ("dropDownMenu",      490, 406, 60, 30),
     "start_b":      ("buttonMomentary",    10, 346, 120, 36),
     "pause_b":      ("buttonMomentary",   140, 346, 120, 36),
     "stop_b":       ("buttonMomentary",   270, 346, 120, 36),
@@ -66,7 +68,9 @@ _TITLES = {
     "format_dd": "FORMAT",
     "quality_dd": "QUALITY",
     "fps_f": "FPS",
-    "res_f": "RES",
+    "resmode_dd": "RES",
+    "res_w": "W",
+    "res_h": "H",
     "fit_dd": "FIT",
     "output_l": "OUTPUT",
     "status_l": "STATUS",
@@ -204,7 +208,8 @@ def build():
 
     # ---- defaults ----------------------------------------------------------
     say("configuring widgets (external pars only)")
-    for name, val in [("fps_f", "auto"), ("res_f", "auto")]:
+    for name, val in [("fps_f", "auto"), ("res_w", "1920"),
+                      ("res_h", "1080")]:
         if name in widgets:
             setp(widgets[name], "Value0", val)
     # output label: read-only-ish — the preview callback writes its text
@@ -234,6 +239,19 @@ def build():
                  ["Fit Best", "Stretch", "Fit Width", "Fit Height",
                   "Cover/Crop"],
                  "fitbest")
+    # RESOLUTION switch: Keep (source size) or Custom (reveals W/H fields,
+    # hidden by default — visibility toggled by _update_res_fields()).
+    if "resmode_dd" in widgets:
+        set_menu(widgets["resmode_dd"], ["keep", "custom"],
+                 ["Keep", "Custom"], "keep")
+    for name in ("res_w", "res_h"):
+        if name in widgets:
+            outer = panelcomp.op(name)
+            if outer is not None:
+                try:
+                    outer.par.display = 0
+                except Exception as exc:
+                    say(f"  (display {name}: {exc})")
 
     # ---- buttons -----------------------------------------------------------
     say("wiring buttons")
@@ -262,11 +280,25 @@ def build():
 
     say("wiring live output-name preview")
     preview = "op.vcon.op('panel_callbacks').module.PreviewOutput()"
-    for name in ("source", "destination", "codec_dd", "subtype_dd",
-                 "format_dd", "quality_dd"):
+    for name in ("source", "destination", "quality_dd"):
         if name in widgets:
             if setp(widgets[name], "Onvaluechangescript0", preview):
                 say(f"  {name}: preview wired")
+    # CODEC drives subtype/format menu repopulation (+ preview refresh)
+    if "codec_dd" in widgets:
+        setp(widgets["codec_dd"], "Onvaluechangescript0",
+             "op.vcon.op('panel_callbacks').module.UpdateSubtypes()")
+        say("  codec_dd: subtype/format filter wired")
+    # subtype change re-filters format (ProRes menus differ per subtype)
+    if "subtype_dd" in widgets:
+        setp(widgets["subtype_dd"], "Onvaluechangescript0",
+             "op.vcon.op('panel_callbacks').module.UpdateSubtypes()")
+        say("  subtype_dd: format filter wired")
+    # RESOLUTION switch toggles W/H field visibility
+    if "resmode_dd" in widgets:
+        setp(widgets["resmode_dd"], "Onvaluechangescript0",
+             "op.vcon.op('panel_callbacks').module._update_res_fields()")
+        say("  resmode_dd: field visibility wired")
     if "destination" in widgets:
         setp(widgets["destination"], "Valueparexec",
              "op.vcon.op('panel_callbacks').module.NormalizeDestination()")
