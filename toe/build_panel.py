@@ -59,7 +59,7 @@ _WIDGETS = {
     "quality_dd":   ("dropDownMenu",      260, 465, 230, _ROW),
     # row: FPS | RES | SCALE(hidden) | FIT — all narrow
     "fps_f":        ("fieldString",        20, 420, 120, _ROW),
-    "resmode_dd":   ("dropDownMenu",      150, 420, 110, _ROW),
+    "scaled_t":     ("buttonToggle",      150, 420, 90, _ROW),
     "scale_dd":     ("dropDownMenu",      270, 420, 110, _ROW),
     "fit_dd":       ("dropDownMenu",      390, 420, 120, _ROW),
     # buttons (label disabled) | OUTPUT name
@@ -83,7 +83,7 @@ _TITLES = {
     "format_dd": "FORMAT",
     "quality_dd": "QUALITY",
     "fps_f": "FPS",
-    "resmode_dd": "RES",
+    "scaled_t": "SCALED",
     "scale_dd": "SCALE",
     "fit_dd": "FIT",
     "output_l": "OUTPUT",
@@ -224,7 +224,7 @@ def build():
     # doubled-up with face text — label disabled per JP's note).
     _LABEL_W = {"source": 110, "destination": 110, "codec_dd": 90,
                 "subtype_dd": 90, "format_dd": 90, "quality_dd": 90,
-                "fps_f": 45, "resmode_dd": 45, "scale_dd": 60,
+                "fps_f": 45, "scaled_t": 60, "scale_dd": 60,
                 "fit_dd": 45, "output_l": 110, "status_l": 110,
                 "start_b": 0, "pause_b": 0, "stop_b": 0}
     for name, lw in _LABEL_W.items():
@@ -295,13 +295,16 @@ def build():
                  ["Fit Best", "Stretch", "Fit Width", "Fit Height",
                   "Cover/Crop"],
                  "fitbest")
-    # RESOLUTION: Unscaled (source size preserved — fit TOP bypassed) or
-    # Scaled, which reveals the SCALE dropdown (quarter..3x). The factor is
-    # applied by the CONTROLLER against the movie's real dimensions after
-    # load (the panel can't know WxH pre-load); even-dimension clamped.
-    if "resmode_dd" in widgets:
-        set_menu(widgets["resmode_dd"], ["unscaled", "scaled"],
-                 ["Unscaled", "Scaled"], "unscaled")
+    # RESOLUTION: a TOGGLE (JP request) — off = Unscaled (fit TOP bypassed,
+    # source size preserved), on = Scaled (reveals the SCALE dropdown; the
+    # factor is applied by the CONTROLLER against the movie's real
+    # dimensions after load, even-dimension clamped). The toggle ALSO
+    # rewires the fit path LIVE via the extension's Setfitpath().
+    if "scaled_t" in widgets:
+        setp(widgets["scaled_t"], "Widgetlabel", "SCALED")
+        setp(widgets["scaled_t"], "Buttonofflabel", "OFF")
+        setp(widgets["scaled_t"], "Buttononlabel", "ON")
+        setp(widgets["scaled_t"], "Value0", 0)
     if "scale_dd" in widgets:
         set_menu(widgets["scale_dd"],
                  ["0.25", "0.5", "1", "2", "3"],
@@ -358,11 +361,11 @@ def build():
         setp(widgets["subtype_dd"], "Onvaluechangescript0",
              "op.vcon.op('panel_callbacks').module.UpdateSubtypes()")
         say("  subtype_dd: format filter wired")
-    # RESOLUTION switch toggles the SCALE dropdown's visibility
-    if "resmode_dd" in widgets:
-        setp(widgets["resmode_dd"], "Onvaluechangescript0",
+    # SCALED toggle: rewire fit path LIVE + toggle SCALE dropdown visibility
+    if "scaled_t" in widgets:
+        setp(widgets["scaled_t"], "Onvaluechangescript0",
              "op.vcon.op('panel_callbacks').module._update_res_fields()")
-        say("  resmode_dd: scale visibility wired")
+        say("  scaled_t: live fit rewire wired")
     if "destination" in widgets:
         setp(widgets["destination"], "Valueparexec",
              "op.vcon.op('panel_callbacks').module.NormalizeDestination()")

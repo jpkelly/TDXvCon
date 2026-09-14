@@ -315,6 +315,28 @@ class VconExt:
         """Resume a paused encode. Promoted for embedders and the panel."""
         self._resume("*")
 
+    def Setfitpath(self, scaled):
+        """Promoted panel hook: wire the fit TOP in/out LIVE.
+
+        The SCALED toggle calls this so the wiring visibly changes at the
+        SWITCH (JP: rewiring belongs to the toggle, not job start). Idle
+        only — never touches the wiring mid-encode; the per-job
+        _apply_resolution()/bypass remains the authority during jobs.
+        """
+        if self.state != "idle":
+            debug("vCon: Setfitpath skipped — encoder busy (wiring "
+                  "changes at job boundaries only)")
+            return False
+        try:
+            if scaled:
+                self._switch_mvo_input(self.fit)
+            else:
+                self._bypass_fit()
+            return True
+        except Exception as exc:
+            debug(f"vCon: Setfitpath failed: {exc}")
+            return False
+
     # ------------------------------------------------------------------
     # Connection handshake
     # ------------------------------------------------------------------

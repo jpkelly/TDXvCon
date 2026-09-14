@@ -192,70 +192,97 @@ def UpdateSubtypes():
         meta = CODECS.get(codec, {})
         sub_w = widget("subtype_dd")
         fmt_w = widget("format_dd")
+        # Mirrors Movie File Out's OWN parameter behavior: menus that are
+        # EMPTY for the selected codec grey out rather than offering junk
+        # (builder-verified: movieout.videocodectype = [] for NotchLC).
         if sub_w is not None:
             subs = ["none"] + list(meta.get("subtypes", []))
-            ok = setp_par(sub_w, "Menunames", " ".join(subs))
-            ok &= setp_par(sub_w, "Menulabels", " ".join(subs))
-            if ok:
+            setp_par(sub_w, "Menunames", " ".join(subs))
+            setp_par(sub_w, "Menulabels", " ".join(subs))
+            try:
                 sub_w.par.Value0.val = "none"
+            except Exception:
+                pass
+            _grey_out(sub_w, not subs[1:])
         if fmt_w is not None:
             if codec == "prores":
-                # subtype not chosen yet: 422 defaults (the common case)
                 fmts = PRORES_PIXEL_FORMATS.get("prores422",
                                                 ["yuv4228bit"])
+                grey = False
             else:
                 fmts = ["none"] + list(meta.get("pixel_formats", []))
-            ok = setp_par(fmt_w, "Menunames", " ".join(fmts))
-            ok &= setp_par(fmt_w, "Menulabels", " ".join(fmts))
-            if ok:
+                grey = not fmts[1:]
+            setp_par(fmt_w, "Menunames", " ".join(fmts))
+            setp_par(fmt_w, "Menulabels", " ".join(fmts))
+            try:
                 fmt_w.par.Value0.val = "none"
-        # QUALITY is NotchLC-only: grey it out (label + value) for others
+            except Exception:
+                pass
+            _grey_out(fmt_w, grey)
+        # QUALITY: TD exposes NO quality menu for NotchLC on this build
+        # (builder dump: movieout.quality = []) — the -q ladder is Notch
+        # manual knowledge, applied by the toe via a fallback. Grey the
+        # menu when the codec has no ladder rather than offering junk.
         q_w = widget("quality_dd")
         if q_w is not None:
             has_q = bool(meta.get("qualities"))
-            try:
-                q_w.par.enable = 1 if has_q else 0
-            except Exception:
-                pass
-        # RESOLUTION switch: show custom fields only for 'custom'
+            _grey_out(q_w, not has_q)
         _update_res_fields()
-        # refresh the OUTPUT preview for the new codec context
         PreviewOutput()
     except Exception as exc:
         note(f"subtype update failed: {exc}")
 
 
-def _update_res_fields():
-    """Show the SCALE dropdown only when RES is set to 'scaled'.
+def _grey_out(inner, grey):
+    """Disable a widget's interaction (greyed like MvO's empty menus)."""
+    try:
+        inner.par.enable.val = 0 if grey else 1
+    except Exception:
+        try:
+            inner.par.Enable.val = 0 if grey else 1
+        except Exception:
+            pass
 
-    Uses the OUTER wrapper's Layout par (display=0 collapses the widget's
-    width/height to nothing in the parent panel — verified: widget config
-    pars live on the INNER, layout on the outer). If display is missing,
-    x-placement is the fallback.
+
+def _update_res_fields():
+    """Live-fit wiring + SCALE visibility, driven by the SCALED toggle.
+
+    Two effects when the toggle flips (JP: wiring should visibly change
+    AT THE SWITCH, not at job time):
+      - SCALED  -> controller wires moviein -> fit -> movieout NOW
+                   (fit configured with the chosen mode; a later job only
+                   sets the exact WxH once the movie's size is known)
+      - UNSCALED-> controller rewires moviein -> movieout NOW
+    Plus: the SCALE dropdown shows/hides with the toggle.
     """
-    mode = str(_val("resmode_dd") or "unscaled").strip().lower()
-    show = 1 if mode == "scaled" else 0
+    mode = str(_val("scaled_t") or "unscaled").strip().lower()
+    scaled = mode == "scaled"
+    # 1) rewire NOW through the extension (toggle state is advisory; the
+    #    controller re-applies per job, so a busy encoder is unaffected).
+    try:
+        ext().Setfitpath(scaled)
+    except Exception as exc:
+        note(f"fit rewire failed: {exc}")
+    # 2) SCALE dropdown visibility
     outer = panel().op("scale_dd") if panel() is not None else None
     if outer is not None:
         try:
-            outer.par.display = show
-            return
+            outer.par.display = 1 if scaled else 0
         except Exception:
-            pass
-        try:
-            outer.par.x = 320 if show else 1200   # off-panel when hidden
-        except Exception as exc:
-            note(f"display toggle failed: {exc}")
+            try:
+                outer.par.x = 270 if scaled else 1200
+            except Exception as exc:
+                note(f"display toggle failed: {exc}")
 
 
 def _res_value():
     """Resolution args for Transcode(): ('auto', scale) from the panel.
 
-    RES widget: 'unscaled' sends nothing (source size preserved);
-    'scaled' sends the chosen factor — the CONTROLLER computes the final
-    WxH from the movie's real dimensions after load (the panel cannot
-    know them pre-load). Returns (resolution, scale)."""
-    mode = str(_val("resmode_dd") or "unscaled").strip().lower()
+    The SCALED toggle drives everything: unscaled sends nothing (source
+    size preserved); scaled sends the chosen factor — the CONTROLLER
+    computes the final WxH from the movie's real dimensions after load.
+    Returns (resolution, scale)."""
+    mode = str(_val("scaled_t") or "unscaled").strip().lower()
     if mode != "scaled":
         return "auto", None
     factor = str(_val("scale_dd") or "1").strip()
