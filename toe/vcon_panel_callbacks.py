@@ -202,7 +202,19 @@ def PreviewOutput():
     Full path: destination folder + derived file name.
     """
     try:
-        src = _queue[0]["input"] if _queue else None
+        # the SELECTED row if one is clicked, else the next job (first
+        # queued) — showing _queue[0] always meant 2nd+ drops recomputed
+        # identical text and looked frozen
+        src = None
+        if _selected_path:
+            src = _selected_path
+        if not src:
+            for it in _queue:
+                if it["status"] == "queued":
+                    src = it["input"]
+                    break
+        if not src and _queue:
+            src = _queue[0]["input"]
         if not src or not os.path.isfile(src):
             _set_output_text("(queue is empty — add files)")
             return
@@ -1306,7 +1318,8 @@ def onFrame():
     directly (no expression needed). The LISTER row shows the current
     file's own progress as a block bar.
     """
-    try:
+    global _last_src_fps          # without this, block 1b raised
+    try:                          # UnboundLocalError on EVERY frame
         e = ext()
     except Exception:
         return
