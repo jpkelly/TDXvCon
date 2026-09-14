@@ -41,7 +41,9 @@ Homepage = "https://github.com/jpkelly/TDXvCon"
 where = ["src"]
 
 [tool.setuptools.package-data]
-vcon = ["data/*.toe"]
+# Exact filename — a bare data/*.toe glob would also ship TD's versioned
+# backups (transcoder.1.toe etc.) that TD writes next to the toe on save.
+vcon = ["data/transcoder.toe"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
