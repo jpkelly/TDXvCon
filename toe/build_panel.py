@@ -292,6 +292,37 @@ def build():
         widgets[outer_name] = wcomp
     say(f"loaded {len(widgets)}/{len(_WIDGETS)} widgets (flat at panel root)")
 
+    # ---- queue lister: force geometry + visibility ------------------------
+    # The lister's copy historically resisted place() (missing Layout
+    # pars on its wrapper). Write each geometry par individually and
+    # report misses, so the queue is VISIBLE at a known spot, plus an
+    # explicit gray background paint so it reads against the panel.
+    if "queue" in widgets:
+        qx, qy, qw, qh = 20, 90, 620, 200
+        q_ = widgets["queue"]
+        for pname, val in (("x", qx), ("y", qy), ("w", qw), ("h", qh)):
+            try:
+                q_.par[pname].val = val
+            except Exception as exc:
+                say(f"  (queue {pname}: {exc})")
+        for pname in ("display", "enable"):
+            try:
+                q_.par[pname].val = True
+            except Exception:
+                pass
+        try:
+            q_.par.layer = 0          # above nothing, below the bars
+        except Exception:
+            pass
+        try:
+            q_.par.bgcolorr = 0.25
+            q_.par.bgcolorg = 0.25
+            q_.par.bgcolorb = 0.25
+            q_.par.bgalpha = 1.0
+        except Exception:
+            pass          # widget COMPs may have these; bare ones may not
+        say("  queue: geometry forced 20,90 620x200")
+
     # ---- progress bar: track + fill, painted with Constant TOPs ----
     # A bare containerCOMP has NO Look page — panels paint via a
     # Background TOP (Look page 'top' on widget COMPs). PROVEN pattern
