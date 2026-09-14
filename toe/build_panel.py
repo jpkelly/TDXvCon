@@ -63,10 +63,10 @@ _WIDGETS = {
     "scale_dd":     ("dropDownMenu",      270, 420, 110, _ROW),
     "fit_dd":       ("dropDownMenu",      390, 420, 120, _ROW),
     # buttons (label disabled) | OUTPUT name
-    "start_b":      ("buttonMomentary",    20, 375, 80, _ROW),
-    "pause_b":      ("buttonMomentary",   115, 375, 80, _ROW),
-    "stop_b":       ("buttonMomentary",   210, 375, 80, _ROW),
-    "output_l":     ("label",             310, 375, 330, _ROW),
+    "start_b":      ("buttonMomentary",    20, 375, 70, _ROW),
+    "pause_b":      ("buttonMomentary",   130, 375, 70, _ROW),
+    "stop_b":       ("buttonMomentary",   240, 375, 70, _ROW),
+    "output_l":     ("label",             330, 375, 310, _ROW),
     # PROGRESS slider, full width
     "prog_s":       ("sliderHorz",         20, 330, 620, _ROW),
     # queue, then STATUS at the very bottom
