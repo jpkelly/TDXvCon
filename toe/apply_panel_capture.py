@@ -8,9 +8,9 @@ Order matters:
   2. pars — OP-valued strings re-LINKED (object first, path fallback —
      the set_op_par pattern); the capture already skipped refs pointing
      INSIDE a widget (internal wiring stays untouched)
-  3. expressions REBOUND after values (the status label's live
-     Widgetlabel expr survives; baking only the eval'd value would
-     freeze it)
+  3. expressions AND binds REBOUND after values (the status label's
+     live Widgetlabel expr and any par bindings survive; baking only
+     the eval'd value would freeze them)
   4. queue listerconfig DAT texts (hand-tuned column settings)
   5. ONE explicit lister Refresh pulse on the settled state (the
      established pattern — refresh-on-input-change throws on
@@ -117,16 +117,24 @@ def _apply_entry(name, entry):
             continue
         if not _set_value(w, par, value):
             missed += 1
-    # expressions AFTER values: rebinding wins (live wiring restored)
+    # expressions AND binds AFTER values: rebinding wins (live wiring
+    # restored — the 'None' string was filtered at capture time)
     for pname, expr in (entry.get('expressions') or {}).items():
         try:
             w.par[pname].expr = expr
         except Exception as exc:
             print(f"[capture] ( {name}.{pname} expr: {exc} )")
+    for pname, bindexpr in (entry.get('binds') or {}).items():
+        try:
+            w.par[pname].bindExpr = bindexpr
+        except Exception as exc:
+            print(f"[capture] ( {name}.{pname} bind: {exc} )")
     print(f"[capture] {name}: geometry + "
           f"{len(entry.get('pars') or {})} pars applied"
           + (f", {len(entry.get('expressions') or {})} exprs rebound"
-             if entry.get('expressions') else ''))
+             if entry.get('expressions') else '')
+          + (f", {len(entry.get('binds') or {})} binds rebound"
+             if entry.get('binds') else ''))
 
 
 def _restore_listerconfig(entry):

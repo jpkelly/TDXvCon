@@ -1,4 +1,4 @@
-"""capture_panel.py v3 — full-fidelity snapshot of your hand-tuned panel.
+"""capture_panel.py v3.1 — full-fidelity snapshot of your hand-tuned panel.
 
 Run in the TD textport AFTER adjusting the panel by hand:
 
@@ -8,8 +8,24 @@ Run in the TD textport AFTER adjusting the panel by hand:
 Captures the PANEL CONTAINER ITSELF (a 'panel' entry: its Layout/Look/
 drop settings, diffed against a fresh containerCOMP) plus EVERY widget
 — all 20, including add_b / resw_f / resh_f and the two progress-bar
-containers that v2 silently skipped — diffing custom AND builtin pars
+containers that v2 silently skipped — diffing EVERY par (custom AND
+builtin: fonts, font choices, sizes, colors, alignment, everything)
 against a freshly loaded copy of each widget's tox.
+
+v3.1 fixes found by auditing the first v3 run (2026-09-14):
+  - PAR ENUMERATION now goes comp.pages -> page.pars with fallbacks
+    (v3's comp.pars alone did NOT deliver builtin pars — the 'panel'
+    and 'prog_fill' entries came out with 0 changed pars despite the
+    builder-set drop settings and layer=1)
+  - EXPRESSIONS are DIFFED AGAINST STOCK too (v3 recorded ~20 exprs
+    per button: the widget's own internal exprs plus 'None' strings
+    that this TD build returns for unset expressions — baking those
+    would break pars)
+  - BINDS (par.bindExpr) are captured as well — value + expr + bind
+    is the complete parameter state
+  - listerconfig lookup goes through the queue's Configcomp PAR first
+    (canonical — points at the ACTIVE config wherever it lives), with
+    loud diagnostics instead of v3's silent skip
 
 Fidelity details:
   - geometry (panel-view x/y/w/h) per widget, in the 'geometry' section
@@ -18,17 +34,17 @@ Fidelity details:
     INSIDE a widget are skipped (internal wiring — baking them would
     reach into the widget's internals), refs to outside ops
     (queue_display, panel_dnd, ...) are kept as paths
-  - EXPRESSIONS are recorded separately ('expressions') — baking the
-    eval'd values alone would freeze live bindings like the status
-    label's Widgetlabel expr
+  - only DIFFS vs stock are recorded — unchanged pars (fonts, colors,
+    sizes matching the stock widget) regenerate from the tox on
+    rebuild, so capture + rebuild reproduces the panel exactly
   - pulse pars are skipped (they are actions, not state)
   - the queue entry also carries 'listerconfig': {DAT name: text} —
-    the lister's config COMP holds hand-tuned column settings; it is
-    found inside the lister or flattened at panel root (both seen
-    in the live panel)
+    the lister's config COMP holds hand-tuned column settings
 
-Output: printed AND written to toe/panel_layout_captured.py. Say
-"captured" and it gets baked into build_panel.py as canonical state.
+Output: written to toe/panel_layout_captured.py (summary printed).
+The next build_panel.py run applies it automatically — the capture
+is canonical. Hand-broken expressions (typos) are recorded faithfully
+— check the printed summary.
 """
 
 import os
@@ -82,6 +98,7 @@ def _safe_geom(c):
 
 
 _SKIP = object()          # sentinel: omit this par from the dump
+_ENUM_REPORTED = [False]  # one-shot enumeration diagnostic
 
 
 def _is_op(v):
@@ -107,42 +124,75 @@ def _snap_par(comp, par):
 
 
 def _snapshots(comp):
-    """(pars, exprs) of every par — custom AND builtin.
+    """(pars, exprs, binds) of EVERY par — builtin AND custom.
 
+    v3.1: enumeration goes comp.pages -> page.pars (the probe-verified
+    pattern) with customPars/comp.pars fallbacks — the first v3 run
+    proved comp.pars alone did NOT deliver builtin pars ('panel' came
+    out with 0 changed pars despite builder-set drop settings, and
+    prog_fill lost its layer=1).
     Pulse pars are actions, not state: skipped. Geometry pars are
-    skipped (captured separately). Expressions are recorded apart
-    from values so the bake can REBIND live wiring (e.g. the status
-    label's Widgetlabel expr) instead of freezing the eval'd snapshot.
+    skipped as VALUES (captured separately) but their expressions are
+    still recorded. 'None' strings — what this TD build returns for
+    unset expressions/binds — are filtered; the stock diff below then
+    keeps only expressions/binds that genuinely differ.
     """
-    vals, exprs = {}, {}
+    vals, exprs, binds = {}, {}, {}
     allpars = []
+    n_pages = n_custom = n_bare = 0
     try:
-        allpars.extend(comp.pars)
+        for page in comp.pages:
+            for par in page.pars:
+                allpars.append(par)
+                n_pages += 1
     except Exception:
         pass
     try:
-        # explicit union — op.pars should already include customs, but
-        # don't bet the capture on it
         allpars.extend(comp.customPars)
+        n_custom = len(comp.customPars)
     except Exception:
         pass
+    try:
+        # whatever comp.pars yields on this build — belt and braces
+        allpars.extend(comp.pars)
+        n_bare = len(comp.pars)
+    except Exception:
+        pass
+    if not _ENUM_REPORTED[0]:
+        _ENUM_REPORTED[0] = True
+        print(f'[capture] par enumeration on {comp.name}: {n_pages} '
+              f'via pages, {n_custom} via customPars, {n_bare} via pars')
+    seen = set()
     for par in allpars:
+        try:
+            pname = par.name
+        except Exception:
+            continue
+        if pname in seen:
+            continue
+        seen.add(pname)
         try:
             if str(par.style) == "Pulse":
                 continue
-            is_geom = (not par.isCustom) and par.name in _GEOM_PARS
+            is_geom = (not par.isCustom) and pname in _GEOM_PARS
         except Exception:
             continue
         v = _snap_par(comp, par)
         if v is not _SKIP and not is_geom:
-            vals[par.name] = v
+            vals[pname] = v
         try:
-            e = par.expr or ""
+            e = par.expr
         except Exception:
-            e = ""
-        if e:
-            exprs[par.name] = e
-    return vals, exprs
+            e = None
+        if e and str(e) != 'None':
+            exprs[pname] = str(e)
+        try:
+            b = par.bindExpr
+        except Exception:
+            b = None
+        if b and str(b) != 'None':
+            binds[pname] = str(b)
+    return vals, exprs, binds
 
 
 def _diff(mine, stock):
@@ -164,27 +214,34 @@ def _builtin_geom(comp):
     return out
 
 
-lines = ["#: Full capture of JP's hand-tuned panel (v3)",
+lines = ["#: Full capture of JP's hand-tuned panel (v3.1)",
          "#: {name: {'geometry': {...}, 'pars': {...},",
-         "#:          'expressions': {par: expr}}} — OP refs are paths,",
-         "#: 'panel' holds the panel CONTAINER's own settings;",
-         "#: 'listerconfig' (queue only) = {DAT name: text}.",
+         "#:          'expressions': {...}, 'binds': {...}}} —",
+         "#: OP refs are paths; 'panel' holds the panel CONTAINER's",
+         "#: own settings; 'listerconfig' (queue only) = {DAT: text}.",
          "CAPTURED_PANEL = {"]
 scratch = p.create(containerCOMP, '_capture_scratch')
 
 
 def _capture(name, comp, stock):
-    """One entry: geometry + pars diffed vs stock + expressions."""
+    """One entry: geometry + pars/exprs/binds, each diffed vs stock."""
     geom = _builtin_geom(comp)
-    mine_v, mine_e = _snapshots(comp)
+    mine_v, mine_e, mine_b = _snapshots(comp)
     if stock is not None:
-        stock_v, _ = _snapshots(stock)
+        stock_v, stock_e, stock_b = _snapshots(stock)
         pars = _diff(mine_v, stock_v)
+        # expressions/binds that MATCH stock regenerate from the tox —
+        # only genuine differences are baked (kills the widget-internal
+        # expr flood the first v3 run recorded)
+        exprs = {k: v for k, v in mine_e.items() if stock_e.get(k) != v}
+        binds = {k: v for k, v in mine_b.items() if stock_b.get(k) != v}
     else:
-        pars = mine_v
+        pars, exprs, binds = mine_v, mine_e, mine_b
     entry = {"geometry": geom, "pars": pars}
-    if mine_e:
-        entry["expressions"] = mine_e
+    if exprs:
+        entry["expressions"] = exprs
+    if binds:
+        entry["binds"] = binds
     return entry
 
 
@@ -195,6 +252,9 @@ def _emit(name, entry):
     if entry.get("expressions"):
         lines.append(f'        "expressions": '
                      f'{entry["expressions"]!r},')
+    if entry.get("binds"):
+        lines.append(f'        "binds": '
+                     f'{entry["binds"]!r},')
     if entry.get("listerconfig"):
         lines.append(f'        "listerconfig": '
                      f'{entry["listerconfig"]!r},')
@@ -202,6 +262,8 @@ def _emit(name, entry):
     extra = ''
     if entry.get("expressions"):
         extra += f', {len(entry["expressions"])} exprs'
+    if entry.get("binds"):
+        extra += f', {len(entry["binds"])} binds'
     if entry.get("listerconfig"):
         extra += ', listerconfig DATs'
     print(f'[capture] {name}: geometry {entry["geometry"]} — '
@@ -231,19 +293,26 @@ def _stock_widget(toxname):
 
 
 def _dat_texts(comp):
-    """{DAT name: text} for the DATs directly inside comp (the
-    listerConfig config/callbacks DATs — where hand-tuned column
-    settings live)."""
+    """{DAT name: text} for the DATs inside comp (the listerConfig
+    config/callbacks DATs — where hand-tuned column settings live).
+    comp.dats first; children-scan fallback in case .dats fails on
+    this build (the first v3 run produced NO DATs silently)."""
     out = {}
+    dats = []
     try:
         dats = list(comp.dats)
     except Exception:
-        return out
+        dats = []
+    if not dats:
+        try:
+            dats = [ch for ch in comp.children if ch.isDAT]
+        except Exception:
+            dats = []
     for d in dats:
         try:
             out[d.name] = d.text
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[capture] ( DAT {d.name} text read failed: {exc} )")
     return out
 
 
@@ -267,14 +336,29 @@ for c in sorted(p.children, key=_safe_geom):
         stock = _stock_widget(_TOX_OF[name])
     entry = _capture(name, c, stock)
     # queue: the lister's config COMP holds hand-tuned column state in
-    # its DATs — capture their text wherever the config lives (inside
-    # the lister, or flattened at panel root as seen in the live panel)
+    # its DATs. Find it CANONICALLY via the Configcomp par (it points
+    # at the ACTIVE config wherever it lives) — the first v3 run
+    # printed no listerconfig at all, so this branch now reports
+    # loudly instead of skipping silently.
     if name == "queue":
-        cfg = c.op('listerConfig')
-        if cfg is None:
+        cfg = None
+        try:
+            cfg = c.par.Configcomp.eval()
+        except Exception:
+            cfg = None
+        if not _is_op(cfg):
+            cfg = c.op('listerConfig')
+        if not _is_op(cfg):
             cfg = p.op('listerConfig')
-        if cfg is not None:
+        if not _is_op(cfg):
+            print('[capture] !! queue: listerConfig NOT FOUND '
+                  '(Configcomp par, inside queue, panel root — all '
+                  'missed); column tuning will not be captured')
+        else:
             texts = _dat_texts(cfg)
+            print(f"[capture] queue: listerConfig at {cfg.path} — "
+                  f"{len(texts)} DATs"
+                  + (f" ({', '.join(sorted(texts))})" if texts else ''))
             if texts:
                 entry['listerconfig'] = texts
     _emit(name, entry)
