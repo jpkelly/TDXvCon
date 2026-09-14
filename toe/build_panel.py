@@ -261,11 +261,16 @@ def build():
             vcon.op(stale).destroy()
     # panel_dnd DATs ACCUMULATE across rebuilds (create-with-existing-
     # name auto-renames: the live toe had panel_dnd11) — sweep them ALL
-    # so every rebuild names the fresh callbacks DAT plainly 'panel_dnd'
-    for ch in list(vcon.children):
-        if ch.name.startswith("panel_dnd"):
-            say(f"removing existing {ch.name}")
-            ch.destroy()
+    # so every rebuild names the fresh callbacks DAT plainly 'panel_dnd'.
+    # Same for the RUNNER DATs (panel_build_run / panel_capture_run):
+    # create-with-existing-name auto-renames, and a duplicate
+    # panel_build_run would make op('panel_build_run') ambiguous —
+    # sweep by PREFIX so every rebuild leaves exactly one of each.
+    for _pref in ("panel_dnd", "panel_build_run", "panel_capture_run"):
+        for ch in list(vcon.children):
+            if ch.name == _pref or ch.name.startswith(_pref + "1"):
+                say(f"removing existing {ch.name}")
+                ch.destroy()
 
     # ---- callbacks DAT (file-linked, like the controller DAT) -----------
     say("creating panel_callbacks DAT (file-linked)")
