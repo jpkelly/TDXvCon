@@ -270,13 +270,11 @@ def OnQualityChanged():
     """QUALITY slider dragged -> set MvO's quality slider LIVE.
 
     Wired to the slider's Onvaluechangescript0 (fires on every drag
-    tick). NotchLC-only: the hook is a no-op when the codec greys the
-    slider out (Setquality refuses non-NotchLC codecs, never silently).
+    tick). Works for ANY codec (JP: MvO's quality par is general) —
+    the per-codec greying is a UI hint about which codecs have a
+    documented ladder, not a write guard.
     """
     try:
-        codec = _val("codec_dd") or "notchlc"
-        if codec != "notchlc":
-            return                       # greyed out — nothing to do
         v = _val("quality_s")
         ext().Setquality(v)
     except Exception as exc:
