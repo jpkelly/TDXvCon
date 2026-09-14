@@ -421,6 +421,19 @@ class VconExt:
                         "message": f"input not found: {job['input']}",
                         "code": "input-missing"})
             return
+        out_dir = os.path.dirname(job["output"]) or "."
+        if not os.path.isdir(out_dir):
+            self._send({"type": "error", "id": job["id"],
+                        "message": f"output folder not found: {out_dir}",
+                        "code": "output-error"})
+            return
+        if not os.path.splitext(job["output"])[1]:
+            self._send({"type": "error", "id": job["id"],
+                        "message": f"output has no file extension: "
+                                   f"{job['output']!r} (a folder was given "
+                                   f"as the output path?)",
+                        "code": "output-error"})
+            return
         self.job = job
         self._loading_ticks = 0
         self._paused = False   # a fresh job always starts unpaused

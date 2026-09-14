@@ -128,8 +128,14 @@ def Start():
     if res in ("", "keep", "auto"):
         res = "auto"
 
-    out = dst if dst and os.path.isdir(dst) else _output_name(
-        src, codec, subtype)
+    derived = _output_name(src, codec, subtype)
+    if dst and os.path.isdir(dst):
+        # Destination is a FOLDER: the derived FILENAME joins into it.
+        # (Passing the folder itself as the output file made movieout
+        # error 'Filename missing extension' every frame — caught live.)
+        out = os.path.join(dst, os.path.basename(derived))
+    else:
+        out = derived
 
     # pixel format 'none' = let the codec/registry decide (auto)
     if fmt == "none":
