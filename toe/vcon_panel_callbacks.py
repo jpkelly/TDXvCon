@@ -828,6 +828,17 @@ def _inspect_tick():
             parts.append(f"{width}x{height}")
         if fps:
             parts.append(f"{fps} fps")
+        # LENGTH (JP 2026-09-14): the DAT emits 'duration' (formatted),
+        # 'seconds' (float) and 'frames' — prefer the formatted one
+        dur = pick("duration", "length")
+        if not dur:
+            secs = pick("seconds")
+            dur = f"{secs} s" if secs else None
+        if not dur:
+            frames = pick("frames")
+            dur = f"{frames} frames" if frames else None
+        if dur:
+            parts.append(dur)
         codec = vdesc or vcodec
         parts.append(codec if codec else "(codec unavailable)")
         _set_output_text("  |  ".join(parts))
