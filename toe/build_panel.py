@@ -213,12 +213,13 @@ def build():
     place(panelcomp, 0, 0, 660, 640)
 
     # ---- load widgets -----------------------------------------------------
-    # Load the tox into a SCRATCH COMP, then copy the widget to the panel
-    # level and destroy the scratch — every widget is a DIRECT child of
-    # the panel (JP: same level, no wrappers), and ALL configuration
-    # happens through its TOP-LEVEL parameters only. No inner-child
-    # targeting anywhere: probe 5 proved inner_of() can grab a stray
-    # child (prog_s/label) instead of the widget.
+    # FLAT WIDGETS AT PANEL ROOT (JP, twice): load the tox into a scratch,
+    # copy ONLY the inner widget COMP up to the panel root, destroy the
+    # scratch. The panel's children are the actual widgets — no wrapper
+    # containers. Configuration still targets TOP-LEVEL parameters of the
+    # widget we keep (the inner widget IS the top level of the flat copy);
+    # the top-level-only rule is about never reaching INTO the widget's
+    # internals, which we never do.
     say("loading widgets")
     widgets = {}
     for outer_name, (tox, x, y, w, h) in _WIDGETS.items():
@@ -231,20 +232,28 @@ def build():
             say(f"!! loadTox({tox}) failed in scratch")
             scratch.destroy()
             continue
+        # Find the inner widget (the tox drops a same-named container
+        # holding the real widget).
+        inner = None
+        for c in wrapper.children:
+            if c.name == wrapper.name or c.isPanel:
+                inner = c
+                break
+        src_comp = inner if inner is not None else wrapper
         try:
-            wcomp = panelcomp.copy(wrapper, name=outer_name)
+            wcomp = panelcomp.copy(src_comp, name=outer_name)
         except Exception as exc:
-            say(f"!! copy wrapper {tox} -> {outer_name}: {exc}")
+            say(f"!! copy {tox} -> {outer_name}: {exc}")
             scratch.destroy()
             continue
         if wcomp is None:
-            say(f"!! copy wrapper {tox} returned None")
+            say(f"!! copy {tox} returned None")
             scratch.destroy()
             continue
         scratch.destroy()
         place(wcomp, x, y, w, h)
         widgets[outer_name] = wcomp
-    say(f"loaded {len(widgets)}/{len(_WIDGETS)} widgets (top-level, configured via top-level pars)")
+    say(f"loaded {len(widgets)}/{len(_WIDGETS)} widgets (flat at panel root)")
 
     mod = cb.module
 
