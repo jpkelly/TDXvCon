@@ -323,12 +323,16 @@ def build():
     audio = vcon.create(find_type("audiomovieCHOP"), "audio")
     audio.nodeX = -300
     audio.nodeY = -200
-    # The Audio Movie CHOP takes a Movie File In TOP reference via
-    # 'moviefileintop' (NOT 'file' — that's a file PATH par on other
-    # CHOPs; this one wants the TOP op). Link MvO's 'audio' par to the
-    # Audio Movie CHOP.
     set_op_par(audio, "moviefileintop", moviein)
-    # MvO's audio par is 'audiochop' (type=CHOP), NOT 'audio'
+    # Play MUST be ON or the CHOP outputs no audio (stock default: off)
+    safe_set(audio.par, "play", 1)
+    # Pre-read the FULL audio into cache (not time-sliced): stop-frame
+    # video advances frame by frame via addframe.pulse(), but the audio
+    # needs the complete track available so MvO writes it whole. A
+    # large pre-read covers long movies; 3600s = 1 hour max.
+    safe_set(audio.par, "prereadlength", 3600)
+    safe_set(audio.par, "prereadlengthunit", "seconds")
+    # MvO's audio par is 'audiochop' (type=CHOP)
     set_op_par(movieout, "audiochop", audio)
 
     # ---- tcp server ----------------------------------------------------

@@ -1,8 +1,8 @@
 {
   "destination": "/Users/jp/Desktop/converted",
   "codec_dd": "prores",
-  "subtype_dd": "prores422proxy",
-  "format_dd": "yuv4228bit",
+  "subtype_dd": "",
+  "format_dd": "rgb",
   "quality_s": 0.0,
   "fps_f": "23.976",
   "fps_t": false,
