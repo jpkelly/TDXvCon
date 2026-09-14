@@ -133,6 +133,8 @@ class CodecSpec:
         quality: str | None = None,
         fps: str = "auto",
         alpha: bool | None = None,
+        resolution: str = "auto",
+        fit: str = "stretch",
     ) -> dict[str, Any]:
         """Build the Movie File Out TOP parameter payload for one job.
 
@@ -180,6 +182,12 @@ class CodecSpec:
         elif alpha is False and fmts:
             params["moviepixelformat"] = fmts[0]
         params["fps"] = fps or "auto"
+        # Custom resolution: applied by the toe via a Fit TOP. "auto" sends
+        # nothing — the toe bypasses the fit TOP entirely (moviein wired
+        # straight to movieout), so existing jobs change zero behavior.
+        if resolution and resolution != "auto":
+            params["resolution"] = resolution
+            params["fit"] = fit or "stretch"
         return params
 
     def output_name(self, input_path_name: str, out_ext: str | None = None) -> str:

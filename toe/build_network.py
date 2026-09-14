@@ -277,6 +277,22 @@ def build():
     # inputConnectors/inputs wiring raises on this build.)
     set_op_par(info, "op", moviein)
 
+    # ---- fit TOP (custom resolution path) ------------------------------
+    # Created always, wired in the data path only when a job asks for a
+    # custom -s resolution: the controller bypasses it (moviein → movieout)
+    # for "auto" jobs. Menu token 'stretch' verified against Fit TOP docs.
+    say("creating fit TOP (custom resolution path)")
+    fit = vcon.create(find_type("fitTOP"), "fit")
+    fit.nodeX = -150
+    fit.nodeY = -240
+    menu_set(fit.par.fit, ["stretch", "fitwidth", "fitheight", "cover"],
+             "fit.fit")
+    menu_set(fit.par.outputresolution, ["customresolution", "custom"],
+             "fit.outputresolution")
+    # Wire moviein -> fit; the controller connects fit -> movieout when a
+    # custom resolution job arrives, and rewires moviein -> movieout for
+    # "auto" jobs (bypassing fit).
+
     # ---- movieout ------------------------------------------------------
     say("creating movieout (Movie File Out TOP, NotchLC)")
     movieout = vcon.create(find_type("moviefileoutTOP"), "movieout")

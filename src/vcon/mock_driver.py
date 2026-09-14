@@ -58,6 +58,9 @@ class MockDriver(Driver):
     def __init__(self, ctx: DriverContext) -> None:
         super().__init__(ctx)
         self._cancelled: set[str] = set()
+        self._paused: set[str] = set()
+        self._pause_star = False
+        self._active: str | None = None
         self._stop = asyncio.Event()
         self._fail_on_job: str | None = ctx.fail_on_job
 
@@ -86,6 +89,7 @@ class MockDriver(Driver):
             return
 
         total = _guess_total_frames(job.spec.input)
+        self._active = job.id
         self._emit_simple(job.id, "accepted", total_frames=total)
 
         tick = float(self.ctx.extra.get("sleep", 0.005))
@@ -94,6 +98,17 @@ class MockDriver(Driver):
                 self._emit_simple(job.id, "error", message="cancelled", code="cancelled")
                 return
             await asyncio.sleep(tick)
+            # Check pause AFTER the sleep: a pause that arrives mid-sleep
+            # must suppress this frame's progress, not leak one more event
+            # (which made early pause tests race by a single frame).
+            while ((job.id in self._paused or self._pause_star)
+                   and not self._stop.is_set()):
+                # Paused: hold at this frame (no progress) until resumed.
+                await asyncio.sleep(tick)
+                if job.id in self._cancelled:
+                    self._emit_simple(job.id, "error", message="cancelled",
+                                      code="cancelled")
+                    return
             self._emit_simple(job.id, "progress", frame=frame, total_frames=total)
 
         # Materialize output so overwrite/verification logic is exercised.
@@ -110,10 +125,24 @@ class MockDriver(Driver):
             job.id, "done", path=str(job.spec.output), total_frames=total,
             seconds=round(total * tick, 3),
         )
+        self._active = None
 
     async def cancel(self, job_id: str) -> None:
         """Test seam; the real driver forwards a protocol cancel to the toe."""
         self._cancelled.add(job_id)
+
+    async def pause(self, job_id: str) -> None:
+        """Test seam; the real driver forwards a protocol pause to the toe.
+        job_id "*" pauses whichever job is currently emitting progress."""
+        self._paused.add(job_id)
+        if job_id == "*":
+            # target the active job — resolved lazily by _run_one's check
+            self._pause_star = True
+
+    async def resume(self, job_id: str) -> None:
+        self._paused.discard(job_id)
+        if job_id == "*":
+            self._pause_star = False
 
     async def shutdown(self) -> None:
         self._stop.set()

@@ -54,20 +54,24 @@ def _build_specs(p: ParsedArgs) -> list[JobSpec]:
         alpha = None
         if out.get("no_alpha"):
             alpha = False
+        resolution = out.get("resolution", "auto")
+        fit = out.get("fit", "stretch")
 
         output = Path(out["output"])
 
-        specs.append(
-            JobSpec(
-                input=input_path,
-                output=output,
-                codec=codec_name,
-                subtype=subtype,
-                quality=quality,
-                fps=fps,
-                alpha=alpha,
-            )
+        spec = JobSpec(
+            input=input_path,
+            output=output,
+            codec=codec_name,
+            subtype=subtype,
+            quality=quality,
+            fps=fps,
+            alpha=alpha,
+            resolution=resolution,
+            fit=fit,
         )
+        spec.validate_resolution()
+        specs.append(spec)
     return specs
 
 

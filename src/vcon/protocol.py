@@ -63,8 +63,30 @@ class Cancel:
         return "cancel"
 
 
+@dataclass(frozen=True)
+class Pause:
+    """Request: pause the active encode (id may be "*" = whatever runs)."""
+
+    job_id: str = "*"
+
+    @property
+    def type(self) -> str:
+        return "pause"
+
+
+@dataclass(frozen=True)
+class Resume:
+    """Request: resume a paused encode."""
+
+    job_id: str = "*"
+
+    @property
+    def type(self) -> str:
+        return "resume"
+
+
 #: Union-ish alias for documentation only.
-ProtocolMessage = Submit | Cancel
+ProtocolMessage = Submit | Cancel | Pause | Resume
 
 
 def encode_msg(obj: dict[str, Any] | Submit | Cancel) -> bytes:
@@ -79,6 +101,10 @@ def encode_msg(obj: dict[str, Any] | Submit | Cancel) -> bytes:
         }
     elif isinstance(obj, Cancel):
         obj = {"type": "cancel", "id": obj.job_id}
+    elif isinstance(obj, Pause):
+        obj = {"type": "pause", "id": obj.job_id}
+    elif isinstance(obj, Resume):
+        obj = {"type": "resume", "id": obj.job_id}
     return (json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8")
 
 

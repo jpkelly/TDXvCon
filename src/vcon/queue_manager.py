@@ -88,6 +88,8 @@ class QueueManager:
             quality=spec.quality,
             fps=spec.fps,
             alpha=spec.alpha,
+            resolution=spec.resolution,
+            fit=spec.fit,
         )
         job = Job(spec=spec, id=job_id)
         self._jobs[job_id] = job

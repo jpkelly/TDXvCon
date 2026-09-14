@@ -79,6 +79,9 @@ _OUTPUT_FLAGS = {
     "-quality": "quality",
     "-f": "fps",
     "-fps": "fps",
+    "-s": "resolution",
+    "-resolution": "resolution",
+    "-fit": "fit",
     "-no-alpha": "no_alpha",
 }
 
@@ -95,6 +98,8 @@ def _flag_needs_value(flag: str) -> bool:
         "-t", "-subtype",
         "-q", "-quality",
         "-f", "-fps",
+        "-s", "-resolution",
+        "-fit",
     }
 
 
@@ -280,6 +285,8 @@ output options (apply to the output that follows — like ffmpeg):
   -t,  -subtype SUBTYPE    codec variant (see the list below)
   -q,  -quality QUALITY    quality level (notchlc: good|very-good|excellent|optimal|best)
   -f,  -fps FPS            output frame rate ("auto" follows the source)
+  -s,  -resolution WxH     output resolution ("auto" keeps the source size)
+  -fit MODE                how to rescale: stretch|fitwidth|fitheight|cover
   -no-alpha                force alpha off even if the source has it
 
 global options:

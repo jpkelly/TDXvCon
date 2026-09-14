@@ -50,6 +50,12 @@ class JobSpec:
     quality: str | None = None  # None → codec default (notchlc: optimal)
     fps: str = "auto"  # "auto" = follow source
     alpha: bool | None = None  # None = follow source; False forces off
+    #: "auto" keeps the source resolution; "1920x1080" sets a custom one.
+    #: Applied by the toe via a Fit TOP between moviein and movieout.
+    resolution: str = "auto"
+    #: How a custom resolution rescales the image — Fit TOP's `fit` menu
+    #: tokens: "stretch" | "fitwidth" | "fitheight" | "cover".
+    fit: str = "stretch"
     extra: dict[str, Any] = field(default_factory=dict)  # per-codec baggage
 
     def resolved_quality(self, default_quality: str | None) -> str:
@@ -73,6 +79,28 @@ class JobSpec:
         if not os.access(parent, os.W_OK):
             raise OutputError(f"output directory not writable: {parent}")
 
+    def validate_resolution(self) -> None:
+        """Resolution grammar: "auto" or "WxH" with positive integers."""
+        r = self.resolution
+        if r == "auto":
+            return
+        if "x" not in r:
+            raise InputError(
+                f"invalid resolution {r!r} — expected 'auto' or WxH "
+                f"like 1280x720"
+            )
+        w, _, h = r.partition("x")
+        if not (w.isdigit() and h.isdigit()) or int(w) < 1 or int(h) < 1:
+            raise InputError(
+                f"invalid resolution {r!r} — width and height must be "
+                f"positive integers (e.g. 1280x720)"
+            )
+        if self.fit not in ("stretch", "fitwidth", "fitheight", "cover"):
+            raise InputError(
+                f"invalid fit mode {self.fit!r} — one of stretch, "
+                f"fitwidth, fitheight, cover"
+            )
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "input": str(self.input),
@@ -82,6 +110,8 @@ class JobSpec:
             "quality": self.quality,
             "fps": self.fps,
             "alpha": self.alpha,
+            "resolution": self.resolution,
+            "fit": self.fit,
             "extra": dict(self.extra),
         }
 
@@ -95,6 +125,8 @@ class JobSpec:
             quality=d.get("quality"),
             fps=d.get("fps", "auto"),
             alpha=d.get("alpha"),
+            resolution=d.get("resolution", "auto"),
+            fit=d.get("fit", "stretch"),
             extra=dict(d.get("extra") or {}),
         )
 

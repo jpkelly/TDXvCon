@@ -28,6 +28,15 @@ Protocol (v1, matching vcon.protocol):
 
     → {"type": "cancel", "id"}
     ← {"type": "error", "id", "message": "cancelled", "code": "cancelled"}
+
+    → {"type": "pause", "id"}   (id "*" = whatever is running)
+    ← {"type": "paused", "id", "frame", "total_frames"}
+    → {"type": "resume", "id"}
+    ← {"type": "resumed", "id", "frame", "total_frames"}
+
+    submit params may carry "resolution" ("WxH") and "fit"
+    (stretch|fitwidth|fitheight|cover) — the toe inserts a Fit TOP when
+    resolution != "auto".
 """
 
 import json
@@ -80,6 +89,10 @@ class VconExt:
         #: the per-frame tick re-asks ~60x/second and buries the user in
         #: modal dialogs.
         self._quit_requested = False
+        #: Paused mid-encode (protocol "pause"). While True, _encode_tick
+        #: skips writing frames but keeps cooking so "resume" continues
+        #: from the exact next frame. "*" targets whatever is running.
+        self._paused = False
         #: ORPHAN-CLEANUP ARMING. True only when this TouchDesigner process
         #: was LAUNCHED BY vCon (the front-end sets VCON_LAUNCHED=1 in the
         #: subprocess environment). A session the user opened themselves
@@ -111,6 +124,12 @@ class VconExt:
     @property
     def moviein(self):
         return self.child("moviein")
+
+    @property
+    def fit(self):
+        """Fit TOP — present when the toe was built with resolution support.
+        Absent in older toes; resolution params are then ignored (logged)."""
+        return self.ownerComp.op("fit")
 
     @property
     def movieout(self):
@@ -330,6 +349,10 @@ class VconExt:
             self._start_job(msg)
         elif mtype == "cancel":
             self._cancel(msg.get("id"))
+        elif mtype == "pause":
+            self._pause(msg.get("id"))
+        elif mtype == "resume":
+            self._resume(msg.get("id"))
         elif mtype == "ping":
             self._send({"type": "pong"})
         elif mtype == "status":
@@ -378,6 +401,7 @@ class VconExt:
             return
         self.job = job
         self._loading_ticks = 0
+        self._paused = False   # a fresh job always starts unpaused
         self.state = "loading"
         self._set_status(f"loading {os.path.basename(job['input'])}")
         self._load_input(job)
@@ -435,6 +459,9 @@ class VconExt:
             )
             return
 
+        self._apply_resolution(self.job["params"].get("resolution"),
+                              self.job["params"].get("fit"))
+
         movieout = self.movieout
         movieout.par.file = self.job["output"]
         # Stop-frame recording, per the documented sequence:
@@ -463,6 +490,11 @@ class VconExt:
     def _encode_tick(self):
         """Write one frame. Called once per TD frame while encoding."""
         if self.state != "encoding":
+            return
+        if self._paused:
+            # Paused: keep the session alive, write nothing. Progress and
+            # status stay at the paused frame so resume continues exactly.
+            self.last_activity = time.time()
             return
         moviein = self.moviein
         movieout = self.movieout
@@ -545,6 +577,28 @@ class VconExt:
             self._send({"type": "error", "id": job_id, "message": "cancelled",
                         "code": "cancelled"})
 
+    def _pause(self, job_id):
+        """Pause the active encode. id "*" (or a match) pauses; else noop."""
+        if self.state == "encoding" and (job_id == "*" or
+                (self.job and self.job.get("id") == job_id)):
+            self._paused = True
+            self._set_status(f"paused at frame {self.frame}/{self.total}")
+            self._send({"type": "paused", "id": (self.job or {}).get("id", "?"),
+                        "frame": self.frame, "total_frames": self.total})
+        elif self.state == "loading":
+            # not yet encoding — nothing meaningful to pause; acknowledge
+            self._send({"type": "error", "id": job_id,
+                        "message": "cannot pause while loading", "code": "noop"})
+
+    def _resume(self, job_id):
+        """Resume a paused encode; also clears the pause on a fresh job."""
+        if self._paused and (job_id == "*" or
+                (self.job and self.job.get("id") == job_id)):
+            self._paused = False
+            self._set_status(f"encoding {self.frame}/{self.total}")
+            self._send({"type": "resumed", "id": (self.job or {}).get("id", "?"),
+                        "frame": self.frame, "total_frames": self.total})
+
     # ------------------------------------------------------------------
     # Codec parameters (registry-resolved values from the front-end)
     # ------------------------------------------------------------------
@@ -618,6 +672,70 @@ class VconExt:
                 except (TypeError, ValueError) as exc:
                     debug(f"could not set fps={p['fps']!r}: {exc}")
 
+    def _apply_resolution(self, resolution, fit_mode):
+        """Configure the Fit TOP for a custom resolution (or bypass it).
+
+        With resolution="auto" the fit TOP is bypassed: moviein is wired
+        straight into movieout, so legacy toes (no fit TOP) and legacy jobs
+        (no -s flag) behave exactly as before. With a custom WxH the fit TOP
+        is inserted and set: outputresolution='custom', resolution='W H',
+        and the `fit` menu token (stretch/fitwidth/fitheight/cover —
+        lowercase, verified against Fit TOP docs).
+        """
+        movieout = self.movieout
+        if not resolution or resolution == "auto":
+            self._bypass_fit()
+            return
+        f = self.fit
+        if f is None:
+            # Older toe without a fit TOP: cannot honor resolution. Fail
+            # LOUDLY rather than encode at the wrong size silently — the
+            # same principle as the codec-menu verification.
+            raise ValueError(
+                f"this toe has no fit TOP; cannot encode at {resolution}. "
+                f"Rebuild the toe (exec build_network.py in the textport)."
+            )
+        try:
+            w, _, h = resolution.partition("x")
+            w = int(w)
+            h = int(h)
+        except (TypeError, ValueError):
+            raise ValueError(f"bad resolution {resolution!r} (expected WxH)")
+        if w < 1 or h < 1:
+            raise ValueError(f"bad resolution {resolution!r} (W and H >= 1)")
+
+        menu = list(getattr(f.par.fit, "menuNames", None) or [])
+        mode = (fit_mode or "stretch").lower()
+        if menu and mode not in menu:
+            # Menu tokens are TD's, not ours — a wrong token silently falls
+            # back to index 0. Report instead of mis-encoding.
+            raise ValueError(
+                f"fit mode {mode!r} not in Fit TOP menu {menu}"
+            )
+        f.par.fit = mode
+        # Common page: Custom Resolution + explicit W H (par.resolution is
+        # a 2-tuple: '1920 1080' via a tuple assignment).
+        f.par.outputresolution = "customresolution"
+        f.par.resolution = (w, h)
+        # Wire moviein → fit → movieout (connect the data path through).
+        try:
+            movieout.inputConnect(f, 0)
+        except Exception as exc:
+            debug(f"fit TOP wire failed: {exc}")
+        self._set_status(f"encoding at {w}x{h} ({mode})")
+
+    def _bypass_fit(self):
+        """Wire moviein straight to movieout, dropping the fit TOP."""
+        try:
+            moviein = self.moviein
+            movieout = self.movieout
+            f = self.fit
+            if f is not None:
+                movieout.inputConnect(moviein, 0)
+                f.par.outputresolution = "useinput"
+        except Exception as exc:
+            debug(f"bypass_fit: {exc}")
+
     # ------------------------------------------------------------------
     # Plumbing
     # ------------------------------------------------------------------
@@ -678,6 +796,7 @@ class VconExt:
             self.ownerComp.par.Progress.val = 0.0
         except Exception:
             pass
+        self._paused = False
         self.job = None
         self.state = "idle"
 
