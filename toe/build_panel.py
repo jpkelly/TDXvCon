@@ -228,6 +228,42 @@ def build():
     cb.par.file = f"{REPO}/toe/vcon_panel_callbacks.py"
     cb.par.syncfile = 1
 
+    # ---- drag/drop callbacks DAT (panel drop target) ----------------------
+    say("creating panel_dnd callbacks DAT")
+    dnd_cb = vcon.create(find_type("textDAT"), "panel_dnd")
+    dnd_cb.nodeX = 360
+    dnd_cb.nodeY = 150
+    dnd_cb.text = (
+        "# Panel drag/drop callbacks (docs: Drag-and-Drop page).\n"
+        "# onHoverStartGetAccept MUST return True or the drop is\n"
+        "# silently rejected.\n"
+        "\n"
+        "\n"
+        "def onHoverStartGetAccept(comp, info):\n"
+        "    for item in info.get('dragItems', []):\n"
+        "        p = getattr(item, 'path', None)\n"
+        "        if p is None and isinstance(item, str):\n"
+        "            p = item\n"
+        "        if p and (os.path.isfile(p) or os.path.isdir(p)):\n"
+        "            return True\n"
+        "    return False\n"
+        "\n"
+        "\n"
+        "def onDropGetResults(comp, info):\n"
+        "    try:\n"
+        "        op('panel_callbacks').module.onDragDrop(\n"
+        "            {'dropItems': list(info.get('dragItems', []))})\n"
+        "        return {'accepted': True}\n"
+        "    except Exception as exc:\n"
+        "        debug(f'vCon drop failed: {exc}')\n"
+        "        return {'accepted': False}\n"
+        "\n"
+        "\n"
+        "import os\n"
+    )
+    # file-linked? no — this DAT is generated; the callbacks module holds
+    # the real logic (onDragDrop).
+
     # ---- queue table DAT (lister source) ---------------------------------
     say("creating queue_table DAT (batch list)")
     qt = vcon.create(tableDAT, "queue_table")
@@ -602,21 +638,24 @@ def build():
         except Exception:
             pass
 
-    # ---- panel drop script: drag files/folders straight into the queue ----
-    # This was NEVER wired (onDragDrop existed in the callbacks but nothing
-    # pointed the panel's dropscript par at it — drops did nothing). The
-    # panel-level Drop Script handles every drop that lands anywhere on
-    # the panel, including over the lister.
-    say("wiring panel drop script (files/folders -> queue)")
+    # ---- drag/drop: files/folders straight into the queue (MODERN system) --
+    # DOCS-VERIFIED (Drag-and-Drop page): the dropscript par takes a DAT
+    # PATH (inline python never worked), and the MODERN panel system is
+    # Drag/Drop Callbacks: On Dropping Into = Use Drag/Drop Callbacks, a
+    # callbacks DAT with onHoverStartGetAccept (MUST return True or the
+    # drop is silently rejected — the "drop did nothing" cause) and
+    # onDropGetResults(comp, info). dragItems arrive as tdu.FileInfo-like
+    # items with .path for file drops.
+    say("wiring drag/drop callbacks (files/folders -> queue)")
     try:
-        panelcomp.par.dropscript.val = (
-            "op('panel_callbacks').module.onDragDrop(args[0])"
-        )
-        # built-in drop options off — our script is the only handler
-        panelcomp.par.builtindrop = "off"
-        say("  panel dropscript -> onDragDrop")
+        panelcomp.par.drop = "usedragdropcallbacks"
     except Exception as exc:
-        say(f"  (dropscript: {exc})")
+        say(f"  (drop mode: {exc})")
+    try:
+        panelcomp.par.dropcallback = dnd_cb
+        say("  drop callbacks DAT linked")
+    except Exception as exc:
+        say(f"  (dropcallback: {exc})")
 
     # ---- panel Execute DAT: batch tick --------------------------------------
     # VERIFIED pattern from build_network.py's controller tick: the Execute
