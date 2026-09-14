@@ -225,7 +225,13 @@ def UpdateSubtypes():
         meta = CODECS.get(codec, {})
         sub_w = widget("subtype_dd")
         fmt_w = widget("format_dd")
-        # ---- SUBTYPE: real options only; grey out when there are none.
+        # ---- SUBTYPE: real options only; CLEAR + grey out when none.
+        # JP bug report: after selecting Hap (subtypes appear), choosing
+        # h264/h265/av1/cineform left 'hap' selectable — the grey-out
+        # never landed and the stale menu/value survived. Fix: when a
+        # codec has NO subtypes, CLEAR the menu (empty), reset Value0,
+        # and grey out — a disabled, visibly-empty control can't offer
+        # or keep a stale option.
         if sub_w is not None:
             subs = list(meta.get("subtypes", []))
             if subs:
@@ -239,6 +245,12 @@ def UpdateSubtypes():
                     pass
                 _grey_out(sub_w, False)
             else:
+                setp_par(sub_w, "Menunames", "")
+                setp_par(sub_w, "Menulabels", "")
+                try:
+                    sub_w.par.Value0.val = ""
+                except Exception:
+                    pass
                 _grey_out(sub_w, True)
         # ---- FORMAT: per-subtype when the codec defines them (Hap's
         # haphdr offers rgbu/rgbs — verified live), else the codec's
@@ -281,7 +293,11 @@ def _grey_out(inner, grey):
     Display/enable pars on these widgets are STRING MENUS
     (['off','on']) — integer writes select menu INDEX 0, which can be
     'on'. Write tokens; fall back to ints only if no menu exists.
+    Tries BOTH the builtin Panel 'enable' and the widget 'Enable'
+    custom par; if neither exists, say so (a silent return here is how
+    stale subtypes stayed clickable — JP bug report).
     """
+    hit = False
     for cand in ("enable", "Enable"):
         par = getattr(inner.par, cand, None)
         if par is None:
@@ -292,9 +308,11 @@ def _grey_out(inner, grey):
                 par.val = "off" if grey else "on"
             else:
                 par.val = 0 if grey else 1
-            return
+            hit = True
         except Exception:
             continue
+    if not hit:
+        note(f"grey-out failed on {inner.name}: no enable par")
 
 
 def OnQualityChanged():
