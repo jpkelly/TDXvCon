@@ -16,7 +16,7 @@ CAPTURED_PANEL = {
     "output_l": {
         "geometry": {'x': 20, 'y': 5, 'w': 620, 'h': 30},
         "nodelayout": (0, -2570),
-        "pars": {'resizecomp': '/project1/vcon/panel/output_l', 'repocomp': '/project1/vcon/panel/output_l', 'Widgetlabel': '(queue is empty — add files)', 'Labelwordwrap': True, 'Labelhorizontalmode': 'fill', 'Labelwidth': 110},
+        "pars": {'resizecomp': '/project1/vcon/panel/output_l', 'repocomp': '/project1/vcon/panel/output_l', 'Widgetlabel': '/Users/jp/Movies/ok go/okg_udio.hap.mov', 'Labelwordwrap': True, 'Labelhorizontalmode': 'fill', 'Labelwidth': 110},
     },
     "queue": {
         "geometry": {'x': 20, 'y': 30, 'w': 620, 'h': 400},
@@ -63,7 +63,7 @@ CAPTURED_PANEL = {
     "fps_f": {
         "geometry": {'x': 88, 'y': 510, 'w': 55, 'h': 30},
         "nodelayout": (210, -1870),
-        "pars": {'resizecomp': '/project1/vcon/panel/fps_f', 'repocomp': '/project1/vcon/panel/fps_f', 'Value0': '01', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFpsChanged()", 'Widgetlabel': 'FPS', 'Labeldisplay': False, 'Labelwidth': 29},
+        "pars": {'resizecomp': '/project1/vcon/panel/fps_f', 'repocomp': '/project1/vcon/panel/fps_f', 'Value0': '29.93', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFpsChanged()", 'Widgetlabel': 'FPS', 'Labeldisplay': False, 'Labelwidth': 29},
     },
     "scaled_t": {
         "geometry": {'x': 143, 'y': 510, 'w': 87, 'h': 30},

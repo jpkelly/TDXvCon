@@ -114,6 +114,7 @@ _last_src_fps = None
 _inspect_item = None
 _inspect_ticks = 0
 _noted_select = False
+_noted_table = False   # one-shot raw-table dump for label verification
 
 
 def ext():
@@ -682,7 +683,8 @@ def OnQueueRowSelected(info=None):
         return
     _inspect_item = item
     _inspect_ticks = 0
-    _set_output_text(f"inspecting {os.path.basename(item['input'])} …")
+    # no intermediate 'inspecting …' text (JP: not needed) — output_l
+    # keeps its current content until the metadata lands
     p = panel()
     d = p.op("inspector") if p is not None else None
     if d is not None:
@@ -706,12 +708,28 @@ def _inspect_tick():
     if _inspect_item is None:
         return
     vals = _inspector_values()
+    # ONE-SHOT DIAGNOSTICS (probe-first, not guess): the DAT's real
+    # labels dump to the textport on the first read — if the pick()
+    # variants ever miss, that dump shows the true row names. A missing
+    # DAT says so plainly (builder creates it — file-linked module
+    # changes go live WITHOUT a rebuild, the DAT does not).
+    global _noted_table
+    if not _noted_table:
+        p_ = panel()
+        d_ = p_.op("inspector") if p_ is not None else None
+        if d_ is None:
+            note("row inspector: no 'inspector' DAT in the panel — "
+                "rebuild (exec panel_build_run)")
+            _noted_table = True
+        elif vals:
+            note(f"inspector DAT table ({d_.numRows} rows): {vals!r}")
+            _noted_table = True
     if not vals:
         _inspect_ticks += 1
         if _inspect_ticks > 120:
             _set_output_text(
                 os.path.basename(_inspect_item["input"])
-                + "  |  (metadata unavailable)")
+                + "  |  metadata unavailable")
             _inspect_item = None
         return
 
