@@ -52,6 +52,21 @@ COMP_PARENT = "/project1/vcon"
 COMP_NAME = "panel"
 REPO = "/Users/jp/Documents/GitHub/vCon"
 
+#: op-type constants — resolved via the td module first, textport
+#: globals second (find_type pattern). Makes the script runnable from
+#: the panel_build_run DAT, not just the textport.
+def _td_type(name):
+    try:
+        import td
+        return getattr(td, name)
+    except Exception:
+        return globals()[name]
+
+_TEXTDAT = lambda: _td_type("textDAT")
+_TABLEDAT = lambda: _td_type("tableDAT")
+_CONTAINERCOMP = lambda: _td_type("containerCOMP")
+_EXECUTEDAT = lambda: _td_type("executeDAT")
+
 #: JP's hand-tuned capture — the CANONICAL panel state (capture-first
 #: workflow). Read at build START so membership is honored during
 #: creation: 'removed' widgets are skipped, 'added' widgets are
@@ -254,7 +269,7 @@ def build():
 
     # ---- callbacks DAT (file-linked, like the controller DAT) -----------
     say("creating panel_callbacks DAT (file-linked)")
-    cb = vcon.create(textDAT, "panel_callbacks")
+    cb = vcon.create(_TEXTDAT(), "panel_callbacks")
     cb.nodeX = 300
     cb.nodeY = 150
     cb.par.file = f"{REPO}/toe/vcon_panel_callbacks.py"
@@ -300,15 +315,24 @@ def build():
     # path) — file-linked to toe/capture_run.py, swept on every rebuild
     # like the other DATs so it can never go stale -----------------------
     say("creating panel_capture_run DAT (file-linked)")
-    crun = vcon.create(textDAT, "panel_capture_run")
+    crun = vcon.create(_TEXTDAT(), "panel_capture_run")
     crun.nodeX = 360
     crun.nodeY = 90
     crun.par.file = f"{REPO}/toe/capture_run.py"
     crun.par.syncfile = 1
 
+    # ---- build runner DAT (JP: same convenience for REBUILDING the
+    # panel — exec(op.vcon.op('panel_build_run').text)) -------------
+    say("creating panel_build_run DAT (file-linked)")
+    brun = vcon.create(_TEXTDAT(), "panel_build_run")
+    brun.nodeX = 360
+    brun.nodeY = 150
+    brun.par.file = f"{REPO}/toe/build_run.py"
+    brun.par.syncfile = 1
+
     # ---- queue table DAT (lister source) ---------------------------------
     say("creating queue_table DAT (batch list)")
-    qt = vcon.create(tableDAT, "queue_table")
+    qt = vcon.create(_TABLEDAT(), "queue_table")
     qt.nodeX = 300
     qt.nodeY = 90
     qt.appendRow(["file", "status", "progress"])
@@ -322,7 +346,7 @@ def build():
     qd.appendRow(["file", "status"])
 
     # ---- panel container -------------------------------------------------
-    panelcomp = vcon.create(containerCOMP, COMP_NAME)
+    panelcomp = vcon.create(_CONTAINERCOMP(), COMP_NAME)
     panelcomp.nodeX = 300
     panelcomp.nodeY = 260
     place(panelcomp, 0, 0, 660, 640)
@@ -346,13 +370,13 @@ def build():
             # Custom progress bar (no palette widget exists; sliderHorz's
             # numeric field cannot be hidden — probe-verified). A plain
             # Container; the fill gets its width bind below.
-            wcomp = panelcomp.create(containerCOMP, outer_name)
+            wcomp = panelcomp.create(_CONTAINERCOMP(), outer_name)
             place(wcomp, x, y, w, h)
             widgets[outer_name] = wcomp
             continue
         path = _TOX_PATHS.get(tox,
                               os.path.join(_TOX_DIR, f"{tox}.tox"))
-        scratch = panelcomp.create(containerCOMP, "_scratch")
+        scratch = panelcomp.create(_CONTAINERCOMP(), "_scratch")
         ret = scratch.loadTox(path)
         wrapper = ret if ret is not None else scratch.op(tox)
         if wrapper is None:
@@ -395,7 +419,7 @@ def build():
             say(f"  !! added {add_name}: palette tox {tox!r} missing — "
                 f"cannot recreate")
             continue
-        scratch = panelcomp.create(containerCOMP, "_scratch")
+        scratch = panelcomp.create(_CONTAINERCOMP(), "_scratch")
         ret = scratch.loadTox(path)
         wrapper = ret if ret is not None else scratch.op(tox)
         inner = None
@@ -936,7 +960,7 @@ def build():
     # function named: onFrameEnd' live. Callback goes in the DAT's text;
     # pars are framestart/frameend/active.
     say("creating panel Execute DAT (batch tick)")
-    ex = vcon.create(executeDAT, "panel_tick")
+    ex = vcon.create(_EXECUTEDAT(), "panel_tick")
     ex.nodeX = 300
     ex.nodeY = 30
     ex.text = (

@@ -605,6 +605,36 @@ def build():
     except Exception as e:
         say(f"  ext.Vcon: not available ({e})")
 
+    # ---- JP's captured vcon-level node layout (capture v4) ---------------
+    # capture_panel.py records the network-editor positions of every op
+    # inside the vcon base ('vconnodelayout' in the dump). build_network
+    # reshuffles them every rebuild — apply the capture AFTER our own
+    # positioning so JP's arrangement wins. Soft-fail: no capture (or a
+    # pre-v4 dump) keeps the built layout, exactly as before.
+    try:
+        _cap_path = os.path.join(
+            os.path.abspath(os.path.join(REPO_TOE_DIR, "..")),
+            "toe", "panel_layout_captured.py")
+        if os.path.isfile(_cap_path):
+            _ns = {}
+            exec(compile(open(_cap_path, encoding='utf-8').read(),
+                         _cap_path, 'exec'), _ns)
+            _layout = (_ns.get("CAPTURED_PANEL") or {}).get("vconnodelayout")
+            _applied = 0
+            if _layout:
+                for _name, (_nx, _ny) in _layout:
+                    _op_ = vcon.op(_name)
+                    if _op_ is not None:
+                        try:
+                            _op_.nodeX = _nx
+                            _op_.nodeY = _ny
+                            _applied += 1
+                        except Exception:
+                            pass
+                say(f"captured vcon node layout applied to {_applied} ops")
+    except Exception as _exc:
+        say(f"  (captured vcon layout: {_exc})")
+
     # ---- save -----------------------------------------------------------
     toe_dir = os.path.abspath(
         os.path.join(REPO_TOE_DIR, "..", "src", "vcon", "data")

@@ -394,6 +394,24 @@ def _dat_texts(comp):
 # ---- the panel CONTAINER itself (JP: capture its settings too) --------
 _emit("panel", _capture("panel", p, _stock_container()))
 
+# ---- VCON-LEVEL NODE LAYOUT (JP 2026-09-14) ---------------------------
+# The ops INSIDE the vcon base (moviein/fit/movieout/info/tcpip/DATs/
+# the panel COMP itself) — their network-editor arrangement is JP's
+# too, and build_network.py reshuffles it every rebuild. Recorded as
+# 'vconnodelayout' {name: (nodeX, nodeY)}; build_network applies it
+# AFTER its own positioning (capture wins).
+_vcon_parent = p.parent()
+_vcon_layout = {}
+if _vcon_parent is not None:
+    for ch in _vcon_parent.children:
+        try:
+            _vcon_layout[ch.name] = (ch.nodeX, ch.nodeY)
+        except Exception:
+            continue
+if _vcon_layout:
+    print(f"[capture] vcon-level node layout: "
+          f"{len(_vcon_layout)} ops recorded")
+
 # ---- MEMBERSHIP accumulators (v4) --------------------------------------
 # added:   hand-added widgets (in the panel, unknown to the builder map)
 # removed: builder widgets deleted by hand (absent from the panel)
@@ -503,6 +521,8 @@ if added:
     lines.append(f'    "added": {sorted(added)!r},')
 if removed:
     lines.append(f'    "removed": {sorted(removed)!r},')
+if _vcon_layout:
+    lines.append(f'    "vconnodelayout": {sorted(_vcon_layout.items())!r},')
 lines.append('}')
 text = '\n'.join(lines)
 print()
