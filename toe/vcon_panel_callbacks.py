@@ -704,6 +704,29 @@ def _inspector_values():
     return out
 
 
+def _full_path_for(basename):
+    """The FULL input path for a queue row's basename — resolved via
+    queue_table col 3 (the durable full-path column), then any _queue
+    item that has a real path (not a bare basename)."""
+    t = op.vcon.op("queue_table")
+    if t is not None:
+        try:
+            for r in range(1, t.numRows):
+                if str(t[r, 0] or "").strip() == basename:
+                    full = (str(t[r, 3] or "").strip()
+                            if t.numCols > 3 else "")
+                    if full:
+                        return full
+        except Exception:
+            pass
+    for it in _queue:
+        if os.path.basename(it["input"]) == basename:
+            cand = it["input"]
+            if os.path.sep in cand:
+                return cand
+    return None
+
+
 def OnQueueRowSelected(info=None):
     """Lister onSelectRow hook (JP 2026-09-14): clicking a queue row
     shows that FILE's info in the OUTPUT label — name, resolution,
@@ -739,12 +762,11 @@ def OnQueueRowSelected(info=None):
     p = panel()
     d = p.op("inspector") if p is not None else None
     if d is not None:
+        full = _full_path_for(os.path.basename(item["input"])) or item["input"]
+        note(f"  inspector loading: {full!r}")
         try:
-            d.par.file = item["input"]
-            try:
-                d.par.reloadpulse.pulse()
-            except Exception:
-                pass
+            d.par.file = full
+            d.par.reloadpulse.pulse()
         except Exception as exc:
             note(f"inspect load failed: {exc}")
 
