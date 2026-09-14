@@ -386,7 +386,7 @@ def build():
 
     say("wiring live output-name preview")
     preview = "op.vcon.op('panel_callbacks').module.PreviewOutput()"
-    for name in ("source", "destination", "quality_s"):
+    for name in ("source", "destination"):
         if name in widgets:
             if setp(widgets[name], "Onvaluechangescript0", preview):
                 say(f"  {name}: preview wired")
@@ -396,16 +396,30 @@ def build():
         setp(widgets["quality_s"], "Onvaluechangescript0",
              "op.vcon.op('panel_callbacks').module.OnQualityChanged()")
         say("  quality_s: live MvO sync wired")
-    # CODEC drives subtype/format menu repopulation (+ preview refresh)
+    # CODEC: repopulates subtype/format menus, previews, AND applies the
+    # codec to MvO LIVE (JP: dropdown changes must show in MvO now).
+    # The combined hook chain fires: UpdateSubtypes re-filters menus,
+    # OnSelectionChanged pushes the choice into MvO via Setparams().
+    selchange = ("op.vcon.op('panel_callbacks').module."
+                 "OnSelectionChanged()")
     if "codec_dd" in widgets:
         setp(widgets["codec_dd"], "Onvaluechangescript0",
-             "op.vcon.op('panel_callbacks').module.UpdateSubtypes()")
-        say("  codec_dd: subtype/format filter wired")
-    # subtype change re-filters format (ProRes menus differ per subtype)
+             "op.vcon.op('panel_callbacks').module.UpdateSubtypes(); "
+             + selchange)
+        say("  codec_dd: menus + live MvO sync wired")
+    # SUBTYPE: re-filters the FORMAT menu per subtype (ProRes 422 vs
+    # 4444 sets differ — JP: format options must follow the subtype)
+    # and applies the subtype live.
     if "subtype_dd" in widgets:
         setp(widgets["subtype_dd"], "Onvaluechangescript0",
-             "op.vcon.op('panel_callbacks').module.UpdateSubtypes()")
-        say("  subtype_dd: format filter wired")
+             "op.vcon.op('panel_callbacks').module.UpdateSubtypes(); "
+             + selchange)
+        say("  subtype_dd: format filter + live MvO sync wired")
+    # FORMAT: previously wired to NOTHING — the live-apply gap JP found
+    # (MvO's parameters didn't move on format change).
+    if "format_dd" in widgets:
+        setp(widgets["format_dd"], "Onvaluechangescript0", selchange)
+        say("  format_dd: live MvO sync wired")
     # SCALED toggle: rewire fit path LIVE + toggle SCALE dropdown visibility
     if "scaled_t" in widgets:
         setp(widgets["scaled_t"], "Onvaluechangescript0",

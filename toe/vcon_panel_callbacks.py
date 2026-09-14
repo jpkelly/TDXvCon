@@ -322,6 +322,31 @@ def OnQualityChanged():
         note(f"quality sync failed: {exc}")
 
 
+def OnSelectionChanged():
+    """CODEC/SUBTYPE/FORMAT dropdown changed -> apply to MvO LIVE.
+
+    JP: changing a dropdown must show in MvO's parameters immediately —
+    the panel IS the parameter editor. Fires from all three dropdowns'
+    Onvaluechangescript0; routes through the extension's Setparams(),
+    which reuses the menu read-back verification (invalid tokens fail
+    loudly, never silently fall back to entry 0). Idle-guarded on the
+    controller side: an encode in flight keeps its settings.
+    """
+    try:
+        codec = _val("codec_dd") or "notchlc"
+        meta = CODECS.get(codec, {})
+        subtype = _validate_choice(codec, "subtype", _val("subtype_dd"))
+        fmt = _validate_choice(codec, "format", _val("format_dd"))
+        ext().Setparams(
+            codec=codec,
+            subtype=subtype if subtype else None,
+            pixel_format=fmt if fmt else None,
+            container=CONTAINERS.get(codec),
+        )
+    except Exception as exc:
+        note(f"selection sync failed: {exc}")
+
+
 def _update_res_fields():
     """Live-fit wiring + SCALE visibility, driven by the SCALED toggle.
 

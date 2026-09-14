@@ -357,6 +357,38 @@ class VconExt:
             debug(f"vCon: Setquality failed: {exc}")
             return False
 
+    def Setparams(self, codec=None, subtype=None, pixel_format=None,
+                  container=None):
+        """Promoted panel hook: apply the CODEC/SUBTYPE/FORMAT dropdown
+        choices to MvO LIVE (JP: the panel IS the parameter editor —
+        changing a dropdown should show in MvO immediately, like
+        Setquality/Setfitpath).
+
+        Reuses _apply_codec_params so every assignment passes the same
+        menu read-back verification — an invalid token fails loudly,
+        never silently falls back to entry 0. Idle-guarded: an encode in
+        flight keeps its settings (codec changes mid-encode would corrupt
+        the file; per-job application re-asserts at every START).
+        """
+        if self.state != "idle":
+            debug("vCon: Setparams skipped — encoder busy")
+            return False
+        params = {}
+        if codec:
+            params["videocodec"] = codec
+        if subtype:
+            params["videocodectype"] = subtype
+        if pixel_format:
+            params["moviepixelformat"] = pixel_format
+        if container:
+            params["moviecontainer"] = container
+        try:
+            self._apply_codec_params(params)
+            return True
+        except Exception as exc:
+            debug(f"vCon: Setparams failed: {exc}")
+            return False
+
     # ------------------------------------------------------------------
     # Connection handshake
     # ------------------------------------------------------------------
