@@ -683,9 +683,9 @@ def build():
     # for codecs with no ladder.
     if "quality_s" in widgets:
         setp(widgets["quality_s"], "Value0", 0.862)      # optimal
-        # Numeric field OFF — the field shows the quality NAME, not
-        # the raw float (OnQualityChanged writes Widgetlabel live).
-        setp(widgets["quality_s"], "Numericfielddisplay", "off")
+        # Numeric field ON — the field area is visible, but we overwrite
+        # its textCOMP with the quality name (OnQualityChanged + tick).
+        setp(widgets["quality_s"], "Numericfielddisplay", "on")
         setp(widgets["quality_s"], "Sliderlabelnames",
              "'Good' 'Very Good' 'Excellent' "
              "'Optimal' 'Best'")
