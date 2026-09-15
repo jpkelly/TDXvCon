@@ -677,7 +677,12 @@ class VconExt:
         #   playmode menu = ['locked','specify','sequential','timecodeop']
         #   indexunit menu = ['index','frames','seconds','fraction']
         moviein.par.playmode = "specify"   # "Specify Index"
-        moviein.par.indexunit = "frames"
+        # 'index' = the movie's OWN frame number. 'frames' counts TIMELINE
+        # frames and rescales by the project rate, so a 24fps movie in a
+        # 60fps project advanced 0.4 frames per step — every source frame
+        # written ~2.5x and the whole encode time-stretched (measured
+        # 2.500 by toe/probe_timing.py).
+        moviein.par.indexunit = "index"
         moviein.par.index = 0
         # Throttle pre-read buffer to 2 frames: default 30 frames at 15.3K
         # resolution allocates ~8 GB of VRAM and can cause Metal memory stalls.
