@@ -731,6 +731,7 @@ def build():
                  ["WAV 16-bit", "WAV 24-bit", "AIFF 16-bit",
                   "AIFF 24-bit", "AAC 256k", "MP3 320k", "Copy source"],
                  "wav16")
+        setp(widgets["audio_sep_dd"], "display", 0)  # hidden until toggle ON
         say("  audio_sep_dd: format menu set")
     # QUALITY is a DROPDOWN of the five named NotchLC levels (JP). The
     # ladder is discrete, and sliderHorz's numeric field cannot be
@@ -1237,6 +1238,13 @@ try:
     print("[panel] container filter applied")
 except Exception as exc:
     print(f"[panel] (container filter: {exc})")
+# Apply the audio_sep toggle's visibility state — the capture may have
+# restored display=True on the dropdown; re-apply based on the toggle.
+try:
+    op.vcon.op('panel_callbacks').module.OnAudioSepChanged()
+    print("[panel] audio_sep visibility applied")
+except Exception as exc:
+    print(f"[panel] (audio_sep visibility: {exc})")
 
 # ---- restore persistent runtime settings (survives TD quit/relaunch) -
 # Runs AFTER the bake + the seeds so the user's last selections win

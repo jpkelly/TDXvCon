@@ -520,7 +520,14 @@ _AUDIO_SEP_EXT = {
 
 
 def OnAudioSepChanged():
-    """AUDIO SEP toggle changed → persisted + grey out the format dropdown."""
+    """AUDIO SEP toggle changed → show/hide the format dropdown + persist."""
+    on = bool(_val("audio_sep_t"))
+    w = widget("audio_sep_dd")
+    if w is not None:
+        try:
+            w.par.display.val = on
+        except Exception:
+            pass
     PersistSettings()
 
 
