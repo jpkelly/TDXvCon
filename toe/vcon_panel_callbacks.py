@@ -1844,7 +1844,7 @@ def ShowSetupDialog():
         f"  ffmpeg           : {ff_ver or 'not installed'}",
     ]
     if latest is None:
-        lines += ["  (update check unavailable — offline?)"]
+        pass   # check failed (offline, SSL, PyPI down) — stay silent
     elif _version_tuple(latest) > _version_tuple(toe_ver):
         lines += [
             "",
