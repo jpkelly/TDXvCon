@@ -265,8 +265,12 @@ def build():
     # playmode menu = ['locked', 'specify', 'sequential', 'timecodeop']).
     menu_set(moviein.par.playmode, ["specify", "specifyindex", "index"],
              "moviein.playmode")
-    menu_set(moviein.par.indexunit, ["index", "idx", "frames"],
-             "moviein.indexunit")
+    # indexunit MUST be 'index' (the movie's own frame number), NOT
+    # 'frames' (timeline frames, rescaled by project rate → 2.5x
+    # time-stretch on a 24fps movie in a 60fps project). menu_set
+    # falls through to 'frames' at build time because the Movie File
+    # In's menu isn't populated until a file is loaded. Hardcode it.
+    moviein.par.indexunit = "index"
     moviein.par.index = 0
     safe_set(moviein.par, "prereadframes", 2)    # cap VRAM pre-read buffer to 2 frames
     safe_set(moviein.par, "alwaysloadinitial", 1)  # never encode black frame 0
