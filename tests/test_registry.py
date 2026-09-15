@@ -222,6 +222,37 @@ def test_controller_version_matches_package_version():
     )
 
 
+def test_packaged_toe_is_newer_than_its_source():
+    """The .toe BAKES IN the DAT text at the moment build_network.py runs,
+    so a toe saved before the last edit to toe/*.py ships stale logic —
+    the package code looks current while the encoder inside the toe is
+    not. (This shipped once: 0.1.2 carried a toe predating three fixes.)
+    Rebuild in TouchDesigner, then package:
+        exec(open('toe/build_network.py', encoding='utf-8').read())
+        exec(open('toe/build_panel.py', encoding='utf-8').read())
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    toe = root / "src" / "vcon" / "data" / "transcoder.toe"
+    if not toe.exists():
+        return  # nothing packaged yet; nothing to go stale
+    toe_mtime = toe.stat().st_mtime
+    # Only the modules the toe bakes in; probes and build scripts do not
+    # end up inside it.
+    baked = ["vcon_controller.py", "vcon_panel_callbacks.py"]
+    stale = [
+        name for name in baked
+        if (root / "toe" / name).exists()
+        and (root / "toe" / name).stat().st_mtime > toe_mtime
+    ]
+    assert not stale, (
+        f"transcoder.toe is OLDER than {', '.join(stale)} — it would ship "
+        f"stale logic. Re-run build_network.py + build_panel.py in "
+        f"TouchDesigner before packaging."
+    )
+
+
 def test_controller_declares_a_version_constant():
     from pathlib import Path
 

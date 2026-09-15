@@ -316,6 +316,14 @@ def PreviewOutput():
     Full path: destination folder + derived file name.
     """
     try:
+        # An empty queue has no output to preview, whatever was last
+        # clicked: a stale _selected_path from a finished/removed row
+        # kept showing a filename after the queue drained.
+        global _selected_path
+        if not _queue:
+            _selected_path = None
+            _set_output_text("(queue is empty — add files)")
+            return
         # the SELECTED row if one is clicked, else the next job (first
         # queued) — showing _queue[0] always meant 2nd+ drops recomputed
         # identical text and looked frozen

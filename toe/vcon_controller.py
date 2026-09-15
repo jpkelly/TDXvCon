@@ -47,7 +47,7 @@ import time
 #: Controller build identifier. Written into the toe's custom "Version"
 #: parameter at build time so a stale toe is identifiable in the UI.
 #: Keep in step with vcon.__version__ (tests assert this).
-CONTROLLER_VERSION = "0.1.2"
+CONTROLLER_VERSION = "0.1.3"
 
 PROTOCOL_VERSION = 1
 #: Default TCP port. Overridable per-instance via the COMP's Tcpport custom
@@ -1320,8 +1320,13 @@ class VconExt:
         ext = {"wav16": ".wav", "wav24": ".wav", "aiff16": ".aiff",
                "aiff24": ".aiff", "aac": ".m4a", "mp3": ".mp3",
                "copy": ".mka"}.get(sep, ".wav")
+        # Sidecar name = video name with the audio extension. The
+        # extension already says it is audio; a ".audio." infix would
+        # only repeat that. A future naming-string control overrides
+        # this via params["audio_sep_name"].
         stem = os.path.splitext(video_output)[0]
-        out = stem + ".audio" + ext
+        out = (self.job.get("params") or {}).get("audio_sep_name") or (
+            stem + ext)
         args = {"wav16": ["-c:a", "pcm_s16le"],
                 "wav24": ["-c:a", "pcm_s24le"],
                 "aiff16": ["-c:a", "pcm_s16be"],
