@@ -418,16 +418,41 @@ def _grey_out(inner, grey):
         note(f"grey-out failed on {inner.name}: no enable par")
 
 
-def OnQualityChanged():
-    """QUALITY slider dragged -> set MvO's quality slider LIVE.
+# NotchLC quality ladder (Derivative's guide).
+# Maps slider 0-1 to named levels shown in the field.
+_QUALITY_LEVELS = [
+    (0.0,   "Good"),
+    (0.285, "Very Good"),
+    (0.575, "Excellent"),
+    (0.862, "Optimal"),
+    (1.0,   "Best"),
+]
 
-    Wired to the slider's Onvaluechangescript0 (fires on every drag
-    tick). Works for ANY codec, ALWAYS enabled (JP: never greyed —
-    MvO's quality par is general).
-    """
+
+def _quality_name(v):
+    """Nearest named quality level for a 0-1 slider value."""
+    try:
+        v = float(v)
+    except Exception:
+        return "Good"
+    best_name, best_dist = "Good", 1e9
+    for qv, qn in _QUALITY_LEVELS:
+        d = abs(v - qv)
+        if d < best_dist:
+            best_name, best_dist = qn, d
+    return best_name
+
+
+def OnQualityChanged():
+    """QUALITY slider dragged -> set MvO's quality slider LIVE and
+    update the field to show the quality name (Good / Very Good /
+    Excellent / Optimal / Best) instead of a raw float."""
     try:
         v = _val("quality_s")
         ext().Setquality(v)
+        w = widget("quality_s")
+        if w is not None:
+            w.par.Widgetlabel.val = f"QUALITY  {_quality_name(v)}"
     except Exception as exc:
         note(f"quality sync failed: {exc}")
 

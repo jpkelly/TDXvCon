@@ -683,8 +683,9 @@ def build():
     # for codecs with no ladder.
     if "quality_s" in widgets:
         setp(widgets["quality_s"], "Value0", 0.862)      # optimal
-        # String-menu tokens, not booleans (see prog_s note above)
-        setp(widgets["quality_s"], "Numericfielddisplay", "on")
+        # Numeric field OFF — the field shows the quality NAME, not
+        # the raw float (OnQualityChanged writes Widgetlabel live).
+        setp(widgets["quality_s"], "Numericfielddisplay", "off")
         setp(widgets["quality_s"], "Sliderlabelnames",
              "'Good' 'Very Good' 'Excellent' "
              "'Optimal' 'Best'")
@@ -1188,3 +1189,13 @@ try:
     print("[panel] persistent settings restored")
 except Exception as exc:
     print(f"[panel] (settings restore: {exc})")
+# Seed the quality slider's Widgetlabel with the quality name — the
+# bake restores the captured "QUALITY" label; this appends the name
+# for the current value so the field isn't blank until first drag.
+try:
+    qs = op.vcon.op('panel').op('quality_s')
+    if qs is not None:
+        op.vcon.op('panel_callbacks').module.OnQualityChanged()
+        print("[panel] quality label seeded")
+except Exception as exc:
+    print(f"[panel] (quality seed: {exc})")
