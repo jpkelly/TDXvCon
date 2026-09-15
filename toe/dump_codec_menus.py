@@ -20,7 +20,16 @@ Output is a Python dict you can paste straight into vcon/registry.py.
 
 
 def _mfo():
-    mfo = _find_movieout()
+    # Search the whole tree: the component sits at /project1/vcon, not
+    # directly under root, and may be renamed or nested anywhere.
+    mfo = None
+    for cand in root.findChildren(name="movieout"):
+        if cand.parent().op("vcon_controller") is not None:
+            mfo = cand
+            break
+    if mfo is None:
+        hits = root.findChildren(name="movieout")
+        mfo = hits[0] if hits else None
     if mfo is None:
         raise RuntimeError(
             "could not find a vCon component with a movieout child — open "

@@ -1,7 +1,7 @@
 {
   "destination": "/Users/jp/Desktop/converted",
-  "codec_dd": "notchlc",
-  "subtype_dd": "",
+  "codec_dd": "hap",
+  "subtype_dd": "hapq",
   "format_dd": "rgb",
   "quality_dd": "0.862",
   "fps_f": "60",
