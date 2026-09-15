@@ -35,3 +35,4 @@ src/vcon/data/CrashAutoSave*.toe
 
 # Original scratch toes this project started from (kept locally, not published)
 VideoConverter*.toepanel_settings.json
+toe/panel_settings.json

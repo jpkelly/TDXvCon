@@ -141,8 +141,26 @@ _selected_path = None  # input path of the last clicked row (remove_b target)
 #: capture owns LAYOUT; this owns RUNTIME SELECTIONS.
 import json as _json
 
-_SETTINGS_PATH = ('/Users/jp/Documents/GitHub/vCon/toe/'
-                 'panel_settings.json')
+
+def _vcon_data_dir():
+    """Per-user vCon data folder (settings, downloaded packages).
+
+    Must NOT be inside the repo or the .toe: those paths do not exist
+    on anyone else's machine, and the .toe is read-only package data
+    once installed.
+    """
+    if sys.platform == "darwin":
+        base = os.path.expanduser("~/Library/Application Support/vCon")
+    elif os.name == "nt":
+        base = os.path.join(
+            os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
+            "vCon")
+    else:
+        base = os.path.expanduser("~/.local/share/vCon")
+    return base
+
+
+_SETTINGS_PATH = os.path.join(_vcon_data_dir(), "panel_settings.json")
 
 #: which widget Value0 pars are persisted (string values stored as-is)
 _PERSIST_WIDGETS = (
@@ -167,6 +185,7 @@ def _save_settings():
         except Exception:
             pass
     try:
+        os.makedirs(os.path.dirname(_SETTINGS_PATH), exist_ok=True)
         with open(_SETTINGS_PATH, 'w', encoding='utf-8') as f:
             _json.dump(out, f, indent=2)
     except Exception as exc:
@@ -1645,16 +1664,8 @@ def onFrame():
 # it survives TouchDesigner updates.
 
 def _vcon_libs_dir():
-    """Where vCon keeps downloaded Python packages, per platform."""
-    if sys.platform == "darwin":
-        base = os.path.expanduser("~/Library/Application Support/vCon")
-    elif os.name == "nt":
-        base = os.path.join(
-            os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
-            "vCon")
-    else:
-        base = os.path.expanduser("~/.local/share/vCon")
-    return os.path.join(base, "pylibs")
+    """Where vCon keeps downloaded Python packages."""
+    return os.path.join(_vcon_data_dir(), "pylibs")
 
 
 def _ffmpeg_binary():
