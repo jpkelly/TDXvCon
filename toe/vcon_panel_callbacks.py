@@ -1784,6 +1784,12 @@ def ShowSetupDialog():
         "vCon also finds ffmpeg from:",
         "  - pipx install tdxvcon   (the vCon command-line tool)",
         "  - any system ffmpeg on PATH",
+        "",
+        "--- Command-line usage (savvy users) ---",
+        "Install the CLI:  pipx install tdxvcon",
+        "Transcode:  vcon -i input.mov -c notchlc output.mov",
+        "List codecs:  vcon -codecs",
+        "Diagnostics:  vcon -doctor",
     ]
     msg = "\n".join(lines)
     manual_cmd = (f'"{py}" -m pip install --upgrade '
