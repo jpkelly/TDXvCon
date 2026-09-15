@@ -97,9 +97,6 @@ class VconExt:
         #: skips writing frames but keeps cooking so "resume" continues
         #: from the exact next frame. "*" targets whatever is running.
         self._paused = False
-        #: Frame seeked and awaiting its addframe pulse (the audio CHOP
-        #: needs a cook between seek and pulse or its slice is empty).
-        self._seek_pending = None
         #: Live background audio-mux state (see _mux_start), or None.
         self._mux = None
         #: ORPHAN-CLEANUP ARMING. True only when this TouchDesigner process
@@ -143,11 +140,6 @@ class VconExt:
     @property
     def movieout(self):
         return self.child("movieout")
-
-    @property
-    def audio(self):
-        """Audio Movie CHOP — absent in older toes (no audio)."""
-        return self.ownerComp.op("audio")
 
     @property
     def info(self):
@@ -801,7 +793,6 @@ class VconExt:
               f"record=1 pause=1")
 
         self.frame = 0
-        self._seek_pending = None
         self.t0 = time.time()
         self.state = "encoding"
         self._set_status(f"encoding 0/{self.total}")
