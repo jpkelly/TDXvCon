@@ -686,8 +686,8 @@ def build():
         # String-menu tokens, not booleans (see prog_s note above)
         setp(widgets["quality_s"], "Numericfielddisplay", "on")
         setp(widgets["quality_s"], "Sliderlabelnames",
-             "'0.0 Good' '0.285 Very Good' '0.575 Excellent' "
-             "'0.862 Optimal' '1.0 Best'")
+             "'Good' 'Very Good' 'Excellent' "
+             "'Optimal' 'Best'")
     if "fit_dd" in widgets:
         set_menu(widgets["fit_dd"],
                  ["fitbest", "fill", "fithorz", "fitvert", "fitoutside"],

@@ -104,7 +104,7 @@ CAPTURED_PANEL = {
     "quality_s": {
         "geometry": {'x': 250, 'y': 540, 'w': 230, 'h': 30},
         "nodelayout": (350, -1650),
-        "pars": {'resizecomp': '/project1/vcon/panel/quality_s', 'repocomp': '/project1/vcon/panel/quality_s', 'Value0': 0.0, 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnQualityChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'QUALITY', 'Labelwidth': 90, 'Sliderlabelnames': "'0.0 Good' '0.285 Very Good' '0.575 Excellent' '0.862 Optimal' '1.0 Best'"},
+        "pars": {'resizecomp': '/project1/vcon/panel/quality_s', 'repocomp': '/project1/vcon/panel/quality_s', 'Value0': 0.0, 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnQualityChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'QUALITY', 'Labelwidth': 90, 'Sliderlabelnames': "'Good' 'Very Good' 'Excellent' 'Optimal' 'Best'"},
     },
     "codec_dd": {
         "geometry": {'x': 20, 'y': 570, 'w': 230, 'h': 30},
