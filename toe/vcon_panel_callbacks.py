@@ -1768,7 +1768,7 @@ def ShowSetupDialog():
             "ffmpeg. ffmpeg comes from the imageio-ffmpeg package",
             "(~30MB), which is not bundled in the .toe.",
             "",
-            "Press INSTALL to fetch it automatically. It installs to",
+            "Press INSTALL NOW to fetch it automatically. It installs to",
             "vCon's own folder in your user Library — no admin rights",
             "needed, no files are written into the TouchDesigner",
             "application folder, and it survives TouchDesigner updates.",
