@@ -1760,8 +1760,9 @@ def ShowSetupDialog():
             "(~30MB), which is not bundled in the .toe.",
             "",
             "Press INSTALL to fetch it automatically. It installs to",
-            "vCon's own folder — no admin rights needed, nothing is",
-            "written inside TouchDesigner, and it survives TD updates.",
+            "vCon's own folder in your user Library — no admin rights",
+            "needed, no files are written into the TouchDesigner",
+            "application folder, and it survives TouchDesigner updates.",
         ]
     lines += [
         "",
@@ -1776,8 +1777,10 @@ def ShowSetupDialog():
         "  - any system ffmpeg on PATH",
     ]
     msg = "\n".join(lines)
-    buttons = (["Re-check", "Copy to Textport", "Close"] if ready
-               else ["Install Now", "Copy to Textport", "Close"])
+    manual_cmd = (f'"{py}" -m pip install --upgrade '
+                  f'--target "{dest}" imageio-ffmpeg')
+    buttons = (["Re-check", "Copy Command", "Close"] if ready
+               else ["Install Now", "Copy Command", "Close"])
     try:
         choice = ui.messageBox("vCon — Setup & Help", msg, buttons=buttons)
     except TypeError:
@@ -1797,7 +1800,19 @@ def ShowSetupDialog():
         else:
             InstallAudioSupport()
     elif choice == 1:
-        note(msg)
+        try:
+            ui.clipboard = manual_cmd
+            note("manual install command copied to the clipboard:")
+            note(f"  {manual_cmd}")
+            ui.messageBox(
+                "vCon — Command Copied",
+                "The manual install command is on your clipboard.\n\n"
+                "Paste it into Terminal (macOS) or cmd/PowerShell\n"
+                "(Windows) and press Enter:\n\n"
+                f"{manual_cmd}")
+        except Exception:
+            note("clipboard unavailable — manual install command:")
+            note(f"  {manual_cmd}")
 
 
 def AudioSupportStatus():
