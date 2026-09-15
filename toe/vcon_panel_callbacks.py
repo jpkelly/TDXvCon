@@ -1655,6 +1655,11 @@ def onFrame():
             op.vcon.par.Progress.val = 0.0
         except Exception:
             pass
+        # Re-run the preview HERE: the activity block above already fired
+        # its one PreviewOutput() while the finished row was still in the
+        # queue, so it rendered that row's path. This is the first moment
+        # the queue is actually empty.
+        PreviewOutput()
     _run_next()
     _refresh_queue()
 
