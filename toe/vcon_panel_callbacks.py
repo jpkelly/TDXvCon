@@ -501,6 +501,29 @@ def OnAudioChanged():
     PersistSettings()
 
 
+#: Separate-audio extraction args (ffmpeg -vn -c:a ...).
+_AUDIO_SEP_ARGS = {
+    "wav16":   ["-c:a", "pcm_s16le"],
+    "wav24":   ["-c:a", "pcm_s24le"],
+    "aiff16":  ["-c:a", "pcm_s16be"],
+    "aiff24":  ["-c:a", "pcm_s24be"],
+    "aac":     ["-c:a", "aac", "-b:a", "256k"],
+    "mp3":     ["-c:a", "libmp3lame", "-b:a", "320k"],
+    "copy":   ["-c:a", "copy"],
+}
+
+_AUDIO_SEP_EXT = {
+    "wav16": ".wav", "wav24": ".wav",
+    "aiff16": ".aiff", "aiff24": ".aiff",
+    "aac": ".m4a", "mp3": ".mp3", "copy": ".audio",
+}
+
+
+def OnAudioSepChanged():
+    """AUDIO SEP toggle changed → persisted + grey out the format dropdown."""
+    PersistSettings()
+
+
 def OnContainerChanged():
     """CONTAINER dropdown changed → repopulate codec_dd AND audio_dd with
     only compatible entries, preserving current selections if still valid.
@@ -1224,9 +1247,12 @@ def _run_next():
         quality = None          # only NotchLC has a quality slider in MvO
     container = _td_container(codec)
     audio = _audio_value()
+    audio_sep = bool(_val("audio_sep_t"))
+    audio_sep_fmt = _val("audio_sep_dd") or "wav16" if audio_sep else None
     note(f"  codec={codec} sub={subtype} fmt={fmt} fps={fps} "
          f"res={res} scale={scale} fit={fitmode} "
-         f"container={container} audio={audio}")
+         f"container={container} audio={audio}"
+         f"{' audio_sep=' + audio_sep_fmt if audio_sep_fmt else ''}")
     ok = e.Transcode(
         input_path=src,
         output_path=nxt["output"],
@@ -1240,6 +1266,7 @@ def _run_next():
         fit=fitmode,
         container=container,
         audio=audio,
+        audio_sep=audio_sep_fmt,
     )
     if ok:
         nxt["status"] = "running"

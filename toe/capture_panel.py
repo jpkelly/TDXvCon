@@ -73,7 +73,9 @@ if p is None:
 _TOX_OF = {
     "source": "fieldFileBrowser", "destination": "fieldFolderBrowser",
     "codec_dd": "dropDownMenu", "subtype_dd": "dropDownMenu",
-    "container_dd": "dropDownMenu", "audio_dd": "dropDownMenu", "format_dd": "dropDownMenu", "quality_dd": "dropDownMenu",
+    "container_dd": "dropDownMenu", "audio_dd": "dropDownMenu",
+    "audio_sep_t": "buttonToggle", "audio_sep_dd": "dropDownMenu",
+    "format_dd": "dropDownMenu", "quality_dd": "dropDownMenu",
     "fps_f": "fieldString", "scaled_t": "buttonToggle",
     "scale_dd": "dropDownMenu", "fit_dd": "dropDownMenu",
     "start_b": "buttonMomentary", "pause_b": "buttonMomentary",
@@ -108,7 +110,7 @@ _BARE_CONTAINERS = {"prog_track", "prog_fill"}
 #: here but missing from the panel → future builds skip them).
 _BUILDER_WIDGETS = {
     "destination", "codec_dd", "format_dd", "subtype_dd", "quality_dd",
-    "container_dd", "audio_dd",
+    "container_dd", "audio_dd", "audio_sep_t", "audio_sep_dd",
     "fps_f", "scaled_t", "scale_dd", "fit_dd", "resw_f", "resh_f",
     "start_b", "pause_b", "stop_b", "add_b", "output_l",
     "prog_track", "prog_fill", "queue", "status_l",

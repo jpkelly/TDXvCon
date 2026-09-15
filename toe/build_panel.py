@@ -105,7 +105,9 @@ _WIDGETS = {
     # settings, two narrow columns (half-width each — no spillover)
     "container_dd": ("dropDownMenu",       20, 555, 230, _ROW),
     "codec_dd":     ("dropDownMenu",      260, 555, 230, _ROW),
-    "audio_dd":     ("dropDownMenu",       20, 480, 230, _ROW),
+    "audio_dd":     ("dropDownMenu",       20, 480, 168, _ROW),
+    "audio_sep_t":  ("buttonToggle",      187, 480, 106, _ROW),
+    "audio_sep_dd": ("dropDownMenu",      291, 480, 176, _ROW),
     "format_dd":    ("dropDownMenu",       20, 540, 230, _ROW),
     "quality_dd":   ("dropDownMenu",      250, 540, 190, _ROW),
     "subtype_dd":   ("dropDownMenu",      440, 540, 200, _ROW),
@@ -143,6 +145,8 @@ _TITLES = {
     "destination": "DESTINATION",
     "container_dd": "CONTAINER",
     "audio_dd": "AUDIO",
+    "audio_sep_t": "AUDIO SEP",
+    "audio_sep_dd": "SEP FORMAT",
     "codec_dd": "CODEC",
     "subtype_dd": "SUBTYPE",
     "format_dd": "FORMAT",
@@ -710,6 +714,24 @@ def build():
         setp(widgets["audio_dd"], "Onvaluechangescript0",
              "op.vcon.op('panel_callbacks').module.OnAudioChanged()")
         say("  audio_dd: mux codec wiring hooked")
+    # AUDIO SEP toggle + SEP FORMAT dropdown (JP hand-added).
+    # The toggle enables separate audio extraction; the dropdown picks
+    # the output format. Both are independent of the container.
+    if "audio_sep_t" in widgets:
+        setp(widgets["audio_sep_t"], "Value0", 0)  # OFF
+        setp(widgets["audio_sep_t"], "Buttonofflabel", "NO")
+        setp(widgets["audio_sep_t"], "Buttononlabel", "YES")
+        setp(widgets["audio_sep_t"], "Onvaluechangescript0",
+             "op.vcon.op('panel_callbacks').module.OnAudioSepChanged()")
+        say("  audio_sep_t: toggle wired")
+    if "audio_sep_dd" in widgets:
+        set_menu(widgets["audio_sep_dd"],
+                 ["wav16", "wav24", "aiff16", "aiff24", "aac", "mp3",
+                  "copy"],
+                 ["WAV 16-bit", "WAV 24-bit", "AIFF 16-bit",
+                  "AIFF 24-bit", "AAC 256k", "MP3 320k", "Copy source"],
+                 "wav16")
+        say("  audio_sep_dd: format menu set")
     # QUALITY is a DROPDOWN of the five named NotchLC levels (JP). The
     # ladder is discrete, and sliderHorz's numeric field cannot be
     # hidden or relabelled (its text par is BIND-driven), so a slider
@@ -926,7 +948,7 @@ def build():
     _PERSIST_HOOK = ("; op.vcon.op('panel_callbacks').module."
                      "PersistSettings()")
     for _pname in ("codec_dd", "subtype_dd", "format_dd", "quality_dd",
-                   "container_dd", "audio_dd",
+                   "container_dd", "audio_dd", "audio_sep_t", "audio_sep_dd",
                    "fps_f", "fps_t", "scaled_t", "scale_dd", "fit_dd",
                    "resw_f", "resh_f", "destination"):
         if _pname in widgets:

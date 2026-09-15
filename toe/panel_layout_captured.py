@@ -36,34 +36,46 @@ CAPTURED_PANEL = {
     },
     "start_b": {
         "geometry": {'x': 20, 'y': 447, 'w': 100, 'h': 30},
-        "nodelayout": (0, -2080),
+        "nodelayout": (20, -2080),
         "pars": {'resizecomp': '/project1/vcon/panel/start_b', 'repocomp': '/project1/vcon/panel/start_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.Start()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'START', 'Buttononlabel': 'START', 'Buttonfont': 'Helvetica', 'Buttonofffacecolorr': 0.0, 'Buttonofffacecolorg': 0.39500001072883606, 'Buttonofffacecolorb': 0.06970594823360443, 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9},
     },
     "pause_b": {
         "geometry": {'x': 120, 'y': 447, 'w': 100, 'h': 30},
-        "nodelayout": (190, -2080),
+        "nodelayout": (210, -2080),
         "pars": {'resizecomp': '/project1/vcon/panel/pause_b', 'repocomp': '/project1/vcon/panel/pause_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.PauseResume()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'PAUSE', 'Buttononlabel': 'PAUSE', 'Buttonfont': 'Helvetica', 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9},
     },
     "stop_b": {
         "geometry": {'x': 220, 'y': 447, 'w': 100, 'h': 30},
-        "nodelayout": (380, -2080),
+        "nodelayout": (400, -2080),
         "pars": {'resizecomp': '/project1/vcon/panel/stop_b', 'repocomp': '/project1/vcon/panel/stop_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.Stop()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'STOP', 'Buttononlabel': 'STOP', 'Buttonfont': 'Helvetica', 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9},
     },
     "add_b": {
         "geometry": {'x': 320, 'y': 447, 'w': 100, 'h': 30},
-        "nodelayout": (570, -2080),
+        "nodelayout": (590, -2080),
         "pars": {'resizecomp': '/project1/vcon/panel/add_b', 'repocomp': '/project1/vcon/panel/add_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.AddFiles()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'ADD', 'Buttononlabel': 'ADD', 'Buttonfont': 'Helvetica', 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9},
     },
     "remove_b": {
         "geometry": {'x': 420, 'y': 447, 'w': 100, 'h': 30},
-        "nodelayout": (760, -2080),
+        "nodelayout": (780, -2080),
         "widgettox": 'buttonMomentary',
         "pars": {'resizecomp': '/project1/vcon/panel/remove_b', 'repocomp': '/project1/vcon/panel/remove_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.RemoveSelected()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'REMOVE', 'Buttononlabel': 'REMOVE', 'Buttonfont': 'Helvetica', 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9},
     },
     "audio_dd": {
-        "geometry": {'x': 20, 'y': 480, 'w': 230, 'h': 30},
+        "geometry": {'x': 20, 'y': 480, 'w': 168, 'h': 30},
         "nodelayout": (20, -1910),
-        "pars": {'resizecomp': '/project1/vcon/panel/audio_dd', 'repocomp': '/project1/vcon/panel/audio_dd', 'Value0': 'copy', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnAudioChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'AUDIO', 'Labelwidth': 90, 'Menunames': 'copy pcm_s16le pcm_s24le aac alac mp3 none', 'Menulabels': "'Copy (source)' 'PCM 16-bit' 'PCM 24-bit' AAC ALAC MP3 'None (video only)'"},
+        "pars": {'resizecomp': '/project1/vcon/panel/audio_dd', 'repocomp': '/project1/vcon/panel/audio_dd', 'Value0': 'none', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnAudioChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'AUDIO', 'Labelwidth': 41, 'Menunames': 'copy pcm_s16le pcm_s24le aac alac none', 'Menulabels': "'Copy (source)' 'PCM 16-bit' 'PCM 24-bit' AAC ALAC 'None (video only)'"},
+    },
+    "audio_sep_t": {
+        "geometry": {'x': 187, 'y': 480, 'w': 106, 'h': 30},
+        "nodelayout": (210, -1910),
+        "widgettox": 'buttonToggle',
+        "pars": {'resizecomp': '/project1/vcon/panel/audio_sep_t', 'repocomp': '/project1/vcon/panel/audio_sep_t', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnAudioSepChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'AUDIO SEP', 'Labelwidth': 64, 'Buttonofflabel': 'NO', 'Buttononlabel': 'YES', 'Buttonfontbold': False, 'Buttononfacecolorr': 0.3, 'Buttononfacecolorg': 0.3, 'Buttononfacecolorb': 0.3, 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9, 'Buttononfontcolorr': 0.9, 'Buttononfontcolorg': 0.9, 'Buttononfontcolorb': 0.9, 'Buttonwidth': 33},
+    },
+    "audio_sep_dd": {
+        "geometry": {'x': 291, 'y': 480, 'w': 176, 'h': 30},
+        "nodelayout": (410, -1910),
+        "widgettox": 'dropDownMenu',
+        "pars": {'resizecomp': '/project1/vcon/panel/audio_sep_dd', 'repocomp': '/project1/vcon/panel/audio_sep_dd', 'Value0': 'wav16', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SEP FORMAT', 'Labelwidth': 74, 'Menunames': 'wav16 wav24 aiff16 aiff24 aac mp3 copy', 'Menulabels': '"WAV 16-bit" "WAV 24-bit" "AIFF 16-bit" "AIFF 24-bit" "AAC 256k" "MP3 320k" "Copy source"'},
     },
     "fps_t": {
         "geometry": {'x': 20, 'y': 510, 'w': 85, 'h': 30},
@@ -79,17 +91,17 @@ CAPTURED_PANEL = {
     "scaled_t": {
         "geometry": {'x': 154, 'y': 510, 'w': 82, 'h': 30},
         "nodelayout": (400, -1730),
-        "pars": {'resizecomp': '/project1/vcon/panel/scaled_t', 'repocomp': '/project1/vcon/panel/scaled_t', 'Value0': True, 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module._update_res_fields(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SCALE', 'Labelwidth': 42, 'Buttonofflabel': 'OFF', 'Buttononlabel': 'ON', 'Buttonwidth': 33},
+        "pars": {'resizecomp': '/project1/vcon/panel/scaled_t', 'repocomp': '/project1/vcon/panel/scaled_t', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module._update_res_fields(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SCALE', 'Labelwidth': 42, 'Buttonofflabel': 'OFF', 'Buttononlabel': 'ON', 'Buttonwidth': 33},
     },
     "scale_dd": {
         "geometry": {'x': 231, 'y': 510, 'w': 108, 'h': 30},
         "nodelayout": (590, -1730),
-        "pars": {'resizecomp': '/project1/vcon/panel/scale_dd', 'repocomp': '/project1/vcon/panel/scale_dd', 'Value0': 'quarter', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module._update_res_fields(); op.vcon.op('panel_callbacks').module.OnFitChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SIZE', 'Labelwidth': 32, 'Menunames': 'eighth quarter half 2x 4x 8x custom', 'Menulabels': 'Eighth Quarter Half 2X 4X 8X Custom'},
+        "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/scale_dd', 'repocomp': '/project1/vcon/panel/scale_dd', 'Value0': 'quarter', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module._update_res_fields(); op.vcon.op('panel_callbacks').module.OnFitChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SIZE', 'Labelwidth': 32, 'Menunames': 'eighth quarter half 2x 4x 8x custom', 'Menulabels': 'Eighth Quarter Half 2X 4X 8X Custom'},
     },
     "fit_dd": {
         "geometry": {'x': 336, 'y': 510, 'w': 121, 'h': 30},
         "nodelayout": (780, -1730),
-        "pars": {'resizecomp': '/project1/vcon/panel/fit_dd', 'repocomp': '/project1/vcon/panel/fit_dd', 'Value0': 'fitoutside', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFitChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'FIT', 'Labelwidth': 26, 'Menunames': 'fitbest fill fithorz fitvert fitoutside', 'Menulabels': "'Fit Best' Stretch 'Fit Width' 'Fit Height' Cover/Crop"},
+        "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/fit_dd', 'repocomp': '/project1/vcon/panel/fit_dd', 'Value0': 'fitoutside', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFitChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'FIT', 'Labelwidth': 26, 'Menunames': 'fitbest fill fithorz fitvert fitoutside', 'Menulabels': "'Fit Best' Stretch 'Fit Width' 'Fit Height' Cover/Crop"},
     },
     "resw_f": {
         "geometry": {'x': 449, 'y': 510, 'w': 100, 'h': 30},
@@ -104,7 +116,7 @@ CAPTURED_PANEL = {
     "format_dd": {
         "geometry": {'x': 20, 'y': 540, 'w': 230, 'h': 30},
         "nodelayout": (20, -1510),
-        "pars": {'resizecomp': '/project1/vcon/panel/format_dd', 'repocomp': '/project1/vcon/panel/format_dd', 'Value0': 'yuv420', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'PIXEL FORMAT', 'Labelwidth': 90, 'Menunames': 'yuv420 yuv444p8bit', 'Menulabels': "'YUV 4:2:0 8-bit' 'YUV 4:4:4 8-bit'"},
+        "pars": {'resizecomp': '/project1/vcon/panel/format_dd', 'repocomp': '/project1/vcon/panel/format_dd', 'Value0': 'rgb', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'PIXEL FORMAT', 'Labelwidth': 90, 'Menunames': 'rgb rgba', 'Menulabels': "'RGB' 'RGB + Alpha'"},
     },
     "quality_dd": {
         "geometry": {'x': 250, 'y': 540, 'w': 190, 'h': 30},
@@ -114,12 +126,12 @@ CAPTURED_PANEL = {
     "container_dd": {
         "geometry": {'x': 20, 'y': 570, 'w': 230, 'h': 30},
         "nodelayout": (20, -1320),
-        "pars": {'resizecomp': '/project1/vcon/panel/container_dd', 'repocomp': '/project1/vcon/panel/container_dd', 'Value0': 'mkv', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnContainerChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'CONTAINER', 'Labelwidth': 90, 'Menunames': 'mov mp4 mkv webm', 'Menulabels': "'QuickTime (.mov)' 'MP4 (.mp4)' 'Matroska (.mkv)' 'WebM (.webm)'"},
+        "pars": {'resizecomp': '/project1/vcon/panel/container_dd', 'repocomp': '/project1/vcon/panel/container_dd', 'Value0': 'mov', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnContainerChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'CONTAINER', 'Labelwidth': 90, 'Menunames': 'mov mp4 mkv webm', 'Menulabels': "'QuickTime (.mov)' 'MP4 (.mp4)' 'Matroska (.mkv)' 'WebM (.webm)'"},
     },
     "codec_dd": {
         "geometry": {'x': 250, 'y': 570, 'w': 190, 'h': 30},
         "nodelayout": (220, -1320),
-        "pars": {'resizecomp': '/project1/vcon/panel/codec_dd', 'repocomp': '/project1/vcon/panel/codec_dd', 'Value0': 'h264', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.UpdateSubtypes(); op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'CODEC', 'Labelwidth': 60, 'Menunames': 'h264 h265 av1 prores', 'Menulabels': "H.264 H.265 AV1 'Apple ProRes'"},
+        "pars": {'resizecomp': '/project1/vcon/panel/codec_dd', 'repocomp': '/project1/vcon/panel/codec_dd', 'Value0': 'notchlc', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.UpdateSubtypes(); op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'CODEC', 'Labelwidth': 60, 'Menunames': 'notchlc hap cineform prores h264 h265', 'Menulabels': "NotchLC Hap 'GoPro CineForm' 'Apple ProRes' H.264 H.265"},
     },
     "subtype_dd": {
         "geometry": {'x': 440, 'y': 570, 'w': 200, 'h': 30},
@@ -131,8 +143,8 @@ CAPTURED_PANEL = {
         "nodelayout": (20, -1140),
         "pars": {'resizecomp': '/project1/vcon/panel/destination', 'repocomp': '/project1/vcon/panel/destination', 'Value0': '/Users/jp/Desktop/converted', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.PreviewOutput(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'DESTINATION', 'Labelwidth': 90, 'Stringfieldfontsize': 10, 'Stringfieldfontcolorr': 0.0, 'Stringfieldfontcolorg': 0.0, 'Stringfieldfontcolorb': 0.0},
     },
-    "added": ['fps_t', 'remove_b'],
+    "added": ['audio_sep_dd', 'audio_sep_t', 'fps_t', 'remove_b'],
     "removed": ['status_l'],
     "vconnodelayout": [('callbacks', (260, -580), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('fit', (-240, -530), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('info', (-440, -590), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('moviein', (-440, -460), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('movieout', (-40, -460), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel', (-40, -120), (0.5, 0.05000000074505806, 0.20000000298023224)), ('panel_build_run', (-20, 410), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel_callbacks', (170, -110), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel_capture_run', (-20, 540), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel_dnd', (160, 230), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel_tick', (-20, 230), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('queue_display', (-20, 90), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('queue_table', (150, 90), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('tcpip', (110, -580), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('tcpip_callbacks', (-40, -580), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('tick', (-190, -310), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('vcon_controller', (-20, -310), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005))],
-    "panelnodelayout": {'fps_t': (20, -1730), 'remove_b': (760, -2080), 'inspector': (-480, -2290), 'listerConfig': (-260, -2290)},
+    "panelnodelayout": {'fps_t': (20, -1730), 'remove_b': (780, -2080), 'inspector': (-480, -2290), 'audio_sep_t': (210, -1910), 'audio_sep_dd': (410, -1910), 'listerConfig': (-260, -2290)},
 }

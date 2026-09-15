@@ -78,7 +78,7 @@ class VconExt:
         self.frame = 0
         self.total = 0
         self.t0 = 0.0
-        self.state = "idle"      # idle | loading | encoding | finishing | muxing
+        self.state = "idle"      # idle | loading | encoding | finishing | muxing | extracting
         self.last_activity = time.time()
         #: frame counters for the state machine driven by onFrame()
         self._loading_ticks = 0
@@ -223,6 +223,8 @@ class VconExt:
                 self._closed()
         elif self.state == "muxing":
             self._mux_tick()
+        elif self.state == "extracting":
+            self._extract_tick()
 
     # ------------------------------------------------------------------
     # Lifecycle (documented extension gotchas)
@@ -254,8 +256,29 @@ class VconExt:
         except Exception:
             pass
         self._kill_mux()
+        self._kill_extract()
         self.job = None
         self.state = "idle"
+
+    def _kill_extract(self):
+        """Stop a background audio extraction (cancel/reset/destroy)."""
+        s = getattr(self, "_sep", None)
+        if not s:
+            return
+        try:
+            s["proc"].kill()
+        except Exception:
+            pass
+        try:
+            s["log"].close()
+        except Exception:
+            pass
+        try:
+            if os.path.exists(s["log_path"]):
+                os.remove(s["log_path"])
+        except Exception:
+            pass
+        self._sep = None
 
     def _kill_mux(self):
         """Stop a background mux and bin its temp files (cancel/reset/destroy)."""
@@ -297,7 +320,7 @@ class VconExt:
                   subtype=None, quality=None, fps="auto",
                   pixel_format=None, container=None,
                   resolution="auto", fit=None, scale=None,
-                  audio="auto"):
+                  audio="auto", audio_sep=None):
         """Encode one file. The embedder/panel-facing entry point.
 
         Promoted (capitalised) so it reads as a method of the component::
@@ -333,6 +356,8 @@ class VconExt:
             params["moviecontainer"] = container
         if audio and audio != "auto":
             params["audio"] = audio
+        if audio_sep:
+            params["audio_sep"] = audio_sep
         if scale is not None:
             params["scale"] = scale
             # The fit mode travels with the token too — _apply_fitres
@@ -560,6 +585,7 @@ class VconExt:
         job_id = (self.job or {}).get("id", "?")
         debug(f"vcon: aborting job {job_id} ({reason})")
         self._kill_mux()
+        self._kill_extract()
         self.job = None
         self.frame = 0
         self.total = 0
@@ -901,7 +927,46 @@ class VconExt:
                 return   # _mux_tick() completes the job when ffmpeg exits
         else:
             debug("vCon: mux SKIPPED (source or output missing)")
-        self._job_complete(out)
+        self._maybe_extract_audio(out)
+
+    def _extract_tick(self):
+        """Poll the background audio extraction; complete when done."""
+        s = getattr(self, "_sep", None)
+        if not s:
+            self.state = "idle"
+            return
+        rc = s["proc"].poll()
+        if rc is None:
+            if time.time() - s["t0"] > 600:
+                debug("vCon: audio extraction timed out (10m)")
+                try:
+                    s["proc"].kill()
+                except Exception:
+                    pass
+                self._extract_done(s, ok=False)
+            return
+        self._extract_done(s, ok=(rc == 0), rc=rc)
+
+    def _extract_done(self, s, ok, rc=0):
+        """Finish audio extraction and complete the job."""
+        try:
+            s["log"].close()
+        except Exception:
+            pass
+        if ok:
+            size = os.path.getsize(s["out"]) if os.path.exists(s["out"]) else 0
+            debug(f"vCon: audio extracted — {s['out']}, size={size}")
+            note = s["note"] + f", sep audio: {os.path.basename(s['out'])}"
+        else:
+            debug(f"vCon: audio extraction failed (rc={rc})")
+            note = s["note"] + ", sep audio failed"
+        try:
+            if os.path.exists(s["log_path"]):
+                os.remove(s["log_path"])
+        except Exception:
+            pass
+        self._sep = None
+        self._job_complete(s["video_out"], note)
 
     def _job_complete(self, out, note=""):
         """Finalize: tell the client, clear the job, return to idle.
@@ -1153,11 +1218,57 @@ class VconExt:
                 pass
         out = m["out"]
         self._mux = None
-        self._job_complete(out, note)
+        self._maybe_extract_audio(out, note)
+
+    def _maybe_extract_audio(self, video_output, note=""):
+        """Run separate audio extraction if audio_sep was requested."""
+        sep = (self.job.get("params") or {}).get("audio_sep")
+        if not sep:
+            self._job_complete(video_output, note)
+            return
+        ffmpeg = self._find_ffmpeg()
+        if ffmpeg is None:
+            debug("vCon: no ffmpeg for audio extraction — skipping")
+            self._job_complete(video_output, note + ", no sep audio")
+            return
+        src = self.job.get("input", "")
+        if not src or not os.path.isfile(src):
+            self._job_complete(video_output, note + ", no sep audio")
+            return
+        ext = {"wav16": ".wav", "wav24": ".wav", "aiff16": ".aiff",
+               "aiff24": ".aiff", "aac": ".m4a", "mp3": ".mp3",
+               "copy": ".audio"}.get(sep, ".wav")
+        stem = os.path.splitext(video_output)[0]
+        out = stem + ".audio" + ext
+        args = {"wav16": ["-c:a", "pcm_s16le"],
+                "wav24": ["-c:a", "pcm_s24le"],
+                "aiff16": ["-c:a", "pcm_s16be"],
+                "aiff24": ["-c:a", "pcm_s24be"],
+                "aac": ["-c:a", "aac", "-b:a", "256k"],
+                "mp3": ["-c:a", "libmp3lame", "-b:a", "320k"],
+                "copy": ["-c:a", "copy"]}.get(sep, ["-c:a", "pcm_s16le"])
+        cmd = [ffmpeg, "-y", "-nostdin", "-nostats",
+               "-i", src, "-vn"] + args + [out]
+        try:
+            import subprocess
+            log_path = stem + ".audio_sep.log"
+            log = open(log_path, "wb")
+            proc = subprocess.Popen(cmd, stdout=log, stderr=log,
+                                    stdin=subprocess.DEVNULL)
+        except Exception as exc:
+            debug(f"vCon: could not launch audio extraction: {exc}")
+            self._job_complete(video_output, note + ", sep audio failed")
+            return
+        self._sep = {"proc": proc, "log": log, "out": out,
+                     "log_path": log_path, "video_out": video_output,
+                     "note": note, "t0": time.time()}
+        self.state = "extracting"
+        self._set_status(f"extracting audio — {os.path.basename(out)}")
+        debug(f"vCon: extracting audio — {sep} → {out}")
 
     def _cancel(self, job_id):
         if self.job and self.job["id"] == job_id and self.state in (
-                "loading", "encoding", "muxing"):
+                "loading", "encoding", "muxing", "extracting"):
             self._abort_active_job("cancelled by client")
             self._send({"type": "error", "id": job_id, "message": "cancelled",
                         "code": "cancelled"})
