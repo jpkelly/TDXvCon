@@ -223,9 +223,11 @@ def test_doctor_reports(tmp_path):
 
 
 def test_version():
+    from vcon import __version__
+
     code, text = run_vcon(["-version"])
     assert code == 0
-    assert "vCon 0.1.1" in text
+    assert f"vCon {__version__}" in text
 
 
 def test_stats_line_renders_with_tty(tmp_path):
@@ -312,6 +314,8 @@ def test_print_doctor_rendering():
 
 
 def test_print_version():
+    from vcon import __version__
+
     stream = io.StringIO()
     print_version(stream)
-    assert "0.1.1" in stream.getvalue()
+    assert __version__ in stream.getvalue()

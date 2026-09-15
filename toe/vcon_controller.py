@@ -1118,18 +1118,41 @@ class VconExt:
         except Exception as exc:
             debug(f"vCon: could not launch ffmpeg: {exc}")
             return False
-        self._mux = {
-            "proc": proc, "log": log, "tmp": tmp, "out": video_output,
-            "prog": prog_path, "log_path": log_path, "acodec": acodec,
-            "t0": time.time(), "frac": 0.0,
-            # expected duration in microseconds, for the progress fraction
-            "total_us": self._expected_duration_us(),
-        }
-        self.state = "muxing"
-        size_mb = os.path.getsize(video_output) / 1e6
-        debug(f"vCon: muxing audio — {acodec}, {size_mb:.0f}MB, "
-              f"source={os.path.basename(source)}")
-        self._set_status(f"muxing audio 0% — {os.path.basename(video_output)}")
+        # Registration must not be able to fail separately from the
+        # launch: an exception between Popen and _mux being set orphans
+        # a running ffmpeg (it finishes, but nothing swaps or cleans up).
+        try:
+            self._mux = {
+                "proc": proc, "log": log, "tmp": tmp, "out": video_output,
+                "prog": prog_path, "log_path": log_path, "acodec": audio,
+                "t0": time.time(), "frac": 0.0,
+                # expected duration in microseconds, for the progress fraction
+                "total_us": self._expected_duration_us(),
+            }
+            self.state = "muxing"
+            size_mb = os.path.getsize(video_output) / 1e6
+            debug(f"vCon: muxing audio — {audio}, {size_mb:.0f}MB, "
+                  f"source={os.path.basename(source)}")
+            self._set_status(
+                f"muxing audio 0% — {os.path.basename(video_output)}")
+        except Exception as exc:
+            debug(f"vCon: mux bookkeeping failed ({exc}) — aborting ffmpeg")
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            try:
+                log.close()
+            except Exception:
+                pass
+            for path in (tmp, prog_path, log_path):
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                except Exception:
+                    pass
+            self._mux = None
+            return False
         return True
 
     def _expected_duration_us(self):
@@ -1257,12 +1280,25 @@ class VconExt:
             debug(f"vCon: could not launch audio extraction: {exc}")
             self._job_complete(video_output, note + ", sep audio failed")
             return
-        self._sep = {"proc": proc, "log": log, "out": out,
-                     "log_path": log_path, "video_out": video_output,
-                     "note": note, "t0": time.time()}
-        self.state = "extracting"
-        self._set_status(f"extracting audio — {os.path.basename(out)}")
-        debug(f"vCon: extracting audio — {sep} → {out}")
+        try:
+            self._sep = {"proc": proc, "log": log, "out": out,
+                         "log_path": log_path, "video_out": video_output,
+                         "note": note, "t0": time.time()}
+            self.state = "extracting"
+            self._set_status(f"extracting audio — {os.path.basename(out)}")
+            debug(f"vCon: extracting audio — {sep} → {out}")
+        except Exception as exc:
+            debug(f"vCon: extraction bookkeeping failed ({exc}) — aborting")
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            try:
+                log.close()
+            except Exception:
+                pass
+            self._sep = None
+            self._job_complete(video_output, note + ", sep audio failed")
 
     def _cancel(self, job_id):
         if self.job and self.job["id"] == job_id and self.state in (
