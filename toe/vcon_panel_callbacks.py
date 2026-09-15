@@ -1928,7 +1928,7 @@ def _update_health_button():
     else:
         # sine pulse at ~2Hz (60fps / 15 ≈ 4Hz, halved by abs)
         import math
-        pulse = 0.5 + 0.5 * math.sin(frame * 6.28 / 30)
+        pulse = 0.5 + 0.5 * math.sin(frame * 6.28 / 60)
         r = 0.4 + 0.4 * pulse
         w.par.Buttonofffacecolorr.val = r
         w.par.Buttonofffacecolorg.val = 0.0

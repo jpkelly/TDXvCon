@@ -145,7 +145,7 @@ CAPTURED_PANEL = {
         "geometry": {'x': 610, 'y': 600, 'w': 30, 'h': 30},
         "nodelayout": (220, -1140),
         "widgettox": 'buttonMomentary',
-        "pars": {'resizecomp': '/project1/vcon/panel/help_b', 'repocomp': '/project1/vcon/panel/help_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.ShowSetupDialog()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': '\U000f0625', 'Buttononlabel': '\U000f0625', 'Buttonfontsize': 20, 'Buttonofffacecolorr': 0.0, 'Buttonofffacecolorg': 0.3666667, 'Buttonofffacecolorb': 0.5, 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9, 'Buttonwidth': 25},
+        "pars": {'resizecomp': '/project1/vcon/panel/help_b', 'repocomp': '/project1/vcon/panel/help_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.ShowSetupDialog()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': '\U000f0625', 'Buttononlabel': '\U000f0625', 'Buttonfontsize': 20, 'Buttonofffacecolorr': 0.7755327389436893, 'Buttonofffacecolorg': 0.0, 'Buttonofffacecolorb': 0.0, 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9, 'Buttonwidth': 23},
         "expressions": {'Buttonofflabel': 'chr(0xF0625)', 'Buttononlabel': 'chr(0xF0625)'},
     },
     "added": ['fps_t', 'help_b', 'remove_b'],
