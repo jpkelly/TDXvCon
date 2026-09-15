@@ -1481,6 +1481,26 @@ def _refresh_queue():
             q.par.Refresh.pulse()
         except Exception:
             pass
+    _update_start_button()
+
+
+def _update_start_button():
+    """START button: green when the queue has items, gray when empty."""
+    w = widget("start_b")
+    if w is None:
+        return
+    has_items = len(_queue) > 0
+    try:
+        if has_items:
+            w.par.Buttonofffacecolorr.val = 0.0
+            w.par.Buttonofffacecolorg.val = 0.395
+            w.par.Buttonofffacecolorb.val = 0.07
+        else:
+            w.par.Buttonofffacecolorr.val = 0.25
+            w.par.Buttonofffacecolorg.val = 0.25
+            w.par.Buttonofffacecolorb.val = 0.25
+    except Exception:
+        pass
 
 
 def _mark_running(output_path):

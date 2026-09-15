@@ -1253,6 +1253,11 @@ try:
     op.vcon.op('panel_callbacks').module.AudioSupportStatus()
 except Exception as exc:
     print(f"[panel] (audio status: {exc})")
+# START button: gray until the queue has items
+try:
+    op.vcon.op('panel_callbacks').module._update_start_button()
+except Exception as exc:
+    print(f"[panel] (start button: {exc})")
 
 # ---- restore persistent runtime settings (survives TD quit/relaunch) -
 # Runs AFTER the bake + the seeds so the user's last selections win
