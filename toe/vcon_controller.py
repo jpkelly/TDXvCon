@@ -872,18 +872,68 @@ class VconExt:
     # Audio mux (post-encode, via ffmpeg subprocess)
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _find_ffmpeg():
-        """Locate an ffmpeg binary: imageio-ffmpeg's bundled one first,
-        then the system PATH. Returns a path string or None."""
+    #: Cached ffmpeg path (None = not yet searched, "" = searched, absent)
+    _ffmpeg_cache = None
+
+    @classmethod
+    def _find_ffmpeg(cls):
+        """Locate an ffmpeg binary across install layouts.
+
+        TD's embedded Python can't see pip packages installed elsewhere,
+        so the search widens from "importable" to "findable on disk":
+          1. import imageio_ffmpeg  (TD's Python has it)
+          2. the pipx venv that ships vCon  (the normal user install)
+          3. any venv/site-packages carrying imageio_ffmpeg binaries
+          4. system ffmpeg on PATH
+        Result is cached — this runs once per session, not per job.
+        """
+        if cls._ffmpeg_cache is not None:
+            return cls._ffmpeg_cache or None
+
+        found = ""
         try:
             import imageio_ffmpeg
-            return imageio_ffmpeg.get_ffmpeg_exe()
+            found = imageio_ffmpeg.get_ffmpeg_exe()
         except Exception:
             pass
-        # System ffmpeg
-        import shutil
-        return shutil.which("ffmpeg")
+
+        if not found:
+            import glob
+            home = os.path.expanduser("~")
+            patterns = [
+                # pipx install of this package (the normal user path)
+                f"{home}/.local/pipx/venvs/*/lib/python*/site-packages/"
+                "imageio_ffmpeg/binaries/ffmpeg-*",
+                # user site-packages (pip install --user)
+                f"{home}/Library/Python/*/lib/python/site-packages/"
+                "imageio_ffmpeg/binaries/ffmpeg-*",
+                f"{home}/.local/lib/python*/site-packages/"
+                "imageio_ffmpeg/binaries/ffmpeg-*",
+            ]
+            # development venv, relative to this DAT's linked file
+            try:
+                here = self_file = op.vcon.op('vcon_controller').par.file.eval()
+                repo = os.path.dirname(os.path.dirname(here))
+                patterns.insert(0, f"{repo}/.venv/lib/python*/site-packages/"
+                                   "imageio_ffmpeg/binaries/ffmpeg-*")
+            except Exception:
+                pass
+            for pat in patterns:
+                for cand in sorted(glob.glob(pat), reverse=True):
+                    if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                        found = cand
+                        break
+                if found:
+                    break
+
+        if not found:
+            import shutil
+            found = shutil.which("ffmpeg") or ""
+
+        cls._ffmpeg_cache = found
+        if found:
+            debug(f"vCon: ffmpeg found at {found}")
+        return found or None
 
     def _mux_audio(self, source, video_output):
         """Mux the source file's audio stream into the TD-encoded video.
