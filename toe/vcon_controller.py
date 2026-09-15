@@ -790,18 +790,14 @@ class VconExt:
             self._finish()
             return
 
-        # SEEK on one tick, PULSE on the next: the Audio Movie CHOP
-        # produces its time slice when it cooks after the seek, so
-        # pulsing addframe in the same tick writes an EMPTY audio slice
-        # (audio track created but silent). _seek_pending holds the
-        # frame that was seeked and is waiting for its pulse.
+        # Seek input to this frame (playmode=specify drives via 'index'
+        # param), then pulse addframe to write exactly one frame.
+        # Video-only: audio is muxed in by ffmpeg after the encode
+        # finishes (TD's stop-frame mode can't feed audio samples —
+        # the Audio Movie CHOP produces empty slices with pause=1).
         try:
-            if self._seek_pending is None:
-                moviein.par.index = self.frame
-                self._seek_pending = self.frame
-                return
+            moviein.par.index = self.frame
             movieout.par.addframe.pulse()
-            self._seek_pending = None
         except Exception as exc:
             self._fail(f"frame {self.frame} write failed: {exc}", "encode-error")
             return
@@ -855,6 +851,12 @@ class VconExt:
         out = self.job["output"]
         debug(f"vCon: closed — output={out!r}, exists={os.path.exists(out)}, "
               f"size={os.path.getsize(out) if os.path.exists(out) else 0}")
+        # Mux audio from the source file into the TD-encoded video.
+        # TD's stop-frame mode writes video-only; ffmpeg copies the
+        # audio stream from the original source (no re-encode of video).
+        src = self.job.get("input", "")
+        if src and os.path.isfile(src) and os.path.isfile(out):
+            self._mux_audio(src, out)
         self._set_status(f"idle — last: {os.path.basename(out)} "
                          f"({frames} frames, {seconds}s)")
         # Reset the slider-bound Progress par so the next job starts at 0.
@@ -865,6 +867,82 @@ class VconExt:
         self.job = None
         self.state = "idle"
         self.last_activity = time.time()
+
+    # ------------------------------------------------------------------
+    # Audio mux (post-encode, via ffmpeg subprocess)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _find_ffmpeg():
+        """Locate an ffmpeg binary: imageio-ffmpeg's bundled one first,
+        then the system PATH. Returns a path string or None."""
+        try:
+            import imageio_ffmpeg
+            return imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:
+            pass
+        # System ffmpeg
+        import shutil
+        return shutil.which("ffmpeg")
+
+    def _mux_audio(self, source, video_output):
+        """Mux the source file's audio stream into the TD-encoded video.
+
+        Runs ffmpeg as a subprocess: video stream is COPIED (no
+        re-encode — lossless, fast), audio is taken from the original
+        source file. The temp video file is replaced in-place.
+        """
+        ffmpeg = self._find_ffmpeg()
+        if ffmpeg is None:
+            debug("vCon: no ffmpeg found — output is video-only "
+                  "(install imageio-ffmpeg or ffmpeg for audio)")
+            self._set_status("idle — video only (no ffmpeg for audio mux)")
+            return
+        # Audio codec by container: PCM for MOV, AAC for MP4
+        ext = os.path.splitext(video_output)[1].lower()
+        if ext == ".mp4":
+            acodec, aargs = "aac", ["-b:a", "256k"]
+        else:
+            acodec, aargs = "pcm_s16le", []
+        # Write to a temp file, then replace the original
+        tmp = video_output + ".muxing.tmp"
+        cmd = [ffmpeg, "-y",
+               "-i", video_output,
+               "-i", source,
+               "-map", "0:v:0", "-map", "1:a:0",
+               "-c:v", "copy",
+               "-c:a", acodec] + aargs + [tmp]
+        try:
+            import subprocess
+            debug(f"vCon: muxing audio — {acodec}, source={source!r}")
+            result = subprocess.run(cmd, capture_output=True, timeout=120)
+            if result.returncode != 0:
+                err = result.stderr.decode("utf-8", "replace")[-500:]
+                debug(f"vCon: ffmpeg mux failed (rc={result.returncode}): {err}")
+                self._set_status("idle — video only (audio mux failed)")
+                try:
+                    if os.path.exists(tmp):
+                        os.remove(tmp)
+                except Exception:
+                    pass
+                return
+            # Replace the video-only file with the muxed result
+            os.replace(tmp, video_output)
+            size = os.path.getsize(video_output)
+            debug(f"vCon: audio muxed — {acodec}, size={size}")
+            self._set_status(f"idle — last: {os.path.basename(video_output)} "
+                             f"(audio muxed, {acodec})")
+        except subprocess.TimeoutExpired:
+            debug("vCon: ffmpeg mux timed out (120s) — output is video-only")
+            self._set_status("idle — video only (audio mux timed out)")
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except Exception:
+                pass
+        except Exception as exc:
+            debug(f"vCon: audio mux error: {exc}")
+            self._set_status("idle — video only (audio mux error)")
 
     def _cancel(self, job_id):
         if self.job and self.job["id"] == job_id and self.state in ("loading",

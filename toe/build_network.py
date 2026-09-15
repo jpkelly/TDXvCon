@@ -314,26 +314,10 @@ def build():
     movieout.par.pause = 1              # addframe requires pause ON
     safe_set(movieout.par, "stallforopen", 1)   # ensure frame 0 is recorded
     # quality menu is set per job by the controller
-
-    # ---- audio (Audio Movie CHOP -> MvO audio par) ---------------------
-    # Movie File Out TOP writes VIDEO only by default; the audio track
-    # must be fed explicitly. Audio Movie CHOP extracts the audio from
-    # the same Movie File In TOP, and MvO's 'audio' par takes the CHOP.
-    say("creating audio (Audio Movie CHOP -> movieout)")
-    # Sweep stray audiomovie* CHOPs — a leftover one can steal MvO's
-    # audiochop link and silence the output.
-    for ch in list(vcon.children):
-        if ch.name.startswith("audiomovie"):
-            say(f"  removing stray {ch.name}")
-            ch.destroy()
-    audio = vcon.create(find_type("audiomovieCHOP"), "audio")
-    audio.nodeX = -300
-    audio.nodeY = -200
-    set_op_par(audio, "moviefileintop", moviein)
-    # Play MUST be ON or the CHOP outputs no audio (stock default: off)
-    safe_set(audio.par, "play", 1)
-    # MvO's audio par is 'audiochop' (type=CHOP)
-    set_op_par(movieout, "audiochop", audio)
+    # NOTE: audio is NOT wired here — TD's stop-frame mode (record=1,
+    # pause=1, addframe.pulse) can't feed audio samples (the Audio
+    # Movie CHOP produces empty time slices with pause on). Audio is
+    # muxed in post-encode via ffmpeg (see _mux_audio in the controller).
 
     # ---- tcp server ----------------------------------------------------
     say("creating tcpip DAT (server :7999)")
