@@ -855,8 +855,12 @@ class VconExt:
         # TD's stop-frame mode writes video-only; ffmpeg copies the
         # audio stream from the original source (no re-encode of video).
         src = self.job.get("input", "")
+        debug(f"vCon: mux check — src={src!r} src_ok={os.path.isfile(src) if src else False} "
+              f"out_ok={os.path.isfile(out)}")
         if src and os.path.isfile(src) and os.path.isfile(out):
             self._mux_audio(src, out)
+        else:
+            debug("vCon: mux SKIPPED (source or output missing)")
         self._set_status(f"idle — last: {os.path.basename(out)} "
                          f"({frames} frames, {seconds}s)")
         # Reset the slider-bound Progress par so the next job starts at 0.
@@ -875,18 +879,18 @@ class VconExt:
     #: Cached ffmpeg path (None = not yet searched, "" = searched, absent)
     _ffmpeg_cache = None
 
-    @classmethod
-    def _find_ffmpeg(cls):
+    def _find_ffmpeg(self):
         """Locate an ffmpeg binary across install layouts.
 
         TD's embedded Python can't see pip packages installed elsewhere,
         so the search widens from "importable" to "findable on disk":
           1. import imageio_ffmpeg  (TD's Python has it)
-          2. the pipx venv that ships vCon  (the normal user install)
-          3. any venv/site-packages carrying imageio_ffmpeg binaries
+          2. the repo/dev venv, from this controller DAT's linked file
+          3. pipx venvs and user site-packages (normal user installs)
           4. system ffmpeg on PATH
         Result is cached — this runs once per session, not per job.
         """
+        cls = type(self)
         if cls._ffmpeg_cache is not None:
             return cls._ffmpeg_cache or None
 
@@ -900,24 +904,28 @@ class VconExt:
         if not found:
             import glob
             home = os.path.expanduser("~")
-            patterns = [
-                # pipx install of this package (the normal user path)
+            patterns = []
+            # repo/dev venv, derived from this DAT's linked file path
+            for holder in ("vcon_controller", "panel_callbacks"):
+                try:
+                    dat = self.ownerComp.op(holder)
+                    src = dat.par.file.eval() if dat is not None else ""
+                    if src:
+                        repo = os.path.dirname(os.path.dirname(src))
+                        patterns.append(
+                            f"{repo}/.venv/lib/python*/site-packages/"
+                            "imageio_ffmpeg/binaries/ffmpeg-*")
+                        break
+                except Exception:
+                    continue
+            patterns += [
                 f"{home}/.local/pipx/venvs/*/lib/python*/site-packages/"
                 "imageio_ffmpeg/binaries/ffmpeg-*",
-                # user site-packages (pip install --user)
                 f"{home}/Library/Python/*/lib/python/site-packages/"
                 "imageio_ffmpeg/binaries/ffmpeg-*",
                 f"{home}/.local/lib/python*/site-packages/"
                 "imageio_ffmpeg/binaries/ffmpeg-*",
             ]
-            # development venv, relative to this DAT's linked file
-            try:
-                here = self_file = op.vcon.op('vcon_controller').par.file.eval()
-                repo = os.path.dirname(os.path.dirname(here))
-                patterns.insert(0, f"{repo}/.venv/lib/python*/site-packages/"
-                                   "imageio_ffmpeg/binaries/ffmpeg-*")
-            except Exception:
-                pass
             for pat in patterns:
                 for cand in sorted(glob.glob(pat), reverse=True):
                     if os.path.isfile(cand) and os.access(cand, os.X_OK):
@@ -931,8 +939,7 @@ class VconExt:
             found = shutil.which("ffmpeg") or ""
 
         cls._ffmpeg_cache = found
-        if found:
-            debug(f"vCon: ffmpeg found at {found}")
+        debug(f"vCon: ffmpeg {'found at ' + found if found else 'NOT FOUND'}")
         return found or None
 
     def _mux_audio(self, source, video_output):
