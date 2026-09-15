@@ -142,7 +142,8 @@ _SETTINGS_PATH = ('/Users/jp/Documents/GitHub/vCon/toe/'
 #: which widget Value0 pars are persisted (string values stored as-is)
 _PERSIST_WIDGETS = (
     "destination", "codec_dd", "subtype_dd", "format_dd",
-    "quality_dd", "fps_f", "fps_t", "scaled_t", "scale_dd",
+    "quality_dd", "container_dd",
+    "fps_f", "fps_t", "scaled_t", "scale_dd",
     "fit_dd", "resw_f", "resh_f",
 )
 
@@ -228,18 +229,23 @@ def _val(name):
 
 
 def _td_container(codec):
-    """CONTAINERS holds file EXTENSIONS ('.mov'); MvO's moviecontainer
-    menu wants bare tokens ('mov')."""
+    """The container token for MvO's moviecontainer par — from the
+    dropdown, falling back to the codec's default in CONTAINERS."""
+    c = _val("container_dd")
+    if c:
+        return c
     ext = CONTAINERS.get(codec)
     return ext.lstrip(".") if ext else None
 
 
 def _output_name(input_path, codec, subtype=None):
-    """clip.mov + prores 422hq -> clip.prores422hq.mov (same folder)."""
+    """clip.mov + prores 422hq -> clip.prores422hq.mov (same folder).
+    Extension follows the container dropdown, not the codec default."""
     folder = os.path.dirname(input_path)
     stem = os.path.splitext(os.path.basename(input_path))[0]
     tag = subtype if subtype and subtype != "none" else codec
-    ext = CONTAINERS.get(codec, ".mov")
+    container = _val("container_dd") or "mov"
+    ext = _container_ext(container)
     return os.path.join(folder, f"{stem}.{tag}{ext}")
 
 
@@ -418,6 +424,65 @@ def _grey_out(inner, grey):
         note(f"grey-out failed on {inner.name}: no enable par")
 
 
+# Container → codec compatibility matrix. The codec dropdown is
+# repopulated from this on every container change — incompatible
+# codecs simply don't appear in the menu.
+_CONTAINER_CODECS = {
+    "mov":  ["notchlc", "hap", "cineform", "prores", "h264", "h265",
+             "rle", "mjpa"],
+    "mp4":  ["h264", "h265", "av1", "mpeg4", "vvc"],
+    "mkv":  ["h264", "h265", "av1", "vp8", "vp9"],
+    "webm": ["vp8", "vp9"],
+}
+
+
+def _container_codecs(container):
+    """Compatible codecs for a container, or all if unknown."""
+    return _CONTAINER_CODECS.get(container, list(CODECS.keys()))
+
+
+def _container_ext(container):
+    """File extension for a container token."""
+    return {"mov": ".mov", "mp4": ".mp4", "mkv": ".mkv",
+            "webm": ".webm"}.get(container, ".mov")
+
+
+def _set_menu(w, names, labels, default):
+    """Populate a dropDownMenu at runtime (mirrors build_panel.set_menu)."""
+    try:
+        w.par.Menunames.val = " ".join(names)
+        w.par.Menulabels.val = " ".join(
+            f"'{l}'" if " " in l else l for l in labels)
+        if default in names:
+            w.par.Value0.val = default
+    except Exception as exc:
+        note(f"menu set failed on {w.name}: {exc}")
+
+
+def OnContainerChanged():
+    """CONTAINER dropdown changed → repopulate codec_dd with only the
+    compatible codecs, preserving the current selection if still valid
+    (falling back to the first compatible entry). Then fire the normal
+    selection chain so subtype/format/MvO all follow."""
+    try:
+        container = _val("container_dd") or "mov"
+        w = widget("codec_dd")
+        if w is None:
+            return
+        cur = _val("codec_dd")
+        valid = _container_codecs(container)
+        names = [c for c in valid if c in CODECS]
+        labels = [CODECS[c]["label"] for c in names]
+        _set_menu(w, names, labels,
+                  cur if cur in names else names[0])
+        # Re-fire the codec/subtype/format chain for the new selection
+        UpdateSubtypes()
+        OnSelectionChanged()
+        PersistSettings()
+    except Exception as exc:
+        note(f"container change failed: {exc}")
+
+
 # NotchLC quality ladder (Derivative's guide) — the dropdown's menu
 # tokens are these values as strings, so the label IS the name.
 _QUALITY_LEVELS = [
@@ -464,7 +529,7 @@ def OnSelectionChanged():
             codec=codec,
             subtype=subtype if subtype else None,
             pixel_format=fmt if fmt else None,
-            container=_td_container(codec),
+            container=_val("container_dd") or None,
         )
     except Exception as exc:
         note(f"selection sync failed: {exc}")

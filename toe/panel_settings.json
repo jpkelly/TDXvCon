@@ -2,13 +2,13 @@
   "destination": "/Users/jp/Desktop/converted",
   "codec_dd": "hap",
   "subtype_dd": "hapq",
-  "format_dd": "rgb",
+  "format_dd": "rgba",
   "quality_dd": "0.862",
   "fps_f": "60",
-  "fps_t": false,
-  "scaled_t": false,
+  "fps_t": true,
+  "scaled_t": true,
   "scale_dd": "custom",
-  "fit_dd": "fitbest",
+  "fit_dd": "fitoutside",
   "resw_f": "1920",
   "resh_f": "1080"
 }

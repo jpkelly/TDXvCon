@@ -103,11 +103,11 @@ _WIDGETS = {
     # drops / +ADD into the queue are the way files get added)
     "destination":  ("fieldFolderBrowser", 20, 600, 620, _ROW),
     # settings, two narrow columns (half-width each — no spillover)
-    # FORMAT and SUBTYPE swapped per JP — SUBTYPE now reads top-left.
-    "codec_dd":     ("dropDownMenu",       20, 555, 230, _ROW),
-    "format_dd":    ("dropDownMenu",      260, 555, 230, _ROW),
-    "subtype_dd":   ("dropDownMenu",       20, 510, 230, _ROW),
+    "container_dd": ("dropDownMenu",       20, 555, 230, _ROW),
+    "codec_dd":     ("dropDownMenu",      260, 555, 230, _ROW),
+    "format_dd":    ("dropDownMenu",       20, 510, 230, _ROW),
     "quality_dd":   ("dropDownMenu",      260, 510, 230, _ROW),
+    "subtype_dd":   ("dropDownMenu",      440, 510, 200, _ROW),
     # row: FPS | SCALING | SCALE(hidden) | W | H(hidden) | FIT —
     # tightened per JP: the row overflowed and FIT fell off-panel.
     "fps_f":        ("fieldString",        20, 465, 110, _ROW),
@@ -140,6 +140,7 @@ _WIDGETS = {
 #: Field titles via Widgetlabel (LIVE-DUMPED: the widget's title par).
 _TITLES = {
     "destination": "DESTINATION",
+    "container_dd": "CONTAINER",
     "codec_dd": "CODEC",
     "subtype_dd": "SUBTYPE",
     "format_dd": "FORMAT",
@@ -581,7 +582,8 @@ def build():
             setp(widgets[name], "Widgetlabel", title)
     # Labelwidth per row type; buttons get NO label area (their titles were
     # doubled-up with face text — label disabled per JP's note).
-    _LABEL_W = {"destination": 110, "codec_dd": 90,
+    _LABEL_W = {"destination": 110, "container_dd": 90,
+                "codec_dd": 90,
                 "subtype_dd": 90, "format_dd": 90, "quality_dd": 90,
                 "fps_f": 45, "scaled_t": 60, "scale_dd": 60,
                 "fit_dd": 45, "output_l": 110, "status_l": 110,
@@ -658,7 +660,13 @@ def build():
             pass
 
     # ---- menus -------------------------------------------------------------
-    codec_names = list(mod.CODECS.keys())
+    # CONTAINER filters the codec list (JP: only compatible codecs appear).
+    if "container_dd" in widgets:
+        _cnames = ["notchlc", "hap", "cineform", "prores", "h264", "h265",
+                   "rle", "mjpa"]
+    else:
+        _cnames = list(mod.CODECS.keys())
+    codec_names = [c for c in _cnames if c in mod.CODECS]
     codec_labels = [mod.CODECS[k]["label"] for k in codec_names]
     if "codec_dd" in widgets:
         set_menu(widgets["codec_dd"], codec_names, codec_labels, "notchlc")
@@ -676,6 +684,17 @@ def build():
         notch_fmts = list(notch["pixel_formats"])
         set_menu(widgets["format_dd"], notch_fmts,
                  [mod.FORMAT_LABELS.get(f, f) for f in notch_fmts], "rgb")
+    # CONTAINER dropdown (JP hand-added). The codec dropdown's contents
+    # are FILTERED by this selection — see OnContainerChanged().
+    if "container_dd" in widgets:
+        set_menu(widgets["container_dd"],
+                 ["mov", "mp4", "mkv", "webm"],
+                 ["QuickTime (.mov)", "MP4 (.mp4)", "Matroska (.mkv)",
+                  "WebM (.webm)"],
+                 "mov")
+        setp(widgets["container_dd"], "Onvaluechangescript0",
+             "op.vcon.op('panel_callbacks').module.OnContainerChanged()")
+        say("  container_dd: codec-filter wiring hooked")
     # QUALITY is a DROPDOWN of the five named NotchLC levels (JP). The
     # ladder is discrete, and sliderHorz's numeric field cannot be
     # hidden or relabelled (its text par is BIND-driven), so a slider
@@ -892,6 +911,7 @@ def build():
     _PERSIST_HOOK = ("; op.vcon.op('panel_callbacks').module."
                      "PersistSettings()")
     for _pname in ("codec_dd", "subtype_dd", "format_dd", "quality_dd",
+                   "container_dd",
                    "fps_f", "fps_t", "scaled_t", "scale_dd", "fit_dd",
                    "resw_f", "resh_f", "destination"):
         if _pname in widgets:
@@ -1173,6 +1193,13 @@ try:
     print("[panel] fps mode applied (grey-out + display)")
 except Exception as exc:
     print(f"[panel] (fps mode apply: {exc})")
+# Fire OnContainerChanged once so the codec menu is filtered to the
+# current container from the start.
+try:
+    op.vcon.op('panel_callbacks').module.OnContainerChanged()
+    print("[panel] container filter applied")
+except Exception as exc:
+    print(f"[panel] (container filter: {exc})")
 
 # ---- restore persistent runtime settings (survives TD quit/relaunch) -
 # Runs AFTER the bake + the seeds so the user's last selections win
