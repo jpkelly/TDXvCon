@@ -625,12 +625,13 @@ def build():
         setp(widgets["remove_b"], "Offtoonscript0",
              "op.vcon.op('panel_callbacks').module.RemoveSelected()")
         say("  remove_b: selected-row removal wired")
-    # setup_b (optional, hand-added): opens the Setup & Help dialog.
+    # help_b (optional, hand-added): opens the Setup & Help dialog.
     # Wired defensively so the panel works with or without the button.
-    if "setup_b" in widgets:
-        setp(widgets["setup_b"], "Offtoonscript0",
-             "op.vcon.op('panel_callbacks').module.ShowSetupDialog()")
-        say("  setup_b: Setup & Help dialog wired")
+    for _hname in ("help_b", "setup_b"):
+        if _hname in widgets:
+            setp(widgets[_hname], "Offtoonscript0",
+                 "op.vcon.op('panel_callbacks').module.ShowSetupDialog()")
+            say(f"  {_hname}: Setup & Help dialog wired")
 
     # Buttons: PROBE 14 VERDICT — the strip renders WIDGETLABEL, and an
     # earlier fix WROTE 'START' there, doubling with the face ('START |
@@ -638,7 +639,8 @@ def build():
     # the button's only text, centered via Buttonalignx/y.
     for name, text in [("start_b", "START"), ("pause_b", "PAUSE"),
                        ("stop_b", "STOP"), ("add_b", "+ ADD"),
-                       ("remove_b", "REMOVE")]:
+                       ("remove_b", "REMOVE"), ("help_b", "SETUP"),
+                       ("setup_b", "SETUP")]:
         if name in widgets:
             w_ = widgets[name]
             setp(w_, "Widgetlabel", "")          # strip: BLANK (was the dup)
