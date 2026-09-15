@@ -1,13 +1,14 @@
 {
   "destination": "/Users/jp/Desktop/converted",
-  "codec_dd": "hap",
-  "subtype_dd": "hapq",
-  "format_dd": "rgba",
+  "codec_dd": "prores",
+  "subtype_dd": "prores4444xq",
+  "format_dd": "yuva444412bit",
   "quality_dd": "0.862",
+  "container_dd": "mov",
   "fps_f": "60",
   "fps_t": true,
   "scaled_t": true,
-  "scale_dd": "custom",
+  "scale_dd": "quarter",
   "fit_dd": "fitoutside",
   "resw_f": "1920",
   "resh_f": "1080"

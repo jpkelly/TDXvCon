@@ -429,10 +429,11 @@ def _grey_out(inner, grey):
 # codecs simply don't appear in the menu.
 _CONTAINER_CODECS = {
     "mov":  ["notchlc", "hap", "cineform", "prores", "h264", "h265",
-             "rle", "mjpa"],
+             "rle", "mjpa", "mpeg4"],
     "mp4":  ["h264", "h265", "av1", "mpeg4", "vvc"],
-    "mkv":  ["h264", "h265", "av1", "vp8", "vp9"],
-    "webm": ["vp8", "vp9"],
+    "mkv":  ["h264", "h265", "av1", "vp8", "vp9", "prores", "vvc",
+             "mjpa", "mpeg4"],
+    "webm": ["vp8", "vp9", "av1"],
 }
 
 

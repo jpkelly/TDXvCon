@@ -663,7 +663,7 @@ def build():
     # CONTAINER filters the codec list (JP: only compatible codecs appear).
     if "container_dd" in widgets:
         _cnames = ["notchlc", "hap", "cineform", "prores", "h264", "h265",
-                   "rle", "mjpa"]
+                   "rle", "mjpa", "mpeg4"]
     else:
         _cnames = list(mod.CODECS.keys())
     codec_names = [c for c in _cnames if c in mod.CODECS]
