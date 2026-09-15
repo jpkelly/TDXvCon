@@ -60,10 +60,10 @@ CAPTURED_PANEL = {
         "widgettox": 'buttonMomentary',
         "pars": {'resizecomp': '/project1/vcon/panel/remove_b', 'repocomp': '/project1/vcon/panel/remove_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.RemoveSelected()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'REMOVE', 'Buttononlabel': 'REMOVE', 'Buttonfont': 'Helvetica', 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9},
     },
-    "format_dd": {
+    "audio_dd": {
         "geometry": {'x': 20, 'y': 480, 'w': 230, 'h': 30},
-        "nodelayout": (20, -1510),
-        "pars": {'resizecomp': '/project1/vcon/panel/format_dd', 'repocomp': '/project1/vcon/panel/format_dd', 'Value0': 'yuv420', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'PIXEL FORMAT', 'Labelwidth': 90, 'Menunames': 'yuv420 yuv444p8bit', 'Menulabels': "'YUV 4:2:0 8-bit' 'YUV 4:4:4 8-bit'"},
+        "nodelayout": (20, -1910),
+        "pars": {'resizecomp': '/project1/vcon/panel/audio_dd', 'repocomp': '/project1/vcon/panel/audio_dd', 'Value0': 'copy', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnAudioChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'AUDIO', 'Labelwidth': 90, 'Menunames': 'copy pcm_s16le pcm_s24le aac alac mp3', 'Menulabels': "'Copy (source)' 'PCM 16-bit' 'PCM 24-bit' AAC ALAC MP3"},
     },
     "fps_t": {
         "geometry": {'x': 20, 'y': 510, 'w': 85, 'h': 30},
@@ -101,11 +101,10 @@ CAPTURED_PANEL = {
         "nodelayout": (1140, -1730),
         "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/resh_f', 'repocomp': '/project1/vcon/panel/resh_f', 'Value0': '1080', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFitChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'H', 'Labelwidth': 20},
     },
-    "audio_dd": {
+    "format_dd": {
         "geometry": {'x': 20, 'y': 540, 'w': 230, 'h': 30},
-        "nodelayout": (20, -1910),
-        "widgettox": 'dropDownMenu',
-        "pars": {'resizecomp': '/project1/vcon/panel/audio_dd', 'repocomp': '/project1/vcon/panel/audio_dd', 'Value0': 'copy', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnAudioChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'AUDIO', 'Labelwidth': 90, 'Menunames': 'copy pcm_s16le pcm_s24le aac alac mp3 none', 'Menulabels': "'Copy (source)' 'PCM 16-bit' 'PCM 24-bit' AAC ALAC MP3 'None (video only)'"},
+        "nodelayout": (20, -1510),
+        "pars": {'resizecomp': '/project1/vcon/panel/format_dd', 'repocomp': '/project1/vcon/panel/format_dd', 'Value0': 'yuv420', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'PIXEL FORMAT', 'Labelwidth': 90, 'Menunames': 'yuv420 yuv444p8bit', 'Menulabels': "'YUV 4:2:0 8-bit' 'YUV 4:4:4 8-bit'"},
     },
     "quality_dd": {
         "geometry": {'x': 250, 'y': 540, 'w': 190, 'h': 30},
@@ -132,8 +131,8 @@ CAPTURED_PANEL = {
         "nodelayout": (20, -1140),
         "pars": {'resizecomp': '/project1/vcon/panel/destination', 'repocomp': '/project1/vcon/panel/destination', 'Value0': '/Users/jp/Desktop/converted', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.PreviewOutput(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'DESTINATION', 'Labelwidth': 90, 'Stringfieldfontsize': 10, 'Stringfieldfontcolorr': 0.0, 'Stringfieldfontcolorg': 0.0, 'Stringfieldfontcolorb': 0.0},
     },
-    "added": ['audio_dd', 'fps_t', 'remove_b'],
+    "added": ['fps_t', 'remove_b'],
     "removed": ['status_l'],
     "vconnodelayout": [('callbacks', (260, -580), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('fit', (-240, -530), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('info', (-440, -590), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('moviein', (-440, -460), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('movieout', (-40, -460), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel', (-40, -120), (0.5, 0.05000000074505806, 0.20000000298023224)), ('panel_build_run', (-20, 410), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel_callbacks', (170, -110), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel_capture_run', (-20, 540), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel_dnd', (160, 230), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel_tick', (-20, 230), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('queue_display', (-20, 90), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('queue_table', (150, 90), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('tcpip', (110, -580), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('tcpip_callbacks', (-40, -580), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('tick', (-190, -310), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('vcon_controller', (-20, -310), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005))],
-    "panelnodelayout": {'fps_t': (20, -1730), 'audio_dd': (20, -1910), 'remove_b': (760, -2080), 'inspector': (-480, -2290), 'listerConfig': (-260, -2290)},
+    "panelnodelayout": {'fps_t': (20, -1730), 'remove_b': (760, -2080), 'inspector': (-480, -2290), 'listerConfig': (-260, -2290)},
 }

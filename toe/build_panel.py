@@ -105,9 +105,9 @@ _WIDGETS = {
     # settings, two narrow columns (half-width each — no spillover)
     "container_dd": ("dropDownMenu",       20, 555, 230, _ROW),
     "codec_dd":     ("dropDownMenu",      260, 555, 230, _ROW),
-    "audio_dd":     ("dropDownMenu",       20, 510, 230, _ROW),
-    "format_dd":    ("dropDownMenu",      250, 510, 230, _ROW),
-    "quality_dd":   ("dropDownMenu",      440, 510, 190, _ROW),
+    "audio_dd":     ("dropDownMenu",       20, 480, 230, _ROW),
+    "format_dd":    ("dropDownMenu",       20, 540, 230, _ROW),
+    "quality_dd":   ("dropDownMenu",      250, 540, 190, _ROW),
     "subtype_dd":   ("dropDownMenu",      440, 540, 200, _ROW),
     # row: FPS | SCALING | SCALE(hidden) | W | H(hidden) | FIT —
     # tightened per JP: the row overflowed and FIT fell off-panel.
