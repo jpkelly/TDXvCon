@@ -456,25 +456,14 @@ def OnQualityChanged():
 
 
 def _update_quality_label(v):
-    """Write the quality name into the slider's numeric field area.
+    """Show the quality name in the slider's numeric field.
 
-    The sliderHorz widget has a numericValue0 child whose inner textCOMP
-    renders the number. We overwrite it with the quality name every
-    change + every tick (the widget's own callback would otherwise
-    reformat the number back).
+    The field's text par is BIND-driven (bindExpr reads Value0), so
+    writing it is ignored. The widget's supported hook is
+    Numericfieldformatting='customfstring' + Numericfieldcustom.
+    Pending: the exact f-string variable name (see probe).
     """
-    w = widget("quality_s")
-    if w is None:
-        return
-    name = _quality_name(v)
-    nv = w.op('numericValue0')
-    if nv is not None:
-        txt = nv.op('text')
-        if txt is not None:
-            try:
-                txt.par.text.val = name
-            except Exception:
-                pass
+    pass
 
 
 def OnSelectionChanged():
@@ -1494,15 +1483,6 @@ def onFrame():
                 PreviewOutput()
     except Exception as exc:
         _tick_err("preview refresh", exc)
-
-    # 1e) quality slider field: the widget rewrites the number every
-    # frame, so we overwrite it with the quality name every frame too
-    try:
-        v = _val("quality_s")
-        if v is not None:
-            _update_quality_label(v)
-    except Exception as exc:
-        _tick_err("quality label", exc)
 
     # 2) feed the loop when idle
     if e.is_busy:
