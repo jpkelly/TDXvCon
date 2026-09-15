@@ -100,6 +100,10 @@ class VconExt:
         self._paused = False
         #: Live background audio-mux state (see _mux_start), or None.
         self._mux = None
+        #: fps resampling (see _plan_frame_rate): source frames available
+        #: and how far the source advances per written output frame.
+        self._src_total = 0
+        self._src_step = 1.0
         #: ORPHAN-CLEANUP ARMING. True only when this TouchDesigner process
         #: was LAUNCHED BY vCon (the front-end sets VCON_LAUNCHED=1 in the
         #: subprocess environment). A session the user opened themselves
@@ -590,6 +594,8 @@ class VconExt:
         self.job = None
         self.frame = 0
         self.total = 0
+        self._src_total = 0
+        self._src_step = 1.0
         self._loading_ticks = 0
         self._finishing_ticks = 0
         # Reset the Progress par — the success (_closed) and failure
@@ -816,6 +822,7 @@ class VconExt:
         movieout = self.movieout
         debug(f"vCon: MvO file <- {self.job['output']!r}")
         movieout.par.file = self.job["output"]
+        self._plan_frame_rate(moviein)
         # Stop-frame recording, per the documented sequence:
         #   record = 1  (start recording)
         #   pause  = 1  (stop realtime advancement)
@@ -841,6 +848,49 @@ class VconExt:
     # Per-frame encode loop (driven by onFrame / Execute DAT)
     # ------------------------------------------------------------------
 
+    def _plan_frame_rate(self, moviein):
+        """Decide how many frames to write, and which source frame each one
+        samples, so the OUTPUT DURATION MATCHES THE SOURCE.
+
+        Writing one output frame per source frame and merely tagging the
+        file with a different fps changes the DURATION — a 24fps source
+        written at 60fps played 2.5x fast and ended long before its own
+        audio. Instead, output frame i samples source frame i*step, where
+        step = source_fps/output_fps: frames are held when speeding the
+        rate up and dropped when slowing it down.
+
+        Nearest source frame only — no blending or optical flow, so no
+        pixels are invented that were not in the source.
+        """
+        self._src_total = self.total          # frames available to sample
+        self._src_step = 1.0                  # 1.0 = one-for-one
+        try:
+            src_fps = float(self.info["sample_rate"][0])
+        except Exception:
+            src_fps = 0.0
+        try:
+            out_fps = float(self.movieout.par.fps.eval())
+        except Exception:
+            out_fps = 0.0
+        if src_fps <= 0 or out_fps <= 0:
+            debug("vCon: fps resample skipped — source rate unknown, "
+                  "writing one output frame per source frame")
+            return
+        # Treat near-equal rates as identical: 23.976 vs 23.98 must not
+        # trigger a resample and its rounding drift.
+        if abs(src_fps - out_fps) < 0.01:
+            return
+        duration = self._src_total / src_fps
+        out_frames = int(round(duration * out_fps))
+        if out_frames <= 0:
+            debug("vCon: fps resample skipped — computed 0 output frames")
+            return
+        self._src_step = src_fps / out_fps
+        self.total = out_frames
+        debug(f"vCon: resampling {src_fps:g} -> {out_fps:g} fps: "
+              f"{self._src_total} source frames -> {out_frames} output "
+              f"frames ({duration:.1f}s preserved)")
+
     def _encode_tick(self):
         """Write one frame. Called once per TD frame while encoding."""
         if self.state != "encoding":
@@ -857,13 +907,19 @@ class VconExt:
             self._finish()
             return
 
-        # Seek input to this frame (playmode=specify drives via 'index'
-        # param), then pulse addframe to write exactly one frame.
+        # Seek input to the SOURCE frame this output frame samples
+        # (playmode=specify drives via 'index'), then pulse addframe to
+        # write exactly one frame. step is 1.0 unless the output fps
+        # differs from the source — see _plan_frame_rate.
         # Video-only: audio is muxed in by ffmpeg after the encode
         # finishes (TD's stop-frame mode can't feed audio samples —
         # the Audio Movie CHOP produces empty slices with pause=1).
+        step = getattr(self, "_src_step", 1.0)
+        src_total = getattr(self, "_src_total", self.total)
+        src_index = (self.frame if step == 1.0
+                     else min(src_total - 1, int(round(self.frame * step))))
         try:
-            moviein.par.index = self.frame
+            moviein.par.index = src_index
             movieout.par.addframe.pulse()
         except Exception as exc:
             self._fail(f"frame {self.frame} write failed: {exc}", "encode-error")
