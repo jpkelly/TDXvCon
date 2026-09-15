@@ -296,7 +296,8 @@ class VconExt:
     def Transcode(self, input_path, output_path, codec="notchlc",
                   subtype=None, quality=None, fps="auto",
                   pixel_format=None, container=None,
-                  resolution="auto", fit=None, scale=None):
+                  resolution="auto", fit=None, scale=None,
+                  audio="auto"):
         """Encode one file. The embedder/panel-facing entry point.
 
         Promoted (capitalised) so it reads as a method of the component::
@@ -330,6 +331,8 @@ class VconExt:
             params["moviepixelformat"] = pixel_format
         if container:
             params["moviecontainer"] = container
+        if audio and audio != "auto":
+            params["audio"] = audio
         if scale is not None:
             params["scale"] = scale
             # The fit mode travels with the token too — _apply_fitres
@@ -1004,12 +1007,34 @@ class VconExt:
             debug("vCon: no ffmpeg found — output is video-only "
                   "(install imageio-ffmpeg or ffmpeg for audio)")
             return False
-        # Audio codec by container: PCM for MOV, AAC for MP4
-        ext = os.path.splitext(video_output)[1].lower()
-        if ext == ".mp4":
-            acodec, aargs = "aac", ["-b:a", "256k"]
+        # Audio codec from the job params (panel's audio_dd selection).
+        # Falls back to container-based defaults for CLI jobs without it.
+        audio = (self.job.get("params") or {}).get("audio", "auto")
+        if audio == "none":
+            debug("vCon: audio=none — skipping mux (video only)")
+            return False
+        if audio == "auto" or not audio:
+            ext = os.path.splitext(video_output)[1].lower()
+            if ext == ".mp4":
+                audio = "aac"
+            else:
+                audio = "pcm_s16le"
+        # Build ffmpeg args from the audio codec selection
+        if audio == "copy":
+            aargs = ["-c:a", "copy"]
+        elif audio == "pcm_s16le":
+            aargs = ["-c:a", "pcm_s16le"]
+        elif audio == "pcm_s24le":
+            aargs = ["-c:a", "pcm_s24le"]
+        elif audio == "aac":
+            aargs = ["-c:a", "aac", "-b:a", "256k"]
+        elif audio == "alac":
+            aargs = ["-c:a", "alac"]
+        elif audio == "mp3":
+            aargs = ["-c:a", "libmp3lame", "-b:a", "320k"]
         else:
-            acodec, aargs = "pcm_s16le", []
+            aargs = ["-c:a", "pcm_s16le"]
+        ext = os.path.splitext(video_output)[1].lower()
         # Temp name keeps the real extension — ffmpeg infers the
         # muxer from it, and ".tmp" matches nothing.
         stem = os.path.splitext(video_output)[0]
@@ -1021,8 +1046,7 @@ class VconExt:
                "-i", video_output,
                "-i", source,
                "-map", "0:v:0", "-map", "1:a:0",
-               "-c:v", "copy",
-               "-c:a", acodec] + aargs + [tmp]
+               "-c:v", "copy"] + aargs + [tmp]
         try:
             import subprocess
             log = open(log_path, "wb")

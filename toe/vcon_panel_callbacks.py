@@ -436,6 +436,31 @@ _CONTAINER_CODECS = {
     "webm": ["vp8", "vp9", "av1"],
 }
 
+#: Container → audio codec compatibility for the ffmpeg mux.
+_CONTAINER_AUDIO = {
+    "mov":  ["copy", "pcm_s16le", "pcm_s24le", "aac", "alac"],
+    "mp4":  ["copy", "aac"],
+    "mkv":  ["copy", "pcm_s16le", "pcm_s24le", "aac", "alac", "mp3"],
+    "webm": ["none"],
+}
+
+#: Audio codec → ffmpeg args for the mux.
+_AUDIO_MUX_ARGS = {
+    "copy":      ["-c:a", "copy"],
+    "pcm_s16le": ["-c:a", "pcm_s16le"],
+    "pcm_s24le": ["-c:a", "pcm_s24le"],
+    "aac":       ["-c:a", "aac", "-b:a", "256k"],
+    "alac":      ["-c:a", "alac"],
+    "mp3":       ["-c:a", "libmp3lame", "-b:a", "320k"],
+    "none":      None,
+}
+
+_AUDIO_LABELS = {
+    "copy": "Copy (source)", "pcm_s16le": "PCM 16-bit",
+    "pcm_s24le": "PCM 24-bit", "aac": "AAC", "alac": "ALAC",
+    "mp3": "MP3", "none": "None (video only)",
+}
+
 
 def _container_codecs(container):
     """Compatible codecs for a container, or all if unknown."""
@@ -460,22 +485,44 @@ def _set_menu(w, names, labels, default):
         note(f"menu set failed on {w.name}: {exc}")
 
 
+def _container_audio(container):
+    """Compatible mux audio codecs for a container."""
+    return _CONTAINER_AUDIO.get(container, ["copy"])
+
+
+def _audio_value():
+    """Current audio_dd selection, default 'copy'."""
+    return _val("audio_dd") or "copy"
+
+
+def OnAudioChanged():
+    """AUDIO dropdown changed → persisted. The mux reads this at job time."""
+    PersistSettings()
+
+
 def OnContainerChanged():
-    """CONTAINER dropdown changed → repopulate codec_dd with only the
-    compatible codecs, preserving the current selection if still valid
-    (falling back to the first compatible entry). Then fire the normal
-    selection chain so subtype/format/MvO all follow."""
+    """CONTAINER dropdown changed → repopulate codec_dd AND audio_dd with
+    only compatible entries, preserving current selections if still valid.
+    Then fire the selection chain so subtype/format/MvO all follow."""
     try:
         container = _val("container_dd") or "mov"
+        # Codec menu
         w = widget("codec_dd")
-        if w is None:
-            return
-        cur = _val("codec_dd")
-        valid = _container_codecs(container)
-        names = [c for c in valid if c in CODECS]
-        labels = [CODECS[c]["label"] for c in names]
-        _set_menu(w, names, labels,
-                  cur if cur in names else names[0])
+        if w is not None:
+            cur = _val("codec_dd")
+            valid = _container_codecs(container)
+            names = [c for c in valid if c in CODECS]
+            labels = [CODECS[c]["label"] for c in names]
+            _set_menu(w, names, labels,
+                      cur if cur in names else names[0])
+        # Audio menu
+        aw = widget("audio_dd")
+        if aw is not None:
+            acur = _val("audio_dd")
+            anames = _container_audio(container)
+            alabels = [_AUDIO_LABELS.get(a, a) for a in anames]
+            _set_menu(aw, anames, alabels,
+                      acur if acur in anames else anames[0])
         # Re-fire the codec/subtype/format chain for the new selection
         UpdateSubtypes()
         OnSelectionChanged()
@@ -1174,9 +1221,11 @@ def _run_next():
         fps = "auto"
     if codec != "notchlc":
         quality = None          # only NotchLC has a quality slider in MvO
+    container = _td_container(codec)
+    audio = _audio_value()
     note(f"  codec={codec} sub={subtype} fmt={fmt} fps={fps} "
          f"res={res} scale={scale} fit={fitmode} "
-         f"container={_td_container(codec)}")
+         f"container={container} audio={audio}")
     ok = e.Transcode(
         input_path=src,
         output_path=nxt["output"],
@@ -1188,7 +1237,8 @@ def _run_next():
         resolution=res,
         scale=scale,
         fit=fitmode,
-        container=_td_container(codec),
+        container=container,
+        audio=audio,
     )
     if ok:
         nxt["status"] = "running"

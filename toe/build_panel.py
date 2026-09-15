@@ -105,9 +105,10 @@ _WIDGETS = {
     # settings, two narrow columns (half-width each — no spillover)
     "container_dd": ("dropDownMenu",       20, 555, 230, _ROW),
     "codec_dd":     ("dropDownMenu",      260, 555, 230, _ROW),
-    "format_dd":    ("dropDownMenu",       20, 510, 230, _ROW),
-    "quality_dd":   ("dropDownMenu",      260, 510, 230, _ROW),
-    "subtype_dd":   ("dropDownMenu",      440, 510, 200, _ROW),
+    "audio_dd":     ("dropDownMenu",       20, 510, 230, _ROW),
+    "format_dd":    ("dropDownMenu",      250, 510, 230, _ROW),
+    "quality_dd":   ("dropDownMenu",      440, 510, 190, _ROW),
+    "subtype_dd":   ("dropDownMenu",      440, 540, 200, _ROW),
     # row: FPS | SCALING | SCALE(hidden) | W | H(hidden) | FIT —
     # tightened per JP: the row overflowed and FIT fell off-panel.
     "fps_f":        ("fieldString",        20, 465, 110, _ROW),
@@ -141,6 +142,7 @@ _WIDGETS = {
 _TITLES = {
     "destination": "DESTINATION",
     "container_dd": "CONTAINER",
+    "audio_dd": "AUDIO",
     "codec_dd": "CODEC",
     "subtype_dd": "SUBTYPE",
     "format_dd": "FORMAT",
@@ -583,6 +585,7 @@ def build():
     # Labelwidth per row type; buttons get NO label area (their titles were
     # doubled-up with face text — label disabled per JP's note).
     _LABEL_W = {"destination": 110, "container_dd": 90,
+                "audio_dd": 90,
                 "codec_dd": 90,
                 "subtype_dd": 90, "format_dd": 90, "quality_dd": 90,
                 "fps_f": 45, "scaled_t": 60, "scale_dd": 60,
@@ -695,6 +698,18 @@ def build():
         setp(widgets["container_dd"], "Onvaluechangescript0",
              "op.vcon.op('panel_callbacks').module.OnContainerChanged()")
         say("  container_dd: codec-filter wiring hooked")
+    # AUDIO dropdown (JP hand-added). Repopulated by container selection
+    # (OnContainerChanged). Default 'copy' — mux source audio as-is.
+    if "audio_dd" in widgets:
+        set_menu(widgets["audio_dd"],
+                 ["copy", "pcm_s16le", "pcm_s24le", "aac", "alac",
+                  "mp3", "none"],
+                 ["Copy (source)", "PCM 16-bit", "PCM 24-bit", "AAC",
+                  "ALAC", "MP3", "None (video only)"],
+                 "copy")
+        setp(widgets["audio_dd"], "Onvaluechangescript0",
+             "op.vcon.op('panel_callbacks').module.OnAudioChanged()")
+        say("  audio_dd: mux codec wiring hooked")
     # QUALITY is a DROPDOWN of the five named NotchLC levels (JP). The
     # ladder is discrete, and sliderHorz's numeric field cannot be
     # hidden or relabelled (its text par is BIND-driven), so a slider
@@ -911,7 +926,7 @@ def build():
     _PERSIST_HOOK = ("; op.vcon.op('panel_callbacks').module."
                      "PersistSettings()")
     for _pname in ("codec_dd", "subtype_dd", "format_dd", "quality_dd",
-                   "container_dd",
+                   "container_dd", "audio_dd",
                    "fps_f", "fps_t", "scaled_t", "scale_dd", "fit_dd",
                    "resw_f", "resh_f", "destination"):
         if _pname in widgets:
