@@ -1852,8 +1852,7 @@ def ShowSetupDialog():
         "",
     ]
     if ready:
-        lines += [f"ffmpeg: {exe}", "",
-                  "Encodes carry the source audio. Nothing to do."]
+        lines += [f"ffmpeg: {exe}"]
     else:
         lines += [
             "Encodes will be VIDEO ONLY until this is installed.",
