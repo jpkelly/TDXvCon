@@ -1837,25 +1837,17 @@ def ShowSetupDialog():
     ff_ver = _ffmpeg_version()
     toe_ver = _toe_version()
     latest = _latest_release()
-    lines = [
-        "VERSIONS",
-        f"  vCon (this .toe) : {toe_ver}",
-        f"  vcon CLI tool    : {cli_ver or 'not installed'}",
-        f"  ffmpeg           : {ff_ver or 'not installed'}",
-    ]
-    if latest is None:
-        pass   # check failed (offline, SSL, PyPI down) — stay silent
-    elif _version_tuple(latest) > _version_tuple(toe_ver):
+    lines = []
+    # An available update stays at the TOP — it is the one thing here
+    # that is time-sensitive. The version list itself goes last.
+    if latest is not None and _version_tuple(latest) > _version_tuple(toe_ver):
         lines += [
-            "",
             f"UPDATE AVAILABLE: {latest}  (this .toe is {toe_ver})",
             "  pipx install:  pipx upgrade tdxvcon, then reopen the .toe",
             "  given a .toe:  ask for an updated copy",
+            "",
         ]
-    else:
-        lines += [f"  latest on PyPI   : {latest} (up to date)"]
     lines += [
-        "",
         "AUDIO SUPPORT:  " + ("READY" if ready else "NOT INSTALLED"),
         "",
     ]
@@ -1893,7 +1885,14 @@ def ShowSetupDialog():
         "Transcode:  vcon -i input.mov -c notchlc output.mov",
         "List codecs:  vcon -codecs",
         "Diagnostics:  vcon -doctor",
+        "",
+        "--- Versions ---",
+        f"  vCon (this .toe) : {toe_ver}",
+        f"  vcon CLI tool    : {cli_ver or 'not installed'}",
+        f"  ffmpeg           : {ff_ver or 'not installed'}",
     ]
+    if latest is not None:
+        lines += [f"  latest on PyPI   : {latest}"]
     msg = "\n".join(lines)
     manual_cmd = (f'"{py}" -m pip install --upgrade '
                   f'--target "{dest}" imageio-ffmpeg')
