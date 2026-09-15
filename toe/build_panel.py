@@ -107,7 +107,7 @@ _WIDGETS = {
     "codec_dd":     ("dropDownMenu",       20, 555, 230, _ROW),
     "format_dd":    ("dropDownMenu",      260, 555, 230, _ROW),
     "subtype_dd":   ("dropDownMenu",       20, 510, 230, _ROW),
-    "quality_s":    ("sliderHorz",        260, 510, 230, _ROW),
+    "quality_dd":   ("dropDownMenu",      260, 510, 230, _ROW),
     # row: FPS | SCALING | SCALE(hidden) | W | H(hidden) | FIT —
     # tightened per JP: the row overflowed and FIT fell off-panel.
     "fps_f":        ("fieldString",        20, 465, 110, _ROW),
@@ -143,7 +143,7 @@ _TITLES = {
     "codec_dd": "CODEC",
     "subtype_dd": "SUBTYPE",
     "format_dd": "FORMAT",
-    "quality_s": "QUALITY",
+    "quality_dd": "QUALITY",
     "fps_f": "FPS",
     "scaled_t": "SCALING",
     "scale_dd": "SCALE",
@@ -582,7 +582,7 @@ def build():
     # Labelwidth per row type; buttons get NO label area (their titles were
     # doubled-up with face text — label disabled per JP's note).
     _LABEL_W = {"destination": 110, "codec_dd": 90,
-                "subtype_dd": 90, "format_dd": 90, "quality_s": 90,
+                "subtype_dd": 90, "format_dd": 90, "quality_dd": 90,
                 "fps_f": 45, "scaled_t": 60, "scale_dd": 60,
                 "fit_dd": 45, "output_l": 110, "status_l": 110,
                 "start_b": 0, "pause_b": 0, "stop_b": 0}
@@ -676,19 +676,15 @@ def build():
         notch_fmts = list(notch["pixel_formats"])
         set_menu(widgets["format_dd"], notch_fmts,
                  [mod.FORMAT_LABELS.get(f, f) for f in notch_fmts], "rgb")
-    # QUALITY is a SLIDER — the same presentation MvO itself uses for
-    # NotchLC (a 0-1 float). The named levels from Derivative's guide
-    # (good=0.0 very-good=0.285 excellent=0.575 optimal=0.862 best=1.0)
-    # mark the track via Sliderlabelnames (live-dumped par). Greys out
-    # for codecs with no ladder.
-    if "quality_s" in widgets:
-        setp(widgets["quality_s"], "Value0", 0.862)      # optimal
-        # Numeric field ON — the field area is visible, but we overwrite
-        # its textCOMP with the quality name (OnQualityChanged + tick).
-        setp(widgets["quality_s"], "Numericfielddisplay", "on")
-        setp(widgets["quality_s"], "Sliderlabelnames",
-             "'Good' 'Very Good' 'Excellent' "
-             "'Optimal' 'Best'")
+    # QUALITY is a DROPDOWN of the five named NotchLC levels (JP). The
+    # ladder is discrete, and sliderHorz's numeric field cannot be
+    # hidden or relabelled (its text par is BIND-driven), so a slider
+    # could only ever show a raw float next to the name.
+    if "quality_dd" in widgets:
+        set_menu(widgets["quality_dd"],
+                 ["0.0", "0.285", "0.575", "0.862", "1.0"],
+                 ["Good", "Very Good", "Excellent", "Optimal", "Best"],
+                 "0.862")
     if "fit_dd" in widgets:
         set_menu(widgets["fit_dd"],
                  ["fitbest", "fill", "fithorz", "fitvert", "fitoutside"],
@@ -817,12 +813,12 @@ def build():
         if name in widgets:
             if setp(widgets[name], "Onvaluechangescript0", preview):
                 say(f"  {name}: preview wired")
-    # QUALITY slider: every drag tick sets MvO's quality slider LIVE
+    # QUALITY dropdown: every selection sets MvO's quality par LIVE
     # (Setquality promoted hook — same pattern as Setfitpath).
-    if "quality_s" in widgets:
-        setp(widgets["quality_s"], "Onvaluechangescript0",
+    if "quality_dd" in widgets:
+        setp(widgets["quality_dd"], "Onvaluechangescript0",
              "op.vcon.op('panel_callbacks').module.OnQualityChanged()")
-        say("  quality_s: live MvO sync wired")
+        say("  quality_dd: live MvO sync wired")
     # FPS field -> MvO fps par LIVE (JP 2026-09-14: the field both READS
     # the par — seeded from it at build end — and CHANGES it, the same
     # live-editor pattern as the QUALITY slider)
@@ -895,7 +891,7 @@ def build():
     # to panel_settings.json on every change (survives TD quit/relaunch).
     _PERSIST_HOOK = ("; op.vcon.op('panel_callbacks').module."
                      "PersistSettings()")
-    for _pname in ("codec_dd", "subtype_dd", "format_dd", "quality_s",
+    for _pname in ("codec_dd", "subtype_dd", "format_dd", "quality_dd",
                    "fps_f", "fps_t", "scaled_t", "scale_dd", "fit_dd",
                    "resw_f", "resh_f", "destination"):
         if _pname in widgets:
@@ -1189,13 +1185,3 @@ try:
     print("[panel] persistent settings restored")
 except Exception as exc:
     print(f"[panel] (settings restore: {exc})")
-# Seed the quality slider's Widgetlabel with the quality name — the
-# bake restores the captured "QUALITY" label; this appends the name
-# for the current value so the field isn't blank until first drag.
-try:
-    qs = op.vcon.op('panel').op('quality_s')
-    if qs is not None:
-        op.vcon.op('panel_callbacks').module.OnQualityChanged()
-        print("[panel] quality label seeded")
-except Exception as exc:
-    print(f"[panel] (quality seed: {exc})")

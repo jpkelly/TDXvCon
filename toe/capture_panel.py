@@ -73,7 +73,7 @@ if p is None:
 _TOX_OF = {
     "source": "fieldFileBrowser", "destination": "fieldFolderBrowser",
     "codec_dd": "dropDownMenu", "subtype_dd": "dropDownMenu",
-    "format_dd": "dropDownMenu", "quality_s": "sliderHorz",
+    "format_dd": "dropDownMenu", "quality_dd": "dropDownMenu",
     "fps_f": "fieldString", "scaled_t": "buttonToggle",
     "scale_dd": "dropDownMenu", "fit_dd": "dropDownMenu",
     "start_b": "buttonMomentary", "pause_b": "buttonMomentary",
@@ -107,7 +107,7 @@ _BARE_CONTAINERS = {"prog_track", "prog_fill"}
 #: builds recreate them) and (b) builder widgets REMOVED by hand (in
 #: here but missing from the panel → future builds skip them).
 _BUILDER_WIDGETS = {
-    "destination", "codec_dd", "format_dd", "subtype_dd", "quality_s",
+    "destination", "codec_dd", "format_dd", "subtype_dd", "quality_dd",
     "fps_f", "scaled_t", "scale_dd", "fit_dd", "resw_f", "resh_f",
     "start_b", "pause_b", "stop_b", "add_b", "output_l",
     "prog_track", "prog_fill", "queue", "status_l",

@@ -142,7 +142,7 @@ _SETTINGS_PATH = ('/Users/jp/Documents/GitHub/vCon/toe/'
 #: which widget Value0 pars are persisted (string values stored as-is)
 _PERSIST_WIDGETS = (
     "destination", "codec_dd", "subtype_dd", "format_dd",
-    "quality_s", "fps_f", "fps_t", "scaled_t", "scale_dd",
+    "quality_dd", "fps_f", "fps_t", "scaled_t", "scale_dd",
     "fit_dd", "resw_f", "resh_f",
 )
 
@@ -418,8 +418,8 @@ def _grey_out(inner, grey):
         note(f"grey-out failed on {inner.name}: no enable par")
 
 
-# NotchLC quality ladder (Derivative's guide).
-# Maps slider 0-1 to named levels shown in the field.
+# NotchLC quality ladder (Derivative's guide) — the dropdown's menu
+# tokens are these values as strings, so the label IS the name.
 _QUALITY_LEVELS = [
     (0.0,   "Good"),
     (0.285, "Very Good"),
@@ -429,41 +429,20 @@ _QUALITY_LEVELS = [
 ]
 
 
-def _quality_name(v):
-    """Nearest named quality level for a 0-1 slider value."""
+def _quality_value():
+    """The QUALITY dropdown's 0-1 float, defaulting to Optimal."""
     try:
-        v = float(v)
-    except Exception:
-        return "Good"
-    best_name, best_dist = "Good", 1e9
-    for qv, qn in _QUALITY_LEVELS:
-        d = abs(v - qv)
-        if d < best_dist:
-            best_name, best_dist = qn, d
-    return best_name
+        return float(_val("quality_dd"))
+    except (TypeError, ValueError):
+        return 0.862
 
 
 def OnQualityChanged():
-    """QUALITY slider dragged -> set MvO's quality slider LIVE and
-    update the field to show the quality name (Good / Very Good /
-    Excellent / Optimal / Best) instead of a raw float."""
+    """QUALITY dropdown changed -> set MvO's quality par LIVE."""
     try:
-        v = _val("quality_s")
-        ext().Setquality(v)
-        _update_quality_label(v)
+        ext().Setquality(_quality_value())
     except Exception as exc:
         note(f"quality sync failed: {exc}")
-
-
-def _update_quality_label(v):
-    """Show the quality name in the slider's numeric field.
-
-    The field's text par is BIND-driven (bindExpr reads Value0), so
-    writing it is ignored. The widget's supported hook is
-    Numericfieldformatting='customfstring' + Numericfieldcustom.
-    Pending: the exact f-string variable name (see probe).
-    """
-    pass
 
 
 def OnSelectionChanged():
@@ -1114,7 +1093,7 @@ def _run_next():
     note(f"  submitting: src={src!r}")
     note(f"  output: {nxt['output']!r}")
     note(f"  exists already: {os.path.exists(nxt['output'])}")
-    quality = _val("quality_s")   # 0-1 float straight to MvO
+    quality = _quality_value()   # 0-1 float straight to MvO
     fmt = _validate_choice(codec, "format", _val("format_dd"))
     # FPS per MODE: SOURCE -> 'auto' (the controller re-resolves from
     # each loaded movie's sample_rate, so batch files with different

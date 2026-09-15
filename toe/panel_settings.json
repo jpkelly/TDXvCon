@@ -3,7 +3,7 @@
   "codec_dd": "notchlc",
   "subtype_dd": "",
   "format_dd": "rgb",
-  "quality_s": 1.0,
+  "quality_dd": "0.862",
   "fps_f": "60",
   "fps_t": false,
   "scaled_t": false,

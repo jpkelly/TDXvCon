@@ -101,10 +101,10 @@ CAPTURED_PANEL = {
         "nodelayout": (-10, -1640),
         "pars": {'resizecomp': '/project1/vcon/panel/subtype_dd', 'repocomp': '/project1/vcon/panel/subtype_dd', 'Value0': '', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.UpdateSubtypes(); op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SUBTYPE', 'Labelwidth': 90, 'Menunames': ''},
     },
-    "quality_s": {
+    "quality_dd": {
         "geometry": {'x': 250, 'y': 540, 'w': 230, 'h': 30},
         "nodelayout": (350, -1650),
-        "pars": {'resizecomp': '/project1/vcon/panel/quality_s', 'repocomp': '/project1/vcon/panel/quality_s', 'Value0': 0.0, 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnQualityChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'QUALITY', 'Labelwidth': 90, 'Sliderlabelnames': "'Good' 'Very Good' 'Excellent' 'Optimal' 'Best'"},
+        "pars": {'resizecomp': '/project1/vcon/panel/quality_dd', 'repocomp': '/project1/vcon/panel/quality_dd', 'Value0': '0.862', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnQualityChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'QUALITY', 'Labelwidth': 90},
     },
     "codec_dd": {
         "geometry": {'x': 20, 'y': 570, 'w': 230, 'h': 30},
