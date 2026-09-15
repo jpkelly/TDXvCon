@@ -73,7 +73,7 @@ CAPTURED_PANEL = {
     "audio_sep_dd": {
         "geometry": {'x': 291, 'y': 480, 'w': 176, 'h': 30},
         "nodelayout": (410, -1910),
-        "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/audio_sep_dd', 'repocomp': '/project1/vcon/panel/audio_sep_dd', 'Value0': 'wav16', 'Onvaluechangescript0': "; op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SEP FORMAT', 'Labelwidth': 74, 'Menunames': 'wav16 wav24 aiff16 aiff24 aac mp3 copy', 'Menulabels': "'WAV 16-bit' 'WAV 24-bit' 'AIFF 16-bit' 'AIFF 24-bit' 'AAC 256k' 'MP3 320k' 'Copy source'"},
+        "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/audio_sep_dd', 'repocomp': '/project1/vcon/panel/audio_sep_dd', 'Value0': 'wav16', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SEP FORMAT', 'Labelwidth': 74, 'Menunames': 'wav16 wav24 aiff16 aiff24 aac mp3 copy', 'Menulabels': "'WAV 16-bit' 'WAV 24-bit' 'AIFF 16-bit' 'AIFF 24-bit' 'AAC 256k' 'MP3 320k' 'Copy source'"},
     },
     "fps_t": {
         "geometry": {'x': 20, 'y': 510, 'w': 85, 'h': 30},

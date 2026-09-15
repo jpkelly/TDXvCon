@@ -739,6 +739,8 @@ def build():
                   "AIFF 24-bit", "AAC 256k", "MP3 320k", "Copy source"],
                  "wav16")
         setp(widgets["audio_sep_dd"], "display", 0)  # hidden until toggle ON
+        setp(widgets["audio_sep_dd"], "Onvaluechangescript0",
+             "op.vcon.op('panel_callbacks').module.PersistSettings()")
         say("  audio_sep_dd: format menu set")
     # QUALITY is a DROPDOWN of the five named NotchLC levels (JP). The
     # ladder is discrete, and sliderHorz's numeric field cannot be
@@ -1245,13 +1247,6 @@ try:
     print("[panel] container filter applied")
 except Exception as exc:
     print(f"[panel] (container filter: {exc})")
-# Apply the audio_sep toggle's visibility state — the capture may have
-# restored display=True on the dropdown; re-apply based on the toggle.
-try:
-    op.vcon.op('panel_callbacks').module.OnAudioSepChanged()
-    print("[panel] audio_sep visibility applied")
-except Exception as exc:
-    print(f"[panel] (audio_sep visibility: {exc})")
 # Tell the user up front whether audio muxing is available — otherwise
 # the first silent output is the only clue.
 try:
@@ -1270,3 +1265,10 @@ try:
     print("[panel] persistent settings restored")
 except Exception as exc:
     print(f"[panel] (settings restore: {exc})")
+# AFTER the restore: a persisted SEP AUDIO=ON must reveal the format
+# dropdown, so this cannot run before _load_settings().
+try:
+    op.vcon.op('panel_callbacks').module.OnAudioSepChanged()
+    print("[panel] audio_sep visibility applied")
+except Exception as exc:
+    print(f"[panel] (audio_sep visibility: {exc})")

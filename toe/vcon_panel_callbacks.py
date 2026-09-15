@@ -148,6 +148,7 @@ _SETTINGS_PATH = ('/Users/jp/Documents/GitHub/vCon/toe/'
 _PERSIST_WIDGETS = (
     "destination", "codec_dd", "subtype_dd", "format_dd",
     "quality_dd", "container_dd",
+    "audio_dd", "audio_sep_t", "audio_sep_dd",
     "fps_f", "fps_t", "scaled_t", "scale_dd",
     "fit_dd", "resw_f", "resh_f",
 )
@@ -450,17 +451,8 @@ _CONTAINER_AUDIO = {
     "webm": ["none"],
 }
 
-#: Audio codec → ffmpeg args for the mux.
-_AUDIO_MUX_ARGS = {
-    "copy":      ["-c:a", "copy"],
-    "pcm_s16le": ["-c:a", "pcm_s16le"],
-    "pcm_s24le": ["-c:a", "pcm_s24le"],
-    "aac":       ["-c:a", "aac", "-b:a", "256k"],
-    "alac":      ["-c:a", "alac"],
-    "mp3":       ["-c:a", "libmp3lame", "-b:a", "320k"],
-    "none":      None,
-}
-
+#: Audio codec → menu label. The ffmpeg argument mapping lives in the
+#: controller, which is what actually runs the mux.
 _AUDIO_LABELS = {
     "copy": "Copy (source)", "pcm_s16le": "PCM 16-bit",
     "pcm_s24le": "PCM 24-bit", "aac": "AAC", "alac": "ALAC",
@@ -504,24 +496,6 @@ def _audio_value():
 def OnAudioChanged():
     """AUDIO dropdown changed → persisted. The mux reads this at job time."""
     PersistSettings()
-
-
-#: Separate-audio extraction args (ffmpeg -vn -c:a ...).
-_AUDIO_SEP_ARGS = {
-    "wav16":   ["-c:a", "pcm_s16le"],
-    "wav24":   ["-c:a", "pcm_s24le"],
-    "aiff16":  ["-c:a", "pcm_s16be"],
-    "aiff24":  ["-c:a", "pcm_s24be"],
-    "aac":     ["-c:a", "aac", "-b:a", "256k"],
-    "mp3":     ["-c:a", "libmp3lame", "-b:a", "320k"],
-    "copy":   ["-c:a", "copy"],
-}
-
-_AUDIO_SEP_EXT = {
-    "wav16": ".wav", "wav24": ".wav",
-    "aiff16": ".aiff", "aiff24": ".aiff",
-    "aac": ".m4a", "mp3": ".mp3", "copy": ".audio",
-}
 
 
 def OnAudioSepChanged():

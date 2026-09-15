@@ -1312,9 +1312,14 @@ class VconExt:
         if not src or not os.path.isfile(src):
             self._job_complete(video_output, note + ", no sep audio")
             return
+        # ffmpeg picks the muxer from the EXTENSION, so every entry must
+        # be a real audio container. 'copy' keeps the source stream
+        # whatever it is, so it needs a container that accepts anything:
+        # Matroska audio (.mka) does, where .wav/.m4a would reject half
+        # the possible codecs.
         ext = {"wav16": ".wav", "wav24": ".wav", "aiff16": ".aiff",
                "aiff24": ".aiff", "aac": ".m4a", "mp3": ".mp3",
-               "copy": ".audio"}.get(sep, ".wav")
+               "copy": ".mka"}.get(sep, ".wav")
         stem = os.path.splitext(video_output)[0]
         out = stem + ".audio" + ext
         args = {"wav16": ["-c:a", "pcm_s16le"],
