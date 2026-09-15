@@ -1732,6 +1732,74 @@ def _python_for_pip():
     return None
 
 
+def ShowSetupDialog():
+    """SETUP button: a modal dialog with live status + actions.
+
+    Uses TD's native ui.messageBox so the information reaches the user
+    where they are looking, instead of the textport they may never open.
+    Falls back to textport output if messageBox is unavailable.
+    """
+    exe = _ffmpeg_binary()
+    dest = _vcon_libs_dir()
+    py = _python_for_pip() or ("py" if os.name == "nt" else "python3")
+    ready = exe is not None
+    lines = [
+        "AUDIO SUPPORT:  " + ("READY" if ready else "NOT INSTALLED"),
+        "",
+    ]
+    if ready:
+        lines += [f"ffmpeg: {exe}", "",
+                  "Encodes carry the source audio. Nothing to do."]
+    else:
+        lines += [
+            "Encodes will be VIDEO ONLY until this is installed.",
+            "",
+            "TouchDesigner's frame-by-frame recording cannot write",
+            "audio, so vCon muxes the source audio in afterwards with",
+            "ffmpeg. ffmpeg comes from the imageio-ffmpeg package",
+            "(~30MB), which is not bundled in the .toe.",
+            "",
+            "Press INSTALL to fetch it automatically. It installs to",
+            "vCon's own folder — no admin rights needed, nothing is",
+            "written inside TouchDesigner, and it survives TD updates.",
+        ]
+    lines += [
+        "",
+        "Install folder:",
+        f"  {dest}",
+        "",
+        "Manual install (Terminal on macOS, cmd/PowerShell on Windows):",
+        f'  "{py}" -m pip install --upgrade --target "{dest}" imageio-ffmpeg',
+        "",
+        "vCon also finds ffmpeg from:",
+        "  - pipx install tdxvcon   (the vCon command-line tool)",
+        "  - any system ffmpeg on PATH",
+    ]
+    msg = "\n".join(lines)
+    buttons = (["Re-check", "Copy to Textport", "Close"] if ready
+               else ["Install Now", "Copy to Textport", "Close"])
+    try:
+        choice = ui.messageBox("vCon — Setup & Help", msg, buttons=buttons)
+    except TypeError:
+        # Older builds: messageBox without a buttons argument.
+        try:
+            ui.messageBox("vCon — Setup & Help", msg)
+        except Exception:
+            note(msg)
+        return
+    except Exception:
+        # No messageBox at all (headless): textport is the fallback.
+        note(msg)
+        return
+    if choice == 0:
+        if ready:
+            AudioSupportStatus()
+        else:
+            InstallAudioSupport()
+    elif choice == 1:
+        note(msg)
+
+
 def AudioSupportStatus():
     """Report whether audio muxing is ready, and how to fix it if not."""
     exe = _ffmpeg_binary()
@@ -1739,8 +1807,7 @@ def AudioSupportStatus():
         note(f"audio support: READY — ffmpeg at {exe}")
         return True
     note("audio support: NOT INSTALLED — encodes will be video-only.")
-    note("  Click INSTALL AUDIO on the panel, or see the manual steps:")
-    ShowAudioSetupHelp()
+    note("  Press the SETUP button on the panel for instructions.")
     return False
 
 
@@ -1849,6 +1916,14 @@ def _install_tick():
             note("  Encodes will now carry audio. Nothing else to do.")
             note("-" * 64)
             _set_output_text("Audio support installed — ready to encode")
+            try:
+                ui.messageBox(
+                    "vCon — Audio Support Installed",
+                    "ffmpeg is now available:\n\n"
+                    f"{exe}\n\n"
+                    "Encodes will carry the source audio from now on.")
+            except Exception:
+                pass
         else:
             note("audio install: pip succeeded but no ffmpeg binary was "
                  "found afterwards.")
@@ -1866,6 +1941,14 @@ def _install_tick():
         note(tail)
     ShowAudioSetupHelp()
     _set_output_text("Audio install failed — see textport for details")
+    try:
+        ui.messageBox(
+            "vCon — Audio Install Failed",
+            f"pip exited with code {rc}.\n\n"
+            f"{tail[-400:] if tail else '(no output captured)'}\n\n"
+            "The manual command has been printed to the textport.")
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------

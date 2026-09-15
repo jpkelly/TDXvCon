@@ -625,16 +625,12 @@ def build():
         setp(widgets["remove_b"], "Offtoonscript0",
              "op.vcon.op('panel_callbacks').module.RemoveSelected()")
         say("  remove_b: selected-row removal wired")
-    # audio_b (optional, hand-added): one-click audio support install.
+    # setup_b (optional, hand-added): opens the Setup & Help dialog.
     # Wired defensively so the panel works with or without the button.
-    if "audio_b" in widgets:
-        setp(widgets["audio_b"], "Offtoonscript0",
-             "op.vcon.op('panel_callbacks').module.InstallAudioSupport()")
-        say("  audio_b: audio-support install wired")
-    if "help_b" in widgets:
-        setp(widgets["help_b"], "Offtoonscript0",
-             "op.vcon.op('panel_callbacks').module.AudioSupportStatus()")
-        say("  help_b: audio-support status/help wired")
+    if "setup_b" in widgets:
+        setp(widgets["setup_b"], "Offtoonscript0",
+             "op.vcon.op('panel_callbacks').module.ShowSetupDialog()")
+        say("  setup_b: Setup & Help dialog wired")
 
     # Buttons: PROBE 14 VERDICT — the strip renders WIDGETLABEL, and an
     # earlier fix WROTE 'START' there, doubling with the face ('START |
