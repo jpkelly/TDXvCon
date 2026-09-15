@@ -54,6 +54,10 @@ PROTOCOL_VERSION = 1
 PORT = 7999
 IDLE_QUIT_SECONDS = 300  # safety net: exit TD when idle this long
 
+#: Share of the progress bar given to the encode; the audio mux fills
+#: the remainder, so a job's bar rises monotonically across both phases.
+_ENCODE_SHARE = 0.92
+
 
 class VconExt:
     """The transcoder controller.
@@ -74,7 +78,7 @@ class VconExt:
         self.frame = 0
         self.total = 0
         self.t0 = 0.0
-        self.state = "idle"      # idle | loading | encoding | finishing
+        self.state = "idle"      # idle | loading | encoding | finishing | muxing
         self.last_activity = time.time()
         #: frame counters for the state machine driven by onFrame()
         self._loading_ticks = 0
@@ -96,6 +100,8 @@ class VconExt:
         #: Frame seeked and awaiting its addframe pulse (the audio CHOP
         #: needs a cook between seek and pulse or its slice is empty).
         self._seek_pending = None
+        #: Live background audio-mux state (see _mux_start), or None.
+        self._mux = None
         #: ORPHAN-CLEANUP ARMING. True only when this TouchDesigner process
         #: was LAUNCHED BY vCon (the front-end sets VCON_LAUNCHED=1 in the
         #: subprocess environment). A session the user opened themselves
@@ -170,6 +176,14 @@ class VconExt:
         except Exception:
             debug(f"vCon status: {text}")
 
+    def _set_progress(self, frac):
+        """Progress par: 0..1 for a panel slider. Encode fills 0..0.92,
+        the audio mux fills the rest, so the bar never runs backwards."""
+        try:
+            self.ownerComp.par.Progress.val = min(1.0, max(0.0, float(frac)))
+        except Exception:
+            pass  # par absent (older toe) — status text still shows
+
     # ------------------------------------------------------------------
     # Scheduling helper
     # ------------------------------------------------------------------
@@ -215,6 +229,8 @@ class VconExt:
             self._finishing_ticks += 1
             if self._finishing_ticks >= 3:
                 self._closed()
+        elif self.state == "muxing":
+            self._mux_tick()
 
     # ------------------------------------------------------------------
     # Lifecycle (documented extension gotchas)
@@ -245,8 +261,31 @@ class VconExt:
                 self.movieout.par.record = 0
         except Exception:
             pass
+        self._kill_mux()
         self.job = None
         self.state = "idle"
+
+    def _kill_mux(self):
+        """Stop a background mux and bin its temp files (cancel/reset/destroy)."""
+        m = getattr(self, "_mux", None)
+        if not m:
+            return
+        try:
+            m["proc"].kill()
+        except Exception:
+            pass
+        try:
+            m["log"].close()
+        except Exception:
+            pass
+        for path in (m["tmp"], m["prog"], m["log_path"]):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception:
+                pass
+        self._mux = None
+        debug("vCon: audio mux stopped — output stays video-only")
 
     # ------------------------------------------------------------------
     # Public API — what an embedder calls
@@ -525,6 +564,7 @@ class VconExt:
             debug(f"abort: could not stop recording: {exc}")
         job_id = (self.job or {}).get("id", "?")
         debug(f"vcon: aborting job {job_id} ({reason})")
+        self._kill_mux()
         self.job = None
         self.frame = 0
         self.total = 0
@@ -634,6 +674,7 @@ class VconExt:
         self._loading_ticks = 0
         self._paused = False   # a fresh job always starts unpaused
         self.state = "loading"
+        self._set_progress(0.0)
         self._set_status(f"loading {os.path.basename(job['input'])}")
         self._load_input(job)
 
@@ -807,14 +848,8 @@ class VconExt:
             debug(f"vCon: first frame written (addframe pulsed)")
         if self.frame % 10 == 0 or self.frame == self.total:
             self._set_status(f"encoding {self.frame}/{self.total}")
-            # Progress par: 0..1 fraction, for a panel slider. Seeded at 0
-            # by the builder; a slider binds directly with normMin/Max 0..1.
-            try:
-                self.ownerComp.par.Progress.val = (
-                    self.frame / float(self.total) if self.total else 0.0
-                )
-            except Exception:
-                pass  # par absent (older toe) — status text still shows
+            frac = self.frame / float(self.total) if self.total else 0.0
+            self._set_progress(frac * _ENCODE_SHARE)
             self._send({"type": "progress", "id": self.job["id"],
                         "frame": self.frame, "total_frames": self.total})
 
@@ -837,6 +872,14 @@ class VconExt:
         if self.job is None:
             self.state = "idle"
             return
+        out = self.job["output"]
+        # Movie File Out finalizes on its own schedule — a large file can
+        # still be flushing several frames after record=0. Reporting
+        # "size=0" here (and skipping the mux) meant the file simply
+        # hadn't landed yet, not that the encode failed.
+        if not os.path.isfile(out) and self._finishing_ticks < 300:
+            self._set_status("finalizing file…")
+            return   # stay in "finishing"; _tick calls back next frame
         movieout = self.movieout
         seconds = getattr(self, "seconds_taken", 0.0) or round(
             time.time() - self.t0, 3)
@@ -845,29 +888,37 @@ class VconExt:
             frames = int(movieout["total_frames_written"][0]) or self.total
         except Exception:
             pass  # info channel unavailable; report the expected count
-        self._send({"type": "done", "id": self.job["id"],
-                    "path": self.job["output"],
-                    "total_frames": frames, "seconds": seconds})
-        out = self.job["output"]
+        self._done_frames = frames
+        self._done_seconds = seconds
         debug(f"vCon: closed — output={out!r}, exists={os.path.exists(out)}, "
-              f"size={os.path.getsize(out) if os.path.exists(out) else 0}")
+              f"size={os.path.getsize(out) if os.path.exists(out) else 0}, "
+              f"waited={self._finishing_ticks} ticks")
         # Mux audio from the source file into the TD-encoded video.
         # TD's stop-frame mode writes video-only; ffmpeg copies the
         # audio stream from the original source (no re-encode of video).
         src = self.job.get("input", "")
-        debug(f"vCon: mux check — src={src!r} src_ok={os.path.isfile(src) if src else False} "
-              f"out_ok={os.path.isfile(out)}")
         if src and os.path.isfile(src) and os.path.isfile(out):
-            self._mux_audio(src, out)
+            if self._mux_start(src, out):
+                return   # _mux_tick() completes the job when ffmpeg exits
         else:
             debug("vCon: mux SKIPPED (source or output missing)")
+        self._job_complete(out)
+
+    def _job_complete(self, out, note=""):
+        """Finalize: tell the client, clear the job, return to idle.
+
+        Deferred until after any audio mux so the panel keeps the row
+        'running' (and its bar alive) for the whole pipeline.
+        """
+        frames = getattr(self, "_done_frames", self.total)
+        seconds = getattr(self, "_done_seconds", 0.0)
+        if self.job is not None:
+            self._send({"type": "done", "id": self.job["id"],
+                        "path": out, "total_frames": frames,
+                        "seconds": seconds})
+        self._set_progress(1.0)
         self._set_status(f"idle — last: {os.path.basename(out)} "
-                         f"({frames} frames, {seconds}s)")
-        # Reset the slider-bound Progress par so the next job starts at 0.
-        try:
-            self.ownerComp.par.Progress.val = 0.0
-        except Exception:
-            pass
+                         f"({frames} frames, {seconds}s{note})")
         self.job = None
         self.state = "idle"
         self.last_activity = time.time()
@@ -942,19 +993,21 @@ class VconExt:
         debug(f"vCon: ffmpeg {'found at ' + found if found else 'NOT FOUND'}")
         return found or None
 
-    def _mux_audio(self, source, video_output):
-        """Mux the source file's audio stream into the TD-encoded video.
+    def _mux_start(self, source, video_output):
+        """Launch the audio mux as a BACKGROUND ffmpeg process.
 
-        Runs ffmpeg as a subprocess: video stream is COPIED (no
-        re-encode — lossless, fast), audio is taken from the original
-        source file. The temp video file is replaced in-place.
+        Never blocks: subprocess.run() froze TD's whole UI for the length
+        of the copy (minutes on a multi-GB file). ffmpeg writes machine
+        progress to a file that _mux_tick() polls each frame; stderr goes
+        to a file too, so a full pipe buffer can't deadlock it.
+
+        Returns True if the process launched (state -> "muxing").
         """
         ffmpeg = self._find_ffmpeg()
         if ffmpeg is None:
             debug("vCon: no ffmpeg found — output is video-only "
                   "(install imageio-ffmpeg or ffmpeg for audio)")
-            self._set_status("idle — video only (no ffmpeg for audio mux)")
-            return
+            return False
         # Audio codec by container: PCM for MOV, AAC for MP4
         ext = os.path.splitext(video_output)[1].lower()
         if ext == ".mp4":
@@ -963,8 +1016,12 @@ class VconExt:
             acodec, aargs = "pcm_s16le", []
         # Temp name keeps the real extension — ffmpeg infers the
         # muxer from it, and ".tmp" matches nothing.
-        tmp = os.path.splitext(video_output)[0] + ".muxing" + ext
-        cmd = [ffmpeg, "-y",
+        stem = os.path.splitext(video_output)[0]
+        tmp = stem + ".muxing" + ext
+        prog_path = stem + ".muxing.progress"
+        log_path = stem + ".muxing.log"
+        cmd = [ffmpeg, "-y", "-nostdin", "-nostats",
+               "-progress", prog_path,
                "-i", video_output,
                "-i", source,
                "-map", "0:v:0", "-map", "1:a:0",
@@ -972,45 +1029,115 @@ class VconExt:
                "-c:a", acodec] + aargs + [tmp]
         try:
             import subprocess
-            debug(f"vCon: muxing audio — {acodec}, source={source!r}")
-            result = subprocess.run(cmd, capture_output=True, timeout=3600)
-            if result.returncode != 0:
-                err = result.stderr.decode("utf-8", "replace")[-500:]
-                if "matches no streams" in err:
-                    debug("vCon: source has no audio track — video only")
-                    self._set_status(
-                        f"idle — last: {os.path.basename(video_output)} "
-                        f"(no audio in source)")
-                else:
-                    debug(f"vCon: ffmpeg mux failed (rc={result.returncode}): {err}")
-                    self._set_status("idle — video only (audio mux failed)")
+            log = open(log_path, "wb")
+            proc = subprocess.Popen(cmd, stdout=log, stderr=log,
+                                    stdin=subprocess.DEVNULL)
+        except Exception as exc:
+            debug(f"vCon: could not launch ffmpeg: {exc}")
+            return False
+        self._mux = {
+            "proc": proc, "log": log, "tmp": tmp, "out": video_output,
+            "prog": prog_path, "log_path": log_path, "acodec": acodec,
+            "t0": time.time(), "frac": 0.0,
+            # expected duration in microseconds, for the progress fraction
+            "total_us": self._expected_duration_us(),
+        }
+        self.state = "muxing"
+        size_mb = os.path.getsize(video_output) / 1e6
+        debug(f"vCon: muxing audio — {acodec}, {size_mb:.0f}MB, "
+              f"source={os.path.basename(source)}")
+        self._set_status(f"muxing audio 0% — {os.path.basename(video_output)}")
+        return True
+
+    def _expected_duration_us(self):
+        """Output duration in microseconds, for the mux progress fraction."""
+        try:
+            fps = float(self.movieout.par.fps.eval())
+            if fps > 0 and self.total:
+                return (self.total / fps) * 1e6
+        except Exception:
+            pass
+        return 0.0
+
+    def _mux_tick(self):
+        """Poll the background mux: update progress, finish when it exits."""
+        m = getattr(self, "_mux", None)
+        if not m:
+            self.state = "idle"
+            return
+        # progress fraction from ffmpeg's -progress file (out_time_us)
+        if m["total_us"]:
+            try:
+                with open(m["prog"], "r") as fh:
+                    tail = fh.read()[-2000:]
+                done_us = 0.0
+                for line in reversed(tail.splitlines()):
+                    if line.startswith("out_time_us="):
+                        done_us = float(line.split("=", 1)[1] or 0)
+                        break
+                frac = min(1.0, done_us / m["total_us"])
+                if frac > m["frac"]:
+                    m["frac"] = frac
+            except Exception:
+                pass  # file not written yet — keep the last fraction
+        self._set_progress(_ENCODE_SHARE + m["frac"] * (1.0 - _ENCODE_SHARE))
+        self._set_status(f"muxing audio {int(m['frac'] * 100)}% — "
+                         f"{os.path.basename(m['out'])}")
+        rc = m["proc"].poll()
+        if rc is None:
+            if time.time() - m["t0"] > 3600:
+                debug("vCon: ffmpeg mux timed out (1h) — output is video-only")
                 try:
-                    if os.path.exists(tmp):
-                        os.remove(tmp)
+                    m["proc"].kill()
                 except Exception:
                     pass
-                return
-            # Replace the video-only file with the muxed result
-            os.replace(tmp, video_output)
-            size = os.path.getsize(video_output)
-            debug(f"vCon: audio muxed — {acodec}, size={size}")
-            self._set_status(f"idle — last: {os.path.basename(video_output)} "
-                             f"(audio muxed, {acodec})")
-        except subprocess.TimeoutExpired:
-            debug("vCon: ffmpeg mux timed out (1h) — output is video-only")
-            self._set_status("idle — video only (audio mux timed out)")
+                self._mux_done(m, ok=False, note=" — mux timed out")
+            return
+        self._mux_done(m, ok=(rc == 0), rc=rc)
+
+    def _mux_done(self, m, ok, rc=0, note=""):
+        """Swap in the muxed file (or clean up) and complete the job."""
+        try:
+            m["log"].close()
+        except Exception:
+            pass
+        if ok:
             try:
-                if os.path.exists(tmp):
-                    os.remove(tmp)
+                os.replace(m["tmp"], m["out"])
+                size = os.path.getsize(m["out"])
+                took = round(time.time() - m["t0"], 1)
+                debug(f"vCon: audio muxed — {m['acodec']}, size={size}, "
+                      f"{took}s")
+                note = f", audio {m['acodec']}"
+            except Exception as exc:
+                debug(f"vCon: could not replace output after mux: {exc}")
+                note = " — mux swap failed"
+        elif rc:
+            err = ""
+            try:
+                with open(m["log_path"], "r", errors="replace") as fh:
+                    err = fh.read()[-500:]
             except Exception:
                 pass
-        except Exception as exc:
-            debug(f"vCon: audio mux error: {exc}")
-            self._set_status("idle — video only (audio mux error)")
+            if "matches no streams" in err:
+                debug("vCon: source has no audio track — video only")
+                note = ", no audio in source"
+            else:
+                debug(f"vCon: ffmpeg mux failed (rc={rc}): {err}")
+                note = " — audio mux failed"
+        for path in (m["tmp"], m["prog"], m["log_path"]):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception:
+                pass
+        out = m["out"]
+        self._mux = None
+        self._job_complete(out, note)
 
     def _cancel(self, job_id):
-        if self.job and self.job["id"] == job_id and self.state in ("loading",
-                                                                    "encoding"):
+        if self.job and self.job["id"] == job_id and self.state in (
+                "loading", "encoding", "muxing"):
             self._abort_active_job("cancelled by client")
             self._send({"type": "error", "id": job_id, "message": "cancelled",
                         "code": "cancelled"})

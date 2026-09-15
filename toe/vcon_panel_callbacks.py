@@ -114,6 +114,7 @@ _last_src_fps = None
 _noted_table = False   # one-shot raw-table dump for label verification
 _tick_alive = False    # one-shot proof the panel tick is running
 _tick_errs = {}        # {label: last frame reported} — rate-limits tick noise
+_showing_activity = False  # OUTPUT field is showing live job status
 
 
 def _tick_err(label, exc):
@@ -1175,6 +1176,24 @@ def _bar_text(frac, width=10):
     return _BAR_FULL * full + _BAR_EMPTY * (width - full)
 
 
+def _activity_text():
+    """What the encoder is doing right now, for the OUTPUT field.
+
+    The controller's Status par already carries the phase ('encoding
+    120/250', 'muxing audio 40% — foo.mov'); this prefixes the batch
+    position so a multi-file run reads as 'file 2/5'.
+    """
+    try:
+        status = str(op.vcon.par.Status.eval())
+    except Exception:
+        status = "working"
+    total = len(_queue)
+    if total > 1:
+        done = sum(1 for it in _queue if it["status"] == "done")
+        return f"[{done + 1}/{total}]  {status}"
+    return status
+
+
 def _batch_progress():
     """(done_count, total_count) across the queue — the PANEL bar shows
     this for the whole batch (JP), not the current file's 0-1."""
@@ -1407,6 +1426,19 @@ def onFrame():
                 SyncFpsField()
     except Exception as exc:
         _tick_err("fps display", exc)
+
+    # 1c) OUTPUT field doubles as the live activity readout while a job
+    # runs (encoding / muxing audio), then reverts to the path preview
+    global _showing_activity
+    try:
+        if e.is_busy:
+            _showing_activity = True
+            _set_output_text(_activity_text())
+        elif _showing_activity:
+            _showing_activity = False
+            PreviewOutput()
+    except Exception as exc:
+        _tick_err("activity text", exc)
 
     # 1d) preview refresh for the just-emptied moment (mutation points
     # call PreviewOutput directly; this catches paths that don't)
