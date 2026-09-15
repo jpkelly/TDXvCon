@@ -118,6 +118,8 @@ _tick_alive = False    # one-shot proof the panel tick is running
 _tick_errs = {}        # {label: last frame reported} — rate-limits tick noise
 _showing_activity = False  # OUTPUT field is showing live job status
 _install = None            # background audio-support install, or None
+_health_check_frame = -999 # last frame we ran the ffmpeg check
+_health_ok = True          # cached ffmpeg status for the help button
 
 
 def _tick_err(label, exc):
@@ -1624,6 +1626,13 @@ def onFrame():
     except Exception as exc:
         _tick_err("audio install", exc)
 
+    # 1f) help button health indicator: blue when ready, pulsing red
+    # when audio support is missing. Checked every ~60 frames (cached).
+    try:
+        _update_health_button()
+    except Exception as exc:
+        _tick_err("health button", exc)
+
     # 2) feed the loop when idle
     if e.is_busy:
         _refresh_queue()     # keeps the running row's bar moving
@@ -1895,6 +1904,35 @@ def InstallAudioSupport():
     _install = {"proc": proc, "log": log, "log_path": log_path,
                 "dest": dest, "t0": time.time()}
     _set_output_text("Installing audio support — downloading ffmpeg…")
+
+
+def _update_health_button():
+    """Drive the help button color: blue when ready, pulsing red when not.
+
+    Caches the ffmpeg check so we don't glob every frame — re-checks
+    every 60 frames. The pulse uses absTime.frame so it runs without
+    any extra CHOP or timer.
+    """
+    global _health_check_frame, _health_ok
+    w = widget("help_b")
+    if w is None:
+        return
+    frame = absTime.frame
+    if frame - _health_check_frame >= 60 or _health_check_frame < 0:
+        _health_check_frame = frame
+        _health_ok = _ffmpeg_binary() is not None
+    if _health_ok:
+        w.par.Buttonofffacecolorr.val = 0.0
+        w.par.Buttonofffacecolorg.val = 0.3666667
+        w.par.Buttonofffacecolorb.val = 0.5
+    else:
+        # sine pulse at ~2Hz (60fps / 15 ≈ 4Hz, halved by abs)
+        import math
+        pulse = 0.5 + 0.5 * math.sin(frame * 6.28 / 30)
+        r = 0.4 + 0.4 * pulse
+        w.par.Buttonofffacecolorr.val = r
+        w.par.Buttonofffacecolorg.val = 0.0
+        w.par.Buttonofffacecolorb.val = 0.0
 
 
 def _install_tick():
