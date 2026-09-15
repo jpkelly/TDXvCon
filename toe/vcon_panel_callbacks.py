@@ -1774,6 +1774,35 @@ def _cli_version():
     return None
 
 
+def _version_tuple(v):
+    """'0.1.10' -> (0, 1, 10) for ordering; non-numeric parts sort last."""
+    out = []
+    for part in str(v).split("."):
+        try:
+            out.append(int(part))
+        except ValueError:
+            out.append(-1)
+    return tuple(out)
+
+
+def _latest_release(timeout=2.0):
+    """Newest tdxvcon version on PyPI, or None if the check fails.
+
+    Called ONLY when the setup dialog opens — never on a timer and never
+    at startup. Short timeout so a slow or absent network cannot stall
+    TouchDesigner's UI, and failure is silent by design: someone working
+    offline should not be shown an error they cannot act on.
+    """
+    try:
+        import json as _j
+        import urllib.request
+        url = "https://pypi.org/pypi/tdxvcon/json"
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            return _j.loads(resp.read().decode("utf-8"))["info"]["version"]
+    except Exception:
+        return None
+
+
 def _ffmpeg_version():
     """Version string of the ffmpeg vCon would use, or None."""
     exe = _ffmpeg_binary()
@@ -1806,11 +1835,28 @@ def ShowSetupDialog():
     ready = exe is not None
     cli_ver = _cli_version()
     ff_ver = _ffmpeg_version()
+    toe_ver = _toe_version()
+    latest = _latest_release()
     lines = [
         "VERSIONS",
-        f"  vCon (this .toe) : {_toe_version()}",
+        f"  vCon (this .toe) : {toe_ver}",
         f"  vcon CLI tool    : {cli_ver or 'not installed'}",
         f"  ffmpeg           : {ff_ver or 'not installed'}",
+    ]
+    if latest is None:
+        lines += ["  (update check unavailable — offline?)"]
+    elif _version_tuple(latest) > _version_tuple(toe_ver):
+        lines += [
+            "",
+            f"UPDATE AVAILABLE: {latest}  (this .toe is {toe_ver})",
+            "  Installed with pipx?  Run:  pipx upgrade tdxvcon",
+            "  then reopen the .toe from the package.",
+            "  Sent this .toe directly?  Ask for an updated copy —",
+            "  pipx will not touch a .toe you were given.",
+        ]
+    else:
+        lines += [f"  latest on PyPI   : {latest} (up to date)"]
+    lines += [
         "",
         "AUDIO SUPPORT:  " + ("READY" if ready else "NOT INSTALLED"),
         "",
