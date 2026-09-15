@@ -450,11 +450,18 @@ def OnQualityChanged():
     try:
         v = _val("quality_s")
         ext().Setquality(v)
-        w = widget("quality_s")
-        if w is not None:
-            w.par.Widgetlabel.val = f"QUALITY  {_quality_name(v)}"
+        _update_quality_label(v)
     except Exception as exc:
         note(f"quality sync failed: {exc}")
+
+
+def _update_quality_label(v):
+    """Write the quality name into the slider's field area.
+
+    TODO: probe quality_s inner structure to find the right child.
+    For now, a no-op placeholder until we know where the text renders.
+    """
+    pass
 
 
 def OnSelectionChanged():
