@@ -1785,7 +1785,7 @@ def ShowSetupDialog():
         "  - pipx install tdxvcon   (the vCon command-line tool)",
         "  - any system ffmpeg on PATH",
         "",
-        "--- Command-line usage (savvy users) ---",
+        "--- Command-line usage ---",
         "Install the CLI:  pipx install tdxvcon",
         "Transcode:  vcon -i input.mov -c notchlc output.mov",
         "List codecs:  vcon -codecs",
