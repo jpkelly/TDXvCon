@@ -961,8 +961,9 @@ class VconExt:
             acodec, aargs = "aac", ["-b:a", "256k"]
         else:
             acodec, aargs = "pcm_s16le", []
-        # Write to a temp file, then replace the original
-        tmp = video_output + ".muxing.tmp"
+        # Temp name keeps the real extension — ffmpeg infers the
+        # muxer from it, and ".tmp" matches nothing.
+        tmp = os.path.splitext(video_output)[0] + ".muxing" + ext
         cmd = [ffmpeg, "-y",
                "-i", video_output,
                "-i", source,
@@ -972,11 +973,17 @@ class VconExt:
         try:
             import subprocess
             debug(f"vCon: muxing audio — {acodec}, source={source!r}")
-            result = subprocess.run(cmd, capture_output=True, timeout=120)
+            result = subprocess.run(cmd, capture_output=True, timeout=3600)
             if result.returncode != 0:
                 err = result.stderr.decode("utf-8", "replace")[-500:]
-                debug(f"vCon: ffmpeg mux failed (rc={result.returncode}): {err}")
-                self._set_status("idle — video only (audio mux failed)")
+                if "matches no streams" in err:
+                    debug("vCon: source has no audio track — video only")
+                    self._set_status(
+                        f"idle — last: {os.path.basename(video_output)} "
+                        f"(no audio in source)")
+                else:
+                    debug(f"vCon: ffmpeg mux failed (rc={result.returncode}): {err}")
+                    self._set_status("idle — video only (audio mux failed)")
                 try:
                     if os.path.exists(tmp):
                         os.remove(tmp)
@@ -990,7 +997,7 @@ class VconExt:
             self._set_status(f"idle — last: {os.path.basename(video_output)} "
                              f"(audio muxed, {acodec})")
         except subprocess.TimeoutExpired:
-            debug("vCon: ffmpeg mux timed out (120s) — output is video-only")
+            debug("vCon: ffmpeg mux timed out (1h) — output is video-only")
             self._set_status("idle — video only (audio mux timed out)")
             try:
                 if os.path.exists(tmp):
