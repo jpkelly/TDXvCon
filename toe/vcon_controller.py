@@ -1000,9 +1000,8 @@ class VconExt:
         TD's embedded Python can't see pip packages installed elsewhere,
         so the search widens from "importable" to "findable on disk":
           1. import imageio_ffmpeg  (TD's Python has it)
-          2. the repo/dev venv, from this controller DAT's linked file
-          3. pipx venvs and user site-packages (normal user installs)
-          4. system ffmpeg on PATH
+          2. pipx venvs and user site-packages (normal user installs)
+          3. system ffmpeg on PATH
         Result is cached — this runs once per session, not per job.
         """
         cls = type(self)
@@ -1019,21 +1018,7 @@ class VconExt:
         if not found:
             import glob
             home = os.path.expanduser("~")
-            patterns = []
-            # repo/dev venv, derived from this DAT's linked file path
-            for holder in ("vcon_controller", "panel_callbacks"):
-                try:
-                    dat = self.ownerComp.op(holder)
-                    src = dat.par.file.eval() if dat is not None else ""
-                    if src:
-                        repo = os.path.dirname(os.path.dirname(src))
-                        patterns.append(
-                            f"{repo}/.venv/lib/python*/site-packages/"
-                            "imageio_ffmpeg/binaries/ffmpeg-*")
-                        break
-                except Exception:
-                    continue
-            patterns += [
+            patterns = [
                 f"{home}/.local/pipx/venvs/*/lib/python*/site-packages/"
                 "imageio_ffmpeg/binaries/ffmpeg-*",
                 f"{home}/Library/Python/*/lib/python/site-packages/"
