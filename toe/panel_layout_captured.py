@@ -63,7 +63,7 @@ CAPTURED_PANEL = {
     "format_dd": {
         "geometry": {'x': 20, 'y': 480, 'w': 230, 'h': 30},
         "nodelayout": (20, -1510),
-        "pars": {'resizecomp': '/project1/vcon/panel/format_dd', 'repocomp': '/project1/vcon/panel/format_dd', 'Value0': 'yuv420', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'AUDIO', 'Labelwidth': 90, 'Menunames': 'yuv420 yuv444p8bit', 'Menulabels': "'YUV 4:2:0 8-bit' 'YUV 4:4:4 8-bit'"},
+        "pars": {'resizecomp': '/project1/vcon/panel/format_dd', 'repocomp': '/project1/vcon/panel/format_dd', 'Value0': 'yuv420', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'PIXEL FORMAT', 'Labelwidth': 90, 'Menunames': 'yuv420 yuv444p8bit', 'Menulabels': "'YUV 4:2:0 8-bit' 'YUV 4:4:4 8-bit'"},
     },
     "fps_t": {
         "geometry": {'x': 20, 'y': 510, 'w': 85, 'h': 30},
