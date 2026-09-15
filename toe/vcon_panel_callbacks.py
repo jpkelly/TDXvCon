@@ -438,9 +438,10 @@ _CONTAINER_CODECS = {
 
 #: Container → audio codec compatibility for the ffmpeg mux.
 _CONTAINER_AUDIO = {
-    "mov":  ["copy", "pcm_s16le", "pcm_s24le", "aac", "alac"],
-    "mp4":  ["copy", "aac"],
-    "mkv":  ["copy", "pcm_s16le", "pcm_s24le", "aac", "alac", "mp3"],
+    "mov":  ["copy", "pcm_s16le", "pcm_s24le", "aac", "alac", "none"],
+    "mp4":  ["copy", "aac", "none"],
+    "mkv":  ["copy", "pcm_s16le", "pcm_s24le", "aac", "alac", "mp3",
+             "none"],
     "webm": ["none"],
 }
 

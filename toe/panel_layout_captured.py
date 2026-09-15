@@ -63,7 +63,7 @@ CAPTURED_PANEL = {
     "audio_dd": {
         "geometry": {'x': 20, 'y': 480, 'w': 230, 'h': 30},
         "nodelayout": (20, -1910),
-        "pars": {'resizecomp': '/project1/vcon/panel/audio_dd', 'repocomp': '/project1/vcon/panel/audio_dd', 'Value0': 'copy', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnAudioChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'AUDIO', 'Labelwidth': 90, 'Menunames': 'copy pcm_s16le pcm_s24le aac alac mp3', 'Menulabels': "'Copy (source)' 'PCM 16-bit' 'PCM 24-bit' AAC ALAC MP3"},
+        "pars": {'resizecomp': '/project1/vcon/panel/audio_dd', 'repocomp': '/project1/vcon/panel/audio_dd', 'Value0': 'copy', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnAudioChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'AUDIO', 'Labelwidth': 90, 'Menunames': 'copy pcm_s16le pcm_s24le aac alac mp3 none', 'Menulabels': "'Copy (source)' 'PCM 16-bit' 'PCM 24-bit' AAC ALAC MP3 'None (video only)'"},
     },
     "fps_t": {
         "geometry": {'x': 20, 'y': 510, 'w': 85, 'h': 30},
