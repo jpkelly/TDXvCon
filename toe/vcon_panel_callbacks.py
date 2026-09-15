@@ -1849,10 +1849,8 @@ def ShowSetupDialog():
         lines += [
             "",
             f"UPDATE AVAILABLE: {latest}  (this .toe is {toe_ver})",
-            "  Installed with pipx?  Run:  pipx upgrade tdxvcon",
-            "  then reopen the .toe from the package.",
-            "  Sent this .toe directly?  Ask for an updated copy —",
-            "  pipx will not touch a .toe you were given.",
+            "  pipx install:  pipx upgrade tdxvcon, then reopen the .toe",
+            "  given a .toe:  ask for an updated copy",
         ]
     else:
         lines += [f"  latest on PyPI   : {latest} (up to date)"]
