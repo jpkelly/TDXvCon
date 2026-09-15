@@ -11,6 +11,8 @@ is_busy (lowercase) — the panel must NOT call a promoted-style Isbusy.
 """
 
 import os
+import sys
+import time
 
 #: Codec table — distilled from src/vcon/codec_meta.py (TD menu tokens).
 #: KEEP IN STEP with codec_meta.py — regenerate via toe/gen_codec_table.py.
@@ -115,6 +117,7 @@ _noted_table = False   # one-shot raw-table dump for label verification
 _tick_alive = False    # one-shot proof the panel tick is running
 _tick_errs = {}        # {label: last frame reported} — rate-limits tick noise
 _showing_activity = False  # OUTPUT field is showing live job status
+_install = None            # background audio-support install, or None
 
 
 def _tick_err(label, exc):
@@ -1614,6 +1617,13 @@ def onFrame():
     except Exception as exc:
         _tick_err("preview refresh", exc)
 
+    # 1e) background audio-support install, if one is running
+    try:
+        if _install is not None:
+            _install_tick()
+    except Exception as exc:
+        _tick_err("audio install", exc)
+
     # 2) feed the loop when idle
     if e.is_busy:
         _refresh_queue()     # keeps the running row's bar moving
@@ -1637,6 +1647,225 @@ def onFrame():
             pass
     _run_next()
     _refresh_queue()
+
+
+# ---------------------------------------------------------------------
+# Audio support setup (ffmpeg via imageio-ffmpeg)
+# ---------------------------------------------------------------------
+#
+# TD's embedded Python cannot see pip packages installed elsewhere, and
+# we do not ship a 60MB ffmpeg binary inside the toe. So audio muxing
+# needs imageio-ffmpeg fetched ONCE. InstallAudioSupport() does that
+# without a terminal: it runs pip into a vCon-owned folder in the user's
+# data directory — no admin rights, no writing inside the TD app bundle
+# (which needs admin on Windows and breaks code signing on macOS), and
+# it survives TouchDesigner updates.
+
+def _vcon_libs_dir():
+    """Where vCon keeps downloaded Python packages, per platform."""
+    if sys.platform == "darwin":
+        base = os.path.expanduser("~/Library/Application Support/vCon")
+    elif os.name == "nt":
+        base = os.path.join(
+            os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
+            "vCon")
+    else:
+        base = os.path.expanduser("~/.local/share/vCon")
+    return os.path.join(base, "pylibs")
+
+
+def _ffmpeg_binary():
+    """The ffmpeg binary vCon can currently use, or None."""
+    import glob
+    import shutil
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        pass
+    home = os.path.expanduser("~")
+    for pat in (
+            f"{_vcon_libs_dir()}/imageio_ffmpeg/binaries/ffmpeg-*",
+            f"{home}/.local/pipx/venvs/*/lib/python*/site-packages/"
+            "imageio_ffmpeg/binaries/ffmpeg-*",
+            f"{home}/Library/Python/*/lib/python/site-packages/"
+            "imageio_ffmpeg/binaries/ffmpeg-*"):
+        for cand in sorted(glob.glob(pat), reverse=True):
+            if os.path.isfile(cand):
+                return cand
+    return shutil.which("ffmpeg")
+
+
+def _python_for_pip():
+    """An interpreter that can run pip, preferring TouchDesigner's own.
+
+    sys.executable inside TD is the TouchDesigner BINARY, not python —
+    running `sys.executable -m pip` would launch a second TD. So the
+    interpreter is located explicitly.
+    """
+    import subprocess
+    cands = []
+    for prefix in (sys.prefix, getattr(sys, "base_prefix", "")):
+        if not prefix:
+            continue
+        if os.name == "nt":
+            cands += [os.path.join(prefix, "python.exe")]
+        else:
+            cands += [os.path.join(prefix, "bin", "python3.11"),
+                      os.path.join(prefix, "bin", "python3")]
+    import shutil
+    for name in (("py", "python", "python3") if os.name == "nt"
+                 else ("python3", "python")):
+        found = shutil.which(name)
+        if found:
+            cands.append(found)
+    for cand in cands:
+        if not cand or not os.path.isfile(cand):
+            continue
+        try:
+            rc = subprocess.run([cand, "-m", "pip", "--version"],
+                                capture_output=True, timeout=30).returncode
+            if rc == 0:
+                return cand
+        except Exception:
+            continue
+    return None
+
+
+def AudioSupportStatus():
+    """Report whether audio muxing is ready, and how to fix it if not."""
+    exe = _ffmpeg_binary()
+    if exe:
+        note(f"audio support: READY — ffmpeg at {exe}")
+        return True
+    note("audio support: NOT INSTALLED — encodes will be video-only.")
+    note("  Click INSTALL AUDIO on the panel, or see the manual steps:")
+    ShowAudioSetupHelp()
+    return False
+
+
+def ShowAudioSetupHelp():
+    """Print the manual install steps for this platform (savvy users)."""
+    dest = _vcon_libs_dir()
+    py = _python_for_pip() or ("py" if os.name == "nt" else "python3")
+    note("-" * 64)
+    note("MANUAL AUDIO SETUP — vCon muxes audio with ffmpeg, supplied")
+    note("by the imageio-ffmpeg package. Install it into vCon's own")
+    note("folder (no admin rights, nothing written inside TouchDesigner):")
+    note("")
+    note(f'  "{py}" -m pip install --upgrade --target "{dest}" imageio-ffmpeg')
+    note("")
+    note("Run that in Terminal (macOS) or cmd/PowerShell (Windows).")
+    note("Alternatives that vCon also detects automatically:")
+    note("  • pipx install tdxvcon      (the vCon command-line tool)")
+    note("  • a system ffmpeg on PATH   (brew install ffmpeg, etc.)")
+    note("Then click CHECK AUDIO, or restart TouchDesigner.")
+    note("-" * 64)
+
+
+def InstallAudioSupport():
+    """One-click audio support: pip-install imageio-ffmpeg in the background.
+
+    Non-blocking — pip downloads ~30MB and would freeze TD's UI if run
+    synchronously. Progress is polled by the panel tick and narrated to
+    the textport so the user can see exactly what is happening.
+    """
+    global _install
+    if _install is not None:
+        note("audio install: already running — watch the OUTPUT field")
+        return
+    exe = _ffmpeg_binary()
+    if exe:
+        note(f"audio support already installed — ffmpeg at {exe}")
+        return
+    py = _python_for_pip()
+    if py is None:
+        note("audio install: no Python with pip was found.")
+        note("  TouchDesigner normally ships one; if this persists, use")
+        note("  the manual steps below.")
+        ShowAudioSetupHelp()
+        return
+    dest = _vcon_libs_dir()
+    try:
+        os.makedirs(dest, exist_ok=True)
+    except Exception as exc:
+        note(f"audio install: cannot create {dest}: {exc}")
+        return
+    log_path = os.path.join(dest, "install.log")
+    cmd = [py, "-m", "pip", "install", "--upgrade",
+           "--target", dest, "imageio-ffmpeg"]
+    note("-" * 64)
+    note("INSTALLING AUDIO SUPPORT")
+    note(f"  interpreter : {py}")
+    note(f"  installing  : imageio-ffmpeg (ffmpeg binary, ~30MB download)")
+    note(f"  destination : {dest}")
+    note("  This runs in the background — TouchDesigner stays responsive.")
+    note("-" * 64)
+    try:
+        import subprocess
+        log = open(log_path, "wb")
+        proc = subprocess.Popen(cmd, stdout=log, stderr=log,
+                                stdin=subprocess.DEVNULL)
+    except Exception as exc:
+        note(f"audio install: could not start pip: {exc}")
+        ShowAudioSetupHelp()
+        return
+    _install = {"proc": proc, "log": log, "log_path": log_path,
+                "dest": dest, "t0": time.time()}
+    _set_output_text("Installing audio support — downloading ffmpeg…")
+
+
+def _install_tick():
+    """Poll the background pip install; narrate the result."""
+    global _install
+    inst = _install
+    if inst is None:
+        return
+    rc = inst["proc"].poll()
+    if rc is None:
+        if time.time() - inst["t0"] > 600:
+            try:
+                inst["proc"].kill()
+            except Exception:
+                pass
+            note("audio install: timed out after 10 minutes.")
+            ShowAudioSetupHelp()
+            _install = None
+        else:
+            secs = int(time.time() - inst["t0"])
+            _set_output_text(f"Installing audio support — {secs}s elapsed…")
+        return
+    try:
+        inst["log"].close()
+    except Exception:
+        pass
+    _install = None
+    if rc == 0:
+        exe = _ffmpeg_binary()
+        if exe:
+            note("-" * 64)
+            note("AUDIO SUPPORT INSTALLED")
+            note(f"  ffmpeg: {exe}")
+            note("  Encodes will now carry audio. Nothing else to do.")
+            note("-" * 64)
+            _set_output_text("Audio support installed — ready to encode")
+        else:
+            note("audio install: pip succeeded but no ffmpeg binary was "
+                 "found afterwards.")
+            ShowAudioSetupHelp()
+        PreviewOutput()
+        return
+    tail = ""
+    try:
+        with open(inst["log_path"], "r", errors="replace") as fh:
+            tail = fh.read()[-800:]
+    except Exception:
+        pass
+    note(f"audio install FAILED (pip exit code {rc}):")
+    if tail:
+        note(tail)
+    ShowAudioSetupHelp()
+    _set_output_text("Audio install failed — see textport for details")
 
 
 # ---------------------------------------------------------------------

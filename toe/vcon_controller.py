@@ -41,6 +41,7 @@ Protocol (v1, matching vcon.protocol):
 
 import json
 import os
+import sys
 import time
 
 #: Controller build identifier. Written into the toe's custom "Version"
@@ -1018,7 +1019,19 @@ class VconExt:
         if not found:
             import glob
             home = os.path.expanduser("~")
+            # vCon's own package folder, written by the panel's
+            # "INSTALL AUDIO" button (no admin rights required).
+            if sys.platform == "darwin":
+                vcon_libs = os.path.expanduser(
+                    "~/Library/Application Support/vCon/pylibs")
+            elif os.name == "nt":
+                vcon_libs = os.path.join(
+                    os.environ.get("LOCALAPPDATA") or home,
+                    "vCon", "pylibs")
+            else:
+                vcon_libs = os.path.expanduser("~/.local/share/vCon/pylibs")
             patterns = [
+                f"{vcon_libs}/imageio_ffmpeg/binaries/ffmpeg-*",
                 f"{home}/.local/pipx/venvs/*/lib/python*/site-packages/"
                 "imageio_ffmpeg/binaries/ffmpeg-*",
                 f"{home}/Library/Python/*/lib/python/site-packages/"

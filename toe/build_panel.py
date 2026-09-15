@@ -625,6 +625,16 @@ def build():
         setp(widgets["remove_b"], "Offtoonscript0",
              "op.vcon.op('panel_callbacks').module.RemoveSelected()")
         say("  remove_b: selected-row removal wired")
+    # audio_b (optional, hand-added): one-click audio support install.
+    # Wired defensively so the panel works with or without the button.
+    if "audio_b" in widgets:
+        setp(widgets["audio_b"], "Offtoonscript0",
+             "op.vcon.op('panel_callbacks').module.InstallAudioSupport()")
+        say("  audio_b: audio-support install wired")
+    if "help_b" in widgets:
+        setp(widgets["help_b"], "Offtoonscript0",
+             "op.vcon.op('panel_callbacks').module.AudioSupportStatus()")
+        say("  help_b: audio-support status/help wired")
 
     # Buttons: PROBE 14 VERDICT — the strip renders WIDGETLABEL, and an
     # earlier fix WROTE 'START' there, doubling with the face ('START |
@@ -1245,6 +1255,12 @@ try:
     print("[panel] audio_sep visibility applied")
 except Exception as exc:
     print(f"[panel] (audio_sep visibility: {exc})")
+# Tell the user up front whether audio muxing is available — otherwise
+# the first silent output is the only clue.
+try:
+    op.vcon.op('panel_callbacks').module.AudioSupportStatus()
+except Exception as exc:
+    print(f"[panel] (audio status: {exc})")
 
 # ---- restore persistent runtime settings (survives TD quit/relaunch) -
 # Runs AFTER the bake + the seeds so the user's last selections win
