@@ -639,8 +639,7 @@ def build():
     # the button's only text, centered via Buttonalignx/y.
     for name, text in [("start_b", "START"), ("pause_b", "PAUSE"),
                        ("stop_b", "STOP"), ("add_b", "+ ADD"),
-                       ("remove_b", "REMOVE"), ("help_b", "SETUP"),
-                       ("setup_b", "SETUP")]:
+                       ("remove_b", "REMOVE")]:
         if name in widgets:
             w_ = widgets[name]
             setp(w_, "Widgetlabel", "")          # strip: BLANK (was the dup)
