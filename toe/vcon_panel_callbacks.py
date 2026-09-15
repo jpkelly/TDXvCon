@@ -1734,6 +1734,65 @@ def _python_for_pip():
     return None
 
 
+def _toe_version():
+    """Version baked into this .toe (the controller's CONTROLLER_VERSION)."""
+    try:
+        return op.vcon.op('vcon_controller').module.CONTROLLER_VERSION
+    except Exception:
+        return "unknown"
+
+
+def _cli_version():
+    """Version of the installed tdxvcon command-line tool, if any.
+
+    TD's Python cannot import it, so the version is read off the
+    dist-info directory name in the pipx venv instead.
+    """
+    import glob
+    import re
+    try:
+        from importlib.metadata import version
+        return version("tdxvcon")
+    except Exception:
+        pass
+    home = os.path.expanduser("~")
+    pats = [
+        f"{home}/.local/pipx/venvs/tdxvcon/lib/python*/site-packages/"
+        "tdxvcon-*.dist-info",
+        # older pipx on Windows keeps venvs under LOCALAPPDATA
+        os.path.join(os.environ.get("LOCALAPPDATA") or home, "pipx", "pipx",
+                     "venvs", "tdxvcon", "Lib", "site-packages",
+                     "tdxvcon-*.dist-info"),
+        f"{home}/.local/pipx/venvs/tdxvcon/Lib/site-packages/"
+        "tdxvcon-*.dist-info",
+    ]
+    for pat in pats:
+        for hit in glob.glob(pat):
+            m = re.search(r"tdxvcon-([^-/\\]+)\.dist-info", hit)
+            if m:
+                return m.group(1)
+    return None
+
+
+def _ffmpeg_version():
+    """Version string of the ffmpeg vCon would use, or None."""
+    exe = _ffmpeg_binary()
+    if not exe:
+        return None
+    try:
+        import subprocess
+        out = subprocess.run([exe, "-version"], capture_output=True,
+                             timeout=10).stdout.decode("utf-8", "replace")
+        first = out.splitlines()[0] if out else ""
+        # "ffmpeg version 7.1 Copyright ..." -> "7.1"
+        parts = first.split()
+        if len(parts) >= 3 and parts[0] == "ffmpeg":
+            return parts[2]
+        return first[:40] or None
+    except Exception:
+        return None
+
+
 def ShowSetupDialog():
     """SETUP button: a modal dialog with live status + actions.
 
@@ -1745,7 +1804,14 @@ def ShowSetupDialog():
     dest = _vcon_libs_dir()
     py = _python_for_pip() or ("py" if os.name == "nt" else "python3")
     ready = exe is not None
+    cli_ver = _cli_version()
+    ff_ver = _ffmpeg_version()
     lines = [
+        "VERSIONS",
+        f"  vCon (this .toe) : {_toe_version()}",
+        f"  vcon CLI tool    : {cli_ver or 'not installed'}",
+        f"  ffmpeg           : {ff_ver or 'not installed'}",
+        "",
         "AUDIO SUPPORT:  " + ("READY" if ready else "NOT INSTALLED"),
         "",
     ]
