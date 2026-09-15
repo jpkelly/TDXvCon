@@ -73,7 +73,7 @@ CAPTURED_PANEL = {
     "audio_sep_dd": {
         "geometry": {'x': 291, 'y': 480, 'w': 176, 'h': 30},
         "nodelayout": (410, -1910),
-        "pars": {'resizecomp': '/project1/vcon/panel/audio_sep_dd', 'repocomp': '/project1/vcon/panel/audio_sep_dd', 'Value0': 'wav16', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SEP FORMAT', 'Labelwidth': 74, 'Menunames': 'wav16 wav24 aiff16 aiff24 aac mp3 copy', 'Menulabels': "'WAV 16-bit' 'WAV 24-bit' 'AIFF 16-bit' 'AIFF 24-bit' 'AAC 256k' 'MP3 320k' 'Copy source'"},
+        "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/audio_sep_dd', 'repocomp': '/project1/vcon/panel/audio_sep_dd', 'Value0': 'wav16', 'Onvaluechangescript0': "; op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SEP FORMAT', 'Labelwidth': 74, 'Menunames': 'wav16 wav24 aiff16 aiff24 aac mp3 copy', 'Menulabels': "'WAV 16-bit' 'WAV 24-bit' 'AIFF 16-bit' 'AIFF 24-bit' 'AAC 256k' 'MP3 320k' 'Copy source'"},
     },
     "fps_t": {
         "geometry": {'x': 20, 'y': 510, 'w': 85, 'h': 30},
@@ -137,12 +137,19 @@ CAPTURED_PANEL = {
         "pars": {'resizecomp': '/project1/vcon/panel/subtype_dd', 'repocomp': '/project1/vcon/panel/subtype_dd', 'Value0': '', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.UpdateSubtypes(); op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'TYPE', 'Labelwidth': 60, 'Menunames': ''},
     },
     "destination": {
-        "geometry": {'x': 20, 'y': 600, 'w': 620, 'h': 30},
+        "geometry": {'x': 20, 'y': 600, 'w': 590, 'h': 30},
         "nodelayout": (20, -1140),
         "pars": {'resizecomp': '/project1/vcon/panel/destination', 'repocomp': '/project1/vcon/panel/destination', 'Value0': '/Users/jp/Desktop/converted', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.PreviewOutput(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'DESTINATION', 'Labelwidth': 90, 'Stringfieldfontsize': 10, 'Stringfieldfontcolorr': 0.0, 'Stringfieldfontcolorg': 0.0, 'Stringfieldfontcolorb': 0.0},
     },
-    "added": ['fps_t', 'remove_b'],
+    "help_b": {
+        "geometry": {'x': 610, 'y': 600, 'w': 30, 'h': 30},
+        "nodelayout": (220, -1140),
+        "widgettox": 'buttonMomentary',
+        "pars": {'resizecomp': '/project1/vcon/panel/help_b', 'repocomp': '/project1/vcon/panel/help_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.ShowSetupDialog()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': '\U000f0625', 'Buttononlabel': '\U000f0625', 'Buttonfontsize': 20, 'Buttonofffacecolorr': 0.0, 'Buttonofffacecolorg': 0.3666667, 'Buttonofffacecolorb': 0.5, 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9, 'Buttonwidth': 25},
+        "expressions": {'Buttonofflabel': 'chr(0xF0625)', 'Buttononlabel': 'chr(0xF0625)'},
+    },
+    "added": ['fps_t', 'help_b', 'remove_b'],
     "removed": ['status_l'],
     "vconnodelayout": [('callbacks', (260, -580), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('fit', (-240, -530), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('info', (-440, -590), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('moviein', (-440, -460), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('movieout', (-40, -460), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel', (-40, -120), (0.5, 0.05000000074505806, 0.20000000298023224)), ('panel_build_run', (-20, 410), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel_callbacks', (170, -110), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel_capture_run', (-20, 540), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel_dnd', (160, 230), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('panel_tick', (-20, 230), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('queue_display', (-20, 90), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('queue_table', (150, 90), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('tcpip', (110, -580), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('tcpip_callbacks', (-40, -580), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('tick', (-190, -310), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005)), ('vcon_controller', (-20, -310), (0.6700000166893005, 0.6700000166893005, 0.6700000166893005))],
-    "panelnodelayout": {'fps_t': (20, -1730), 'remove_b': (780, -2080), 'inspector': (-480, -2290), 'listerConfig': (-260, -2290)},
+    "panelnodelayout": {'fps_t': (20, -1730), 'help_b': (220, -1140), 'remove_b': (780, -2080), 'inspector': (-480, -2290), 'listerConfig': (-260, -2290)},
 }
