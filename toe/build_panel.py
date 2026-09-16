@@ -416,6 +416,17 @@ def build():
             continue
         scratch.destroy()
         place(wcomp, x, y, w, h)
+        # Link the lister to its table THE MOMENT it exists. ListerExt's
+        # Refresh runs on init and raises "Blank header in col 0" with no
+        # input — clearing that error afterwards is whack-a-mole, because
+        # any later re-init raises it again. queue_display is built before
+        # the widgets precisely so this link can happen here.
+        if tox == "lister":
+            try:
+                wcomp.par.Inputtabledat = qd
+                wcomp.par.Inputtablehasheaders = True
+            except Exception as exc:
+                say(f"  (early lister table link: {exc})")
         widgets[outer_name] = wcomp
     # HAND-ADDED widgets (capture v4): JP added a palette widget by
     # hand; the capture records its palette tox origin — recreate it
@@ -454,6 +465,12 @@ def build():
         geom = add_entry.get("geometry") or {}
         place(wcomp, geom.get("x", 20), geom.get("y", 40),
               geom.get("w", 100), geom.get("h", 30))
+        if tox == "lister":
+            try:
+                wcomp.par.Inputtabledat = qd
+                wcomp.par.Inputtablehasheaders = True
+            except Exception as exc:
+                say(f"  (early lister table link: {exc})")
         widgets[add_name] = wcomp
         say(f"  added {add_name}: recreated from palette {tox!r}")
     say(f"loaded {len(widgets)} widgets "
