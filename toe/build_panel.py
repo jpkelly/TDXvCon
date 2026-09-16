@@ -1299,9 +1299,17 @@ except Exception as exc:
 # ListerExt.__init__ runs the instant the widget loads from its tox —
 # before any table can be linked — so its first Refresh legitimately
 # has no input. Every later Refresh succeeds; the badge is a remembered
-# error, not a live one. Re-initialising the extension and cycling
-# allowCooking were both tried and neither clears it, so it is left
-# alone rather than papered over.
+# error, not a live one. clearScriptErrors() is TD's documented API
+# for exactly this: a stored script error that a successful cook does
+# not clear. Called AFTER the table is linked so it only clears the
+# stale load-time error, never a real one.
+try:
+    _q = op.vcon.op('panel').op('queue')
+    if _q is not None:
+        _q.clearScriptErrors()
+        print("[panel] lister stale script errors cleared")
+except Exception as exc:
+    print(f"[panel] (lister clearScriptErrors: {exc})")
 
 # ---- SAVE the project ------------------------------------------------
 # Without this the panel build lives only in the running TD session:
