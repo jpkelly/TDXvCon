@@ -880,13 +880,14 @@ def build():
     say("binding progress + status")
     if "status_l" in widgets:
         try:
-            # Widgetlabel is the STRING par (evidence: the stale path JP
-            # saw rendered in output_l lived there; the par NAMED 'Label'
-            # is an OP-reference to the widget's inner label child).
-            # status_l is a REMOVABLE widget (JP 2026-09-14): absent from
-            # the capture, this block simply skips.
-            widgets["status_l"].par.Widgetlabel.expr = "op.vcon.par.Status"
-            say("  status label bound to Status par (Widgetlabel expr)")
+            # The panel callbacks OWN this label now (SyncStatusField:
+            # output name + frame counter). Assigning .expr would put the
+            # par in EXPRESSION mode and re-evaluate over every write, so
+            # force CONSTANT instead.
+            _slp = widgets["status_l"].par.Widgetlabel
+            _slp.mode = ParMode.CONSTANT
+            _slp.val = ""
+            say("  status label: CONSTANT (callbacks own it)")
         except Exception as exc:
             say(f"  (status bind: {exc})")
 
@@ -1121,7 +1122,21 @@ def build():
                 say("  forwarder already present")
             else:
                 cbdat.text = txt + fwd
+                txt = cbdat.text or ""
                 say("  onSelectRow -> OnQueueRowSelected wired")
+            # Separate marker: panels built before deselect support have
+            # the select forwarder but not this one.
+            dfwd = (
+                "\n\n# --- vCon queue deselect (builder-injected) ---\n"
+                "def onDeselectRow(info):\n"
+                "    op.vcon.op('panel_callbacks').module."
+                "OnQueueRowDeselected(info)\n")
+            dmarker = "vCon queue deselect"
+            if dmarker in txt:
+                say("  deselect forwarder already present")
+            else:
+                cbdat.text = txt + dfwd
+                say("  onDeselectRow -> OnQueueRowDeselected wired")
         except Exception as exc:
             say(f"  !! row-click forwarder: {exc}")
 

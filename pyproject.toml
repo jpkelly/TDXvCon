@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 #     pipx install tdxvcon
 #     vcon -i in.mov -c notchlc out.mov
 name = "tdxvcon"
-version = "0.1.4"
+version = "0.1.5"
 description = "GPU video transcoder front-end driving TouchDesigner's Movie File Out TOP (NotchLC, Hap, ProRes, ...) — FFmpeg-style CLI."
 readme = "README.md"
 requires-python = ">=3.10"

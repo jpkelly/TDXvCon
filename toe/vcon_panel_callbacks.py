@@ -109,6 +109,9 @@ _queue = []
 
 #: last source-rate seen by the onFrame FPS display (SOURCE mode)
 _last_src_fps = None
+#: (source fps, selected path, queue length) — SOURCE mode re-reads the
+#: displayed rate whenever any of these change, not just the fps
+_last_fps_key = None
 
 #: row-click inspector state: the clicked item + load ticks (the
 #: Media File Info DAT provides the metadata; JP 2026-09-14: click a
@@ -121,6 +124,7 @@ _install = None            # background audio-support install, or None
 _health_check_frame = -999 # last frame we ran the ffmpeg check
 _health_ok = True          # cached ffmpeg status for the help button
 _ROW_H = 22                # lister row height in px (measured, JP)
+_BLANK = "---"             # FPS/OUTPUT placeholder: nothing to show
 _lister_errs_cleared = False  # one-shot: stale init error on the lister
 
 
@@ -134,7 +138,6 @@ def _tick_err(label, exc):
     if now - _tick_errs.get(label, -9999) > 300:
         _tick_errs[label] = now
         note(f"tick error [{label}]: {type(exc).__name__}: {exc}")
-_last_sel = ""         # last lister Selectedrows seen (poll fallback)
 _selected_path = None  # input path of the last clicked row (remove_b target)
 
 #: --- persistent panel state (survives TD quit/relaunch) -------------
@@ -298,27 +301,36 @@ def _derive_output(src, dst, codec, subtype):
     return derived
 
 
+def _derived_output_for(src):
+    """The full output path `src` would get under the CURRENT settings,
+    collision numbering included."""
+    codec = _val("codec_dd") or "notchlc"
+    subtype = _validate_choice(codec, "subtype", _val("subtype_dd"))
+    return _unique_output(_derive_output(src, _dst_dir(), codec, subtype))
+
+
 def _is_movie(path):
     return os.path.splitext(path)[1].lower() in MOVIE_EXTS
 
 
 # ---------------------------------------------------------------------
-# Live preview of the output filename
+# Live preview: OUTPUT field describes the SOURCE the user is looking at
 # ---------------------------------------------------------------------
 
-def PreviewOutput():
-    """Update the read-only OUTPUT field from current widget state.
+def PreviewOutput(override_src=None):
+    """Refresh the read-only OUTPUT field: 'source name | WxH | fps |
+    length | codec' for the selected row.
 
-    Called on any relevant widget change. Shows the auto-named output the
-    next START would create — including ' (2)' collision numbering.
+    `override_src` names the file to describe regardless of selection —
+    drops pass the file just added (JP 2026-09-15: without it the field
+    kept showing the FIRST drop, since it read _queue[0]).
 
     LIVE-VERIFIED (2026-09-13 dump): the label widget renders the LABEL
     par, NOT Widgetlabel — writes to Widgetlabel silently don't render
     on this build ('Output field shows nothing', the SECOND occurrence).
-    Full path: destination folder + derived file name.
     """
     try:
-        # An empty queue has no output to preview, whatever was last
+        # An empty queue has nothing to describe, whatever was last
         # clicked: a stale _selected_path from a finished/removed row
         # kept showing a filename after the queue drained.
         global _selected_path
@@ -326,31 +338,84 @@ def PreviewOutput():
             _selected_path = None
             _set_output_text("(queue is empty — add files)")
             return
-        # the SELECTED row if one is clicked, else the next job (first
-        # queued) — showing _queue[0] always meant 2nd+ drops recomputed
-        # identical text and looked frozen
-        src = None
-        if _selected_path:
-            src = _selected_path
-        if not src:
-            for it in _queue:
-                if it["status"] == "queued":
-                    src = it["input"]
-                    break
-        if not src and _queue:
-            src = _queue[0]["input"]
+        # The SELECTED row, or the file a drop just added. NOT the first
+        # queued one: after a deselect that described a row the user was
+        # no longer pointing at (JP 2026-09-15).
+        src = override_src or _selected_path
         if not src or not os.path.isfile(src):
-            _set_output_text("(queue is empty — add files)")
+            _set_output_text(_BLANK)
             return
-        dst = _val("destination")
-        dst_dir = dst if dst and os.path.isdir(dst) else (
-            os.path.dirname(dst) if dst else None)
-        codec = _val("codec_dd") or "notchlc"
-        subtype = _validate_choice(codec, "subtype", _val("subtype_dd"))
-        out = _unique_output(_derive_output(src, dst_dir, codec, subtype))
-        _set_output_text(out)
+        src = _full_path_for(os.path.basename(src)) or src
+        _inspect_now(src, attempt=0)
     except Exception as exc:
         note(f"preview failed: {exc}")
+
+
+#: Phases worth naming in the status label. 'encoding' also shows the
+#: frame counter; the rest have no frames to count.
+_PHASE_LABELS = ("loading", "encoding", "finishing", "muxing",
+                 "extracting")
+_STATUS_PREFIX = "Encoded file name: "
+_EMPTY_QUEUE_HINT = "Drag files into the queue area below or click ADD button"
+
+
+def _controller_phase():
+    """The controller's state name, or '' when unreadable. Falls back to
+    the first word of the Status par, which carries the same phase."""
+    try:
+        s = str(ext().state or "").strip().lower()
+        if s:
+            return s
+    except Exception:
+        pass
+    try:
+        return str(op.vcon.par.Status.eval()).strip().split(" ")[0].lower()
+    except Exception:
+        return ""
+
+
+def SyncStatusField():
+    """The STATUS label (overlaid on the progress bar) names the file
+    being WRITTEN, and what is happening to it:
+      encoding — output name + 'encoding' + frame counter
+      loading/finishing/muxing/extracting — output name + the phase
+      idle, row selected — that row's output name under current settings
+      idle, nothing selected — '---'
+      empty queue — how to add files
+    """
+    try:
+        try:
+            busy = bool(ext().is_busy)
+        except Exception:
+            busy = False
+        if busy:
+            run = next((it for it in _queue
+                        if it["status"] == "running"), None)
+            out = (run or {}).get("output") or ""
+            text = (_STATUS_PREFIX + os.path.basename(out)) if out else ""
+            phase = _controller_phase()
+            if phase == "encoding":
+                try:
+                    frame, total = ext().progress
+                except Exception:
+                    frame, total = 0, 0
+                text = f"{text}  encoding".strip()
+                if total:
+                    text = f"{text}  {frame}/{total}"
+            elif phase in _PHASE_LABELS:
+                text = f"{text}  {phase}".strip()
+            _set_status_text(text)
+            return
+        if _selected_path and os.path.isfile(_selected_path):
+            src = _full_path_for(
+                os.path.basename(_selected_path)) or _selected_path
+            _set_status_text(
+                _STATUS_PREFIX
+                + os.path.basename(_derived_output_for(src)))
+            return
+        _set_status_text(_BLANK if _queue else _EMPTY_QUEUE_HINT)
+    except Exception as exc:
+        note(f"status sync failed: {exc}")
 
 
 def UpdateSubtypes():
@@ -715,6 +780,11 @@ def OnFpsChanged():
     resolves to the loaded source's rate when one is available.
     """
     v = str(_val("fps_f") or "").strip()
+    # The field also carries placeholder text ('---' when there is no
+    # rate to show); pushing that to the controller raised a float
+    # conversion error on every write (JP 2026-09-15).
+    if not v or v == _BLANK:
+        return
     try:
         ext().Setfps(v)
     except Exception as exc:
@@ -737,7 +807,18 @@ def _fps_source_mode():
 def _source_fps():
     """The loaded source's frame rate — the Info CHOP's sample_rate
     channel (the verified source: Movie File In has no fps par).
-    None when nothing is loaded / the channel is unreadable."""
+    None when nothing is loaded / the channel is unreadable.
+
+    PROBE-VERIFIED (JP 2026-09-15): with no movie loaded the Info CHOP
+    still reports a rate — the PROJECT's (60), not a source's. So the
+    Movie In's file par gates the read; without that, 'no source' is
+    indistinguishable from 'a real 60fps source'.
+    """
+    try:
+        if not str(ext().moviein.par.file.eval() or "").strip():
+            return None
+    except Exception:
+        return None
     try:
         sr = float(ext().info["sample_rate"][0])
         if sr > 0:
@@ -778,13 +859,53 @@ def OnFpsModeChanged():
         OnFpsChanged()
 
 
+def _queued_fps():
+    """Frame rate of the SELECTED queue row, or None.
+
+    Selection only — no falling back to the next queued item (JP
+    2026-09-15: nothing selected must show nothing, or the field
+    describes a file the user never pointed at).
+    """
+    src = _selected_path
+    if src:
+        src = _full_path_for(os.path.basename(src)) or src
+    if not src or not os.path.isfile(src):
+        note(f"  queued fps: no selected file ({src!r})")
+        return None
+    p = panel()
+    d = p.op("inspector") if p is not None else None
+    if d is None:
+        note("  queued fps: NO 'inspector' DAT — rebuild needed")
+        return None
+    try:
+        if str(d.par.file.eval() or "") != src:
+            d.par.file = src
+            d.par.reloadpulse.pulse()
+        d.cook(force=True)
+    except Exception as exc:
+        note(f"  queued fps: inspector cook failed: {exc}")
+        return None
+    vals = _inspector_values()
+    raw = None
+    for n in ("fps", "frame rate", "framerate"):
+        if n in vals:
+            raw = vals[n]
+            break
+    if raw is None:
+        note(f"  queued fps: no fps row in inspector {sorted(vals)!r}")
+        return None
+    try:
+        return float(raw) or None
+    except (TypeError, ValueError):
+        return None
+
+
 def SyncFpsField():
     """Seed the FPS field per MODE (runs at build end, AFTER the capture
-    bake, and whenever the mode/source rate changes):
-      SOURCE mode — display the loaded source's rate (sample_rate) and
-        push MvO's par to follow it (JP: 'move out parameter with the
-        FPS of the source'). Best available when nothing is loaded:
-        MvO's current par.
+    bake, and whenever the mode/source rate/selection changes):
+      SOURCE mode — the running job's rate while encoding; otherwise the
+        SELECTED queue row's rate; '---' when nothing is selected, so a
+        stale value is never shown as if it were the source's.
       CUSTOM mode — display MvO's fps par (the field IS the par's editor).
     The field write fires OnFpsChanged -> Setfps with the same value —
     idempotent, no loop.
@@ -793,19 +914,33 @@ def SyncFpsField():
     if w is None:
         return
     if _fps_source_mode():
-        v = _source_fps()
+        # The controller leaves the finished job's movie loaded in Movie
+        # In, so a file being present does NOT mean it is what the user
+        # is looking at — only a running job does (JP 2026-09-15: the
+        # field pinned to the last encode's rate and ignored clicks).
+        try:
+            busy = bool(ext().is_busy)
+        except Exception:
+            busy = False
+        v = _source_fps() if busy else None
+        label = "source rate"
         if v is None:
+            v = _queued_fps()
+            label = "selected row"
+        if v is None:
+            # Nothing loaded and nothing queued: show no number rather
+            # than the last CUSTOM value, which reads as the source's.
             try:
-                v = float(ext().movieout.par.fps.eval())
+                w.par.Value0.val = _BLANK
+                note(f"FPS field <- {_BLANK} (no source)")
             except Exception as exc:
-                note(f"fps read failed: {exc}")
-                return
+                note(f"fps field write failed: {exc}")
+            return
         try:
             # MvO follows the source rate (JP spec for SOURCE mode)
             ext().Setfps(str(v))
         except Exception as exc:
             note(f"fps source push failed: {exc}")
-        label = "source rate"
     else:
         try:
             v = float(ext().movieout.par.fps.eval())
@@ -849,6 +984,19 @@ def _set_output_text(text):
             note(f"output text: par took {got!r}, expected {text!r}")
     except Exception:
         pass
+
+
+def _set_status_text(text):
+    """Write text to the STATUS label (same Widgetlabel rule as the
+    output field). Silent when the widget is absent — status_l has been
+    deleted from the panel before."""
+    w = widget("status_l")
+    if w is None:
+        return
+    try:
+        w.par.Widgetlabel.val = text
+    except Exception as exc:
+        note(f"status text failed (Widgetlabel): {exc}")
 
 
 def _queue_rebuild_from_table():
@@ -1027,6 +1175,32 @@ def OnQueueRowSelected(info=None):
     _selected_path = item["input"]
     full = _full_path_for(os.path.basename(item["input"])) or item["input"]
     _inspect_now(full, attempt=0)
+    # SOURCE mode shows the selected file's rate, so the field follows
+    # the selection. CUSTOM mode leaves the field alone — it is the
+    # user's editor.
+    if _fps_source_mode():
+        SyncFpsField()
+    else:
+        note("  fps_t is CUSTOM — FPS field left alone")
+    SyncStatusField()
+
+
+def OnQueueRowDeselected(info=None):
+    """Lister onDeselectRow hook: clicking empty space clears the
+    highlight, so the fields that describe the selection must clear too.
+
+    Without this the lister's highlight vanished while _selected_path
+    stayed set, freezing the FPS and OUTPUT fields on a row that no
+    longer looked selected (JP 2026-09-15).
+    """
+    global _selected_path
+    info = info or {}
+    note(f"lister onDeselectRow: row={info.get('row')}")
+    _selected_path = None
+    if _fps_source_mode():
+        SyncFpsField()
+    PreviewOutput()
+    SyncStatusField()
 
 
 def _inspect_now(path, attempt=0):
@@ -1074,7 +1248,9 @@ def _note_table_once(d, vals):
 
 
 def _format_media_info(path, vals):
-    """'name | WxH | fps | length | codec' from the DAT's field table."""
+    """'source name | WxH | fps | length | codec' — what the user is
+    looking AT. The file the encode will WRITE is the status field's
+    job (JP 2026-09-15: one subject per field)."""
     def pick(*names):
         for n in names:
             if n in vals:
@@ -1348,24 +1524,6 @@ def _bar_text(frac, width=10):
     return _BAR_FULL * full + _BAR_EMPTY * (width - full)
 
 
-def _activity_text():
-    """What the encoder is doing right now, for the OUTPUT field.
-
-    The controller's Status par already carries the phase ('encoding
-    120/250', 'muxing audio 40% — foo.mov'); this prefixes the batch
-    position so a multi-file run reads as 'file 2/5'.
-    """
-    try:
-        status = str(op.vcon.par.Status.eval())
-    except Exception:
-        status = "working"
-    total = len(_queue)
-    if total > 1:
-        done = sum(1 for it in _queue if it["status"] == "done")
-        return f"[{done + 1}/{total}]  {status}"
-    return status
-
-
 def _batch_progress():
     """(done_count, total_count) across the queue — the PANEL bar shows
     this for the whole batch (JP), not the current file's 0-1."""
@@ -1536,10 +1694,9 @@ def _mark_running(output_path):
 def RemoveSelected():
     """remove_b (JP 2026-09-14): remove the SELECTED queue row.
 
-    The selection is tracked by input PATH (set on every row click —
-    and by the onFrame poll fallback; a module recompile wipes the
-    module globals, so the path also rebuilds from the table first if
-    the queue list is empty). Guards:
+    The selection is tracked by input PATH, set on every row click; a
+    module recompile wipes the module globals, so the queue list
+    rebuilds from the table first when it is empty. Guards:
       - a RUNNING row is never removed (the controller owns it; the
         job would finish writing to an output the queue no longer
         tracks) — STOP cancels instead
@@ -1568,11 +1725,52 @@ def RemoveSelected():
         note(f"{os.path.basename(_selected_path)} is encoding — "
              "STOP cancels it; removing mid-encode is refused")
         return
+    idx = _queue.index(tgt)
     _queue.remove(tgt)
-    _selected_path = None
+    # The lister keeps its highlight on the same ROW INDEX, which now
+    # holds the next item, but moving it itself fires no onSelectRow —
+    # so clearing here left a highlighted row that delete refused to
+    # touch (JP 2026-09-15). Track what the user can see.
+    if _queue:
+        _selected_path = _queue[min(idx, len(_queue) - 1)]["input"]
+    else:
+        _selected_path = None
     _refresh_queue()
+    _sync_lister_selection()
     PreviewOutput()          # the preview follows queue state
-    note(f"removed {os.path.basename(tgt['input'])}")
+    SyncStatusField()
+    note(f"removed {os.path.basename(tgt['input'])} — selection now "
+         f"{os.path.basename(_selected_path) if _selected_path else 'none'}")
+
+
+def _sync_lister_selection():
+    """Push _selected_path to the lister's own highlight so the visible
+    selection and the tracked one cannot disagree.
+
+    SelectRow/SelectedRows are PROBE-VERIFIED on this build (JP
+    2026-09-15); a failure is still non-fatal because the lister's own
+    highlight already sits on the right row index after a remove.
+    """
+    q = panel().op("queue") if panel() is not None else None
+    if q is None:
+        return
+    row = None
+    if _selected_path:
+        for i, it in enumerate(_queue):
+            if it["input"] == _selected_path:
+                row = i
+                break
+    try:
+        e = q.ext.ListerExt
+    except Exception:
+        return
+    try:
+        if row is None:
+            e.SelectedRows = []
+        else:
+            e.SelectRow(row)
+    except Exception as exc:
+        note(f"  lister selection sync skipped: {exc}")
 
 
 def _mark_done(output_path):
@@ -1612,7 +1810,7 @@ def onFrame():
     directly (no expression needed). The LISTER row shows the current
     file's own progress as a block bar.
     """
-    global _last_src_fps, _tick_alive
+    global _last_src_fps, _tick_alive, _last_fps_key
     try:
         e = ext()
     except Exception:
@@ -1664,22 +1862,31 @@ def onFrame():
     except Exception as exc:
         _tick_err("progress bar", exc)
 
-    # 1b) SOURCE-mode FPS display follows the loaded movie's rate
+    # 1b) SOURCE-mode FPS display follows the running job's rate, and
+    # — when idle — the selected/queued file, so it also has to react
+    # to the queue emptying or filling and to jobs starting/ending.
     try:
-        if _fps_source_mode() and _source_fps() != _last_src_fps:
-            _last_src_fps = _source_fps()
-            if _last_src_fps is not None:
+        if _fps_source_mode():
+            try:
+                busy = bool(ext().is_busy)
+            except Exception:
+                busy = False
+            key = (_source_fps(), _selected_path, len(_queue), busy)
+            if key != _last_fps_key:
+                _last_fps_key = key
+                _last_src_fps = key[0]
                 SyncFpsField()
     except Exception as exc:
         _tick_err("fps display", exc)
 
-    # 1c) OUTPUT field doubles as the live activity readout while a job
-    # runs (encoding / muxing audio), then reverts to the path preview
+    # 1c) STATUS label (over the progress bar) names the file being
+    # written and counts its frames; the OUTPUT field keeps describing
+    # the source and is only re-read when a job ends.
     global _showing_activity
     try:
+        SyncStatusField()
         if e.is_busy:
             _showing_activity = True
-            _set_output_text(_activity_text())
         elif _showing_activity:
             _showing_activity = False
             PreviewOutput()
@@ -2224,6 +2431,7 @@ def onDragDrop(info):
         return
 
     added = 0
+    last_added = None
     for path in paths:
         if os.path.isdir(path):
             for inp, rel in _scan_movies(path):
@@ -2233,6 +2441,7 @@ def onDragDrop(info):
                 _queue.append({"input": inp, "output": out,
                                "status": "queued", "rel": rel})
                 added += 1
+                last_added = inp
         elif os.path.isfile(path):
             out = _unique_output(_derive_output(
                 path, _dst_dir(), _val("codec_dd") or "notchlc",
@@ -2241,10 +2450,12 @@ def onDragDrop(info):
                            "status": "queued",
                            "rel": os.path.basename(path)})
             added += 1
-            PreviewOutput()      # refresh from the first queued item
+            last_added = path
 
     if added:
         _refresh_queue()
+        PreviewOutput(last_added)   # the newest drop, not _queue[0]
+        SyncStatusField()
         note(f"dropped {added} file(s) — press START to encode")
     else:
         note("no movie files in the drop")

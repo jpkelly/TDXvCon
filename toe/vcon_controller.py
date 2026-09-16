@@ -47,7 +47,7 @@ import time
 #: Controller build identifier. Written into the toe's custom "Version"
 #: parameter at build time so a stale toe is identifiable in the UI.
 #: Keep in step with vcon.__version__ (tests assert this).
-CONTROLLER_VERSION = "0.1.4"
+CONTROLLER_VERSION = "0.1.5"
 
 PROTOCOL_VERSION = 1
 #: Default TCP port. Overridable per-instance via the COMP's Tcpport custom
