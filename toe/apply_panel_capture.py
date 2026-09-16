@@ -52,6 +52,15 @@ _RESERVED_KEYS = {'panel', 'added', 'removed',
 _BUILDER_OWNED = {'Menunames', 'Menulabels', 'Onvaluechangescript0',
                   'Offtoonscript0', 'Ontooffscript0', 'Valueparexec'}
 
+#: listerConfig DATs the BUILDER owns — restoring these from a capture
+#: breaks the lister:
+#:   callbacks  — holds the row-click forwarder the builder injects
+#:   colDefine  — the builder uses AUTO-DEFINE over queue_display
+#:                (columns 'file'/'status'); the captured copy is the
+#:                palette default ('Name'/'Delete'), and restoring it
+#:                makes the lister raise "Blank header in col 0".
+_CONFIG_DATS_SKIP = {'callbacks', 'colDefine', 'autoColDefineDefaults'}
+
 try:
     with open(DUMP, encoding='utf-8') as f:
         _src = f.read()
@@ -250,10 +259,7 @@ def _restore_listerconfig(entry):
         print("[capture] !! listerConfig not found — column tuning skipped")
         return
     for dname, text in (texts or {}).items():
-        if dname == 'callbacks':
-            # BUILDER-OWNED (row-click forwarder lives here): restoring
-            # a pre-inspector capture would wipe it. The capture still
-            # owns the OTHER config DATs (column tuning).
+        if dname in _CONFIG_DATS_SKIP:
             continue
         d = cfg.op(dname)
         if d is None:
