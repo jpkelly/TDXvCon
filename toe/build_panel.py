@@ -1295,37 +1295,13 @@ try:
 except Exception as exc:
     print(f"[panel] (audio_sep visibility: {exc})")
 
-# ---- clear the lister's stale initial-Refresh error --------------------
-# ListerExt.__init__ runs the moment the widget loads from its tox —
-# before the builder links queue_display — so its first Refresh sees no
-# input and raises "Blank header in col 0". The error badge then sticks
-# even though every later Refresh succeeds. Re-initialising the
-# extension now, against a populated table, clears it.
-try:
-    _q = op.vcon.op('panel').op('queue')
-    if _q is not None:
-        for _p in ('reinitextensions', 'reinitextension'):
-            try:
-                getattr(_q.par, _p).pulse()
-                break
-            except Exception:
-                continue
-        try:
-            _q.par.Refresh.pulse()
-        except Exception:
-            pass
-        # The badge is a STALE error from that first cook, not a live
-        # one — JP found that disabling/re-enabling the node clears it.
-        # allowCooking off/on is that same toggle in script form.
-        try:
-            _q.allowCooking = False
-            _q.allowCooking = True
-        except Exception as exc:
-            print(f"[panel] (lister cook toggle: {exc})")
-        print("[panel] lister extension re-initialised "
-              "(clears the stale initial-Refresh error)")
-except Exception as exc:
-    print(f"[panel] (lister re-init: {exc})")
+# NOTE: the lister may show a stale "Blank header in col 0" badge.
+# ListerExt.__init__ runs the instant the widget loads from its tox —
+# before any table can be linked — so its first Refresh legitimately
+# has no input. Every later Refresh succeeds; the badge is a remembered
+# error, not a live one. Re-initialising the extension and cycling
+# allowCooking were both tried and neither clears it, so it is left
+# alone rather than papered over.
 
 # ---- SAVE the project ------------------------------------------------
 # Without this the panel build lives only in the running TD session:
