@@ -1481,7 +1481,33 @@ def _refresh_queue():
             q.par.Refresh.pulse()
         except Exception:
             pass
+    _update_scrollbar()
     _update_start_button()
+
+
+def _update_scrollbar():
+    """Show the lister's vertical scrollbar only when rows overflow.
+
+    The lister has no 'auto' scrollbar mode (vscrollbar is off/on) and
+    exposes no row height, so the threshold is derived from the config
+    header's height — the template the lister draws rows from — read
+    live rather than hardcoded.
+    """
+    q = panel().op("queue")
+    if q is None:
+        return
+    try:
+        row_h = 20.0
+        cfg = q.par.Configcomp.eval() or q.op("listerConfig")
+        if cfg is not None:
+            hdr = cfg.op("header")
+            if hdr is not None:
+                row_h = float(hdr.par.h.eval()) or row_h
+        # +1 for the header row, which occupies list space too
+        needed = (len(_queue) + 1) * row_h
+        q.par.vscrollbar.val = needed > float(q.par.h.eval())
+    except Exception as exc:
+        _tick_err("scrollbar", exc)
 
 
 def _update_start_button():

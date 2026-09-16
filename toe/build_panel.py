@@ -1086,15 +1086,11 @@ def build():
         except Exception as exc:
             say(f"  !! Advancedcallbacks: {exc} — row clicks will not "
                 f"fire onSelectRow; the onFrame poll still detects them")
-        # Dynamic vertical scrollbar: only show when rows exceed the
-        # list height. The lister's Children page has 'pvscrollbar'
-        # with menu ['off','on','auto'] — 'auto' hides it until needed.
-        # The List page's 'vscrollbar' is just on/off (no auto mode).
-        try:
-            q.par.pvscrollbar.val = "auto"
-            say("  lister pvscrollbar -> auto")
-        except Exception as exc:
-            say(f"  (pvscrollbar: {exc})")
+        # The lister has no 'auto' scrollbar mode: vscrollbar is off/on,
+        # and pvscrollbar's 'auto' only scrolls CHILD PANEL COMPONENTS,
+        # which a lister does not use (it draws rows itself). So the
+        # panel drives vscrollbar from row overflow — see
+        # _update_scrollbar() in the callbacks.
         try:
             cbdat = q.par.Configcomp.eval().op("callbacks")
             txt = cbdat.text or ""
