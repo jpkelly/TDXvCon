@@ -120,6 +120,7 @@ _showing_activity = False  # OUTPUT field is showing live job status
 _install = None            # background audio-support install, or None
 _health_check_frame = -999 # last frame we ran the ffmpeg check
 _health_ok = True          # cached ffmpeg status for the help button
+_ROW_H = 22                # lister row height in px (measured, JP)
 
 
 def _tick_err(label, exc):
@@ -1489,22 +1490,16 @@ def _update_scrollbar():
     """Show the lister's vertical scrollbar only when rows overflow.
 
     The lister has no 'auto' scrollbar mode (vscrollbar is off/on) and
-    exposes no row height, so the threshold is derived from the config
-    header's height — the template the lister draws rows from — read
-    live rather than hardcoded.
+    exposes no row height anywhere, so overflow is computed from a
+    measured row height (22px, JP) — adjust _ROW_H if the bar appears
+    a row early or late.
     """
     q = panel().op("queue")
     if q is None:
         return
     try:
-        row_h = 20.0
-        cfg = q.par.Configcomp.eval() or q.op("listerConfig")
-        if cfg is not None:
-            hdr = cfg.op("header")
-            if hdr is not None:
-                row_h = float(hdr.par.h.eval()) or row_h
         # +1 for the header row, which occupies list space too
-        needed = (len(_queue) + 1) * row_h
+        needed = (len(_queue) + 1) * _ROW_H
         q.par.vscrollbar.val = needed > float(q.par.h.eval())
     except Exception as exc:
         _tick_err("scrollbar", exc)
