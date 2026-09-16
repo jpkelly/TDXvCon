@@ -1622,20 +1622,25 @@ def onFrame():
         _tick_alive = True
         note("panel tick alive (batch feeding + progress active)")
 
-    # 0) one-shot: clear the lister's stale init error.
-    # ListerExt.Refresh runs while the operator is being CREATED — during
-    # loadTox/copy, and again on every .toe open — so it always sees a
+    # 0) one-shot: clear the lister's stale init error — and ONLY that one.
+    # ListerExt.Refresh runs while the operator is being CREATED (during
+    # loadTox/copy, and again on every .toe open), so it always sees a
     # blank table and stores "Blank header in col 0". Nothing can link a
-    # table early enough to prevent it, and clearing it at build time is
-    # useless for anyone who merely OPENS the toe. Clearing here, once
-    # the tick is running and every refresh has succeeded, covers both.
+    # table early enough to prevent it. Blanket-clearing would also hide
+    # real faults, so the stored text is checked first: anything that
+    # is NOT this known error is REPORTED and left on the node.
     global _lister_errs_cleared
     if not _lister_errs_cleared:
         _lister_errs_cleared = True
         try:
             q_ = panel().op("queue")
             if q_ is not None:
-                q_.clearScriptErrors()
+                errs = q_.errors()
+                if errs and "Blank header in col 0" not in errs:
+                    note(f"lister error left in place (not the known "
+                         f"init error): {errs.strip()[:200]}")
+                elif errs:
+                    q_.clearScriptErrors()
         except Exception as exc:
             _tick_err("clear lister errors", exc)
 
