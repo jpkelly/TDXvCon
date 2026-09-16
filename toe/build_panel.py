@@ -1314,8 +1314,16 @@ try:
             _q.par.Refresh.pulse()
         except Exception:
             pass
+        # The badge is a STALE error from that first cook, not a live
+        # one — JP found that disabling/re-enabling the node clears it.
+        # allowCooking off/on is that same toggle in script form.
+        try:
+            _q.allowCooking = False
+            _q.allowCooking = True
+        except Exception as exc:
+            print(f"[panel] (lister cook toggle: {exc})")
         print("[panel] lister extension re-initialised "
-              "(clears the initial-Refresh error)")
+              "(clears the stale initial-Refresh error)")
 except Exception as exc:
     print(f"[panel] (lister re-init: {exc})")
 
