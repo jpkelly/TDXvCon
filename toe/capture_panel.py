@@ -532,16 +532,6 @@ for c in sorted(p.children, key=_safe_geom):
     # printed no listerconfig at all, so this branch now reports
     # loudly instead of skipping silently.
     if name == "queue":
-        # The lister has too much internal state for the stock diff to
-        # be reliable (scrollbar prefs on the List tab, header text
-        # labels set on inner textCOMPs, etc.). Capture ALL pars, not
-        # just the diff — so hand-tuning like scrollbar off survives.
-        mine_v, mine_e, mine_b = _snapshots(c)
-        entry["pars"] = mine_v
-        if mine_e:
-            entry["expressions"] = mine_e
-        if mine_b:
-            entry["binds"] = mine_b
         cfg = None
         try:
             cfg = c.par.Configcomp.eval()
