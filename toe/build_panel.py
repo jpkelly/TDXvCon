@@ -1282,3 +1282,17 @@ try:
     print("[panel] audio_sep visibility applied")
 except Exception as exc:
     print(f"[panel] (audio_sep visibility: {exc})")
+
+# ---- SAVE the project ------------------------------------------------
+# Without this the panel build lives only in the running TD session:
+# build_network.py saves, build_panel.py did not, so every panel
+# rebuild, capture bake and hand-tune since the last network build was
+# lost the moment TD reloaded the .toe (JP lost a session's work this
+# way, 2026-09-15).
+try:
+    _toe_path = f"{REPO}/src/vcon/data/transcoder.toe"
+    project.save(_toe_path)
+    print(f"[panel] project saved → {_toe_path}")
+except Exception as exc:
+    print(f"[panel] !! project.save FAILED ({exc}) — save manually or the "
+          f"panel is lost when TD reloads the .toe")
