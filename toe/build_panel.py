@@ -1086,20 +1086,15 @@ def build():
         except Exception as exc:
             say(f"  !! Advancedcallbacks: {exc} — row clicks will not "
                 f"fire onSelectRow; the onFrame poll still detects them")
-        # Dynamic scrollbar: only show when rows exceed the list height.
+        # Dynamic vertical scrollbar: only show when rows exceed the
+        # list height. The lister's Children page has 'pvscrollbar'
+        # with menu ['off','on','auto'] — 'auto' hides it until needed.
+        # The List page's 'vscrollbar' is just on/off (no auto mode).
         try:
-            for cand in ("Scrollbar", "scrollbar", "Scroll", "scroll"):
-                par = getattr(q.par, cand, None)
-                if par is not None:
-                    menu = list(getattr(par, "menuNames", None) or [])
-                    for opt in ("auto", "whenneeded"):
-                        if opt in menu:
-                            par.val = opt
-                            say(f"  lister scrollbar -> {opt!r}")
-                            break
-                    break
+            q.par.pvscrollbar.val = "auto"
+            say("  lister pvscrollbar -> auto")
         except Exception as exc:
-            say(f"  (scrollbar: {exc})")
+            say(f"  (pvscrollbar: {exc})")
         try:
             cbdat = q.par.Configcomp.eval().op("callbacks")
             txt = cbdat.text or ""
