@@ -1208,8 +1208,20 @@ build()
 # guard inside with a clear "re-capture with v3" message.
 _CAP_DUMP = f"{REPO}/toe/panel_layout_captured.py"
 if os.path.isfile(_CAP_DUMP):
-    exec(open(f"{REPO}/toe/apply_panel_capture.py",
-              encoding='utf-8').read())
+    # Guarded: a failure inside the bake must not abort the rest of the
+    # build — everything after it (the seeds, and the project SAVE)
+    # would be skipped, leaving the .toe on disk at its previous
+    # version. That cost a session's work once already.
+    try:
+        exec(open(f"{REPO}/toe/apply_panel_capture.py",
+                  encoding='utf-8').read())
+    except Exception as _bake_exc:
+        import traceback
+        print(f"[panel] !! CAPTURE BAKE FAILED: "
+              f"{type(_bake_exc).__name__}: {_bake_exc}")
+        traceback.print_exc()
+        print("[panel] !! continuing so the build still saves — "
+              "hand-tuning may be missing until this is fixed")
 else:
     print("[panel] no capture file — defaults only "
           "(run capture_panel.py after hand-tuning)")

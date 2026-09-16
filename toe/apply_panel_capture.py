@@ -274,7 +274,10 @@ def _restore_listerconfig(entry):
             print(f"[capture] ( listerConfig op {opname} missing )")
             continue
         for pname, val in pars.items():
-            _set_value(child, pname, val)
+            par = getattr(child.par, pname, None)
+            if par is None:
+                continue
+            _set_value(child, par, val)
     if cfgpars:
         print(f"[capture] listerConfig: styled "
               + ', '.join(sorted(cfgpars)))
