@@ -355,6 +355,9 @@ def _emit(name, entry):
     if entry.get("listerconfig"):
         lines.append(f'        "listerconfig": '
                      f'{entry["listerconfig"]!r},')
+    if entry.get("listerconfigpars"):
+        lines.append(f'        "listerconfigpars": '
+                     f'{entry["listerconfigpars"]!r},')
     lines.append('    },')
     extra = ''
     if entry.get("nodelayout"):
@@ -369,6 +372,8 @@ def _emit(name, entry):
         extra += f', {len(entry["binds"])} binds'
     if entry.get("listerconfig"):
         extra += ', listerconfig DATs'
+    if entry.get("listerconfigpars"):
+        extra += f', {len(entry["listerconfigpars"])} config ops styled'
     print(f'[capture] {name}: geometry {entry["geometry"]} — '
           f'{len(entry["pars"])} changed pars{extra}')
 
@@ -557,6 +562,39 @@ for c in sorted(p.children, key=_safe_geom):
                   + (f" ({', '.join(sorted(texts))})" if texts else ''))
             if texts:
                 entry['listerconfig'] = texts
+            # The config's non-DAT children (header, rowSelect, ...) carry
+            # hand-styled COLOURS as plain CONSTANT pars. They live inside
+            # lister.tox, so every rebuild restores the stock look unless
+            # they are captured too. Diffed against the same op in a stock
+            # lister so only real changes are stored.
+            stock_cfg = None
+            if stock is not None:
+                try:
+                    stock_cfg = (stock.par.Configcomp.eval()
+                                 or stock.op('listerConfig'))
+                except Exception:
+                    stock_cfg = stock.op('listerConfig')
+            cfgpars = {}
+            for ch in cfg.children:
+                try:
+                    if ch.isDAT:
+                        continue
+                except Exception:
+                    continue
+                mine_cv, _e, _b = _snapshots(ch)
+                stock_cv = {}
+                if _is_op(stock_cfg):
+                    sch = stock_cfg.op(ch.name)
+                    if _is_op(sch):
+                        stock_cv, _se, _sb = _snapshots(sch)
+                changed = _diff(mine_cv, stock_cv)
+                if changed:
+                    cfgpars[ch.name] = changed
+            if cfgpars:
+                entry['listerconfigpars'] = cfgpars
+                print(f"[capture] queue: listerConfig child pars — "
+                      + ', '.join(f'{k}({len(v)})'
+                                  for k, v in sorted(cfgpars.items())))
     _emit(name, entry)
 
 # builder widgets MISSING from the panel = removed by hand (v4).

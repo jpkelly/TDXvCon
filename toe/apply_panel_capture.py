@@ -235,9 +235,10 @@ def _apply_entry(name, entry):
 
 
 def _restore_listerconfig(entry):
-    """Write the captured listerConfig DAT texts back."""
+    """Write the captured listerConfig DAT texts and child-op pars back."""
     texts = entry.get('listerconfig')
-    if not texts:
+    cfgpars = entry.get('listerconfigpars')
+    if not texts and not cfgpars:
         return
     q = _target('queue')
     if q is None:
@@ -248,7 +249,7 @@ def _restore_listerconfig(entry):
     if cfg is None:
         print("[capture] !! listerConfig not found — column tuning skipped")
         return
-    for dname, text in texts.items():
+    for dname, text in (texts or {}).items():
         if dname == 'callbacks':
             # BUILDER-OWNED (row-click forwarder lives here): restoring
             # a pre-inspector capture would wipe it. The capture still
@@ -262,7 +263,21 @@ def _restore_listerconfig(entry):
             d.text = text
         except Exception as exc:
             print(f"[capture] ( listerConfig {dname}: {exc} )")
-    print(f"[capture] listerConfig: {len(texts)} DATs restored")
+    if texts:
+        print(f"[capture] listerConfig: {len(texts)} DATs restored")
+    # Hand-styled config ops (header colours etc.) — plain CONSTANT pars
+    # that live inside lister.tox, so the rebuild restores the stock look
+    # unless they are written back here.
+    for opname, pars in (cfgpars or {}).items():
+        child = cfg.op(opname)
+        if child is None:
+            print(f"[capture] ( listerConfig op {opname} missing )")
+            continue
+        for pname, val in pars.items():
+            _set_value(child, pname, val)
+    if cfgpars:
+        print(f"[capture] listerConfig: styled "
+              + ', '.join(sorted(cfgpars)))
     # Pulse the lister's Refresh AFTER the colDefine text changes —
     # without this the lister keeps its old column widths (the DAT
     # text changed but the lister didn't re-read its config)
