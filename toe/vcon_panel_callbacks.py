@@ -1635,11 +1635,23 @@ def onFrame():
         try:
             q_ = panel().op("queue")
             if q_ is not None:
-                errs = q_.errors()
-                if errs and "Blank header in col 0" not in errs:
+                # scriptErrors() is the counterpart to clearScriptErrors();
+                # errors() is a different channel and comes back empty for
+                # this, which is why gating on it alone stopped the clear.
+                txt = ""
+                for meth in ("scriptErrors", "errors"):
+                    fn = getattr(q_, meth, None)
+                    if callable(fn):
+                        try:
+                            txt = fn() or ""
+                        except Exception:
+                            txt = ""
+                        if txt:
+                            break
+                if txt and "Blank header in col 0" not in txt:
                     note(f"lister error left in place (not the known "
-                         f"init error): {errs.strip()[:200]}")
-                elif errs:
+                         f"init error): {txt.strip()[:200]}")
+                else:
                     q_.clearScriptErrors()
         except Exception as exc:
             _tick_err("clear lister errors", exc)
