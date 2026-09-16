@@ -121,6 +121,7 @@ _install = None            # background audio-support install, or None
 _health_check_frame = -999 # last frame we ran the ffmpeg check
 _health_ok = True          # cached ffmpeg status for the help button
 _ROW_H = 22                # lister row height in px (measured, JP)
+_lister_errs_cleared = False  # one-shot: stale init error on the lister
 
 
 def _tick_err(label, exc):
@@ -1620,6 +1621,23 @@ def onFrame():
     if not _tick_alive:
         _tick_alive = True
         note("panel tick alive (batch feeding + progress active)")
+
+    # 0) one-shot: clear the lister's stale init error.
+    # ListerExt.Refresh runs while the operator is being CREATED — during
+    # loadTox/copy, and again on every .toe open — so it always sees a
+    # blank table and stores "Blank header in col 0". Nothing can link a
+    # table early enough to prevent it, and clearing it at build time is
+    # useless for anyone who merely OPENS the toe. Clearing here, once
+    # the tick is running and every refresh has succeeded, covers both.
+    global _lister_errs_cleared
+    if not _lister_errs_cleared:
+        _lister_errs_cleared = True
+        try:
+            q_ = panel().op("queue")
+            if q_ is not None:
+                q_.clearScriptErrors()
+        except Exception as exc:
+            _tick_err("clear lister errors", exc)
 
     # 1) drive the panel bar with batch progress, every frame
     try:
