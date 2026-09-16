@@ -1086,6 +1086,20 @@ def build():
         except Exception as exc:
             say(f"  !! Advancedcallbacks: {exc} — row clicks will not "
                 f"fire onSelectRow; the onFrame poll still detects them")
+        # Dynamic scrollbar: only show when rows exceed the list height.
+        try:
+            for cand in ("Scrollbar", "scrollbar", "Scroll", "scroll"):
+                par = getattr(q.par, cand, None)
+                if par is not None:
+                    menu = list(getattr(par, "menuNames", None) or [])
+                    for opt in ("auto", "whenneeded"):
+                        if opt in menu:
+                            par.val = opt
+                            say(f"  lister scrollbar -> {opt!r}")
+                            break
+                    break
+        except Exception as exc:
+            say(f"  (scrollbar: {exc})")
         try:
             cbdat = q.par.Configcomp.eval().op("callbacks")
             txt = cbdat.text or ""
