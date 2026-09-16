@@ -1295,6 +1295,30 @@ try:
 except Exception as exc:
     print(f"[panel] (audio_sep visibility: {exc})")
 
+# ---- clear the lister's stale initial-Refresh error --------------------
+# ListerExt.__init__ runs the moment the widget loads from its tox —
+# before the builder links queue_display — so its first Refresh sees no
+# input and raises "Blank header in col 0". The error badge then sticks
+# even though every later Refresh succeeds. Re-initialising the
+# extension now, against a populated table, clears it.
+try:
+    _q = op.vcon.op('panel').op('queue')
+    if _q is not None:
+        for _p in ('reinitextensions', 'reinitextension'):
+            try:
+                getattr(_q.par, _p).pulse()
+                break
+            except Exception:
+                continue
+        try:
+            _q.par.Refresh.pulse()
+        except Exception:
+            pass
+        print("[panel] lister extension re-initialised "
+              "(clears the initial-Refresh error)")
+except Exception as exc:
+    print(f"[panel] (lister re-init: {exc})")
+
 # ---- SAVE the project ------------------------------------------------
 # Without this the panel build lives only in the running TD session:
 # build_network.py saves, build_panel.py did not, so every panel
