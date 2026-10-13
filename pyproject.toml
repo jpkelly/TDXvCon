@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -13,7 +13,8 @@ version = "0.1.6"
 description = "GPU video transcoder front-end driving TouchDesigner's Movie File Out TOP (NotchLC, Hap, ProRes, ...) — FFmpeg-style CLI."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "JP Kelly" }]
 dependencies = ["imageio-ffmpeg>=0.6.0"]
 keywords = [
@@ -23,7 +24,6 @@ keywords = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
@@ -36,6 +36,8 @@ vcon = "vcon.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/jpkelly/TDXvCon"
+Repository = "https://github.com/jpkelly/TDXvCon"
+Issues = "https://github.com/jpkelly/TDXvCon/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

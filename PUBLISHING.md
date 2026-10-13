@@ -35,7 +35,7 @@ exec(op.vcon.op('panel_build_run').text)
 `File → Save As…` in TD, destination:
 
 ```
-/Users/jp/Documents/GitHub/vCon/src/vcon/data/transcoder.toe
+<checkout>/src/vcon/data/transcoder.toe
 ```
 
 Saving bakes the current text of every file-linked DAT into the `.toe`.
@@ -51,13 +51,14 @@ ls -lt src/vcon/data/transcoder.toe toe/*.py | head -5
 
 ## 4. Build
 
-`build` and `twine` are not installed globally — run them through pipx.
+Run the packaging tools in isolated environments with pipx. Remove old release
+artifacts from `dist/` first so they cannot be uploaded accidentally.
 
 ```bash
-rm -rf dist/ && pipx run build
+pipx run build
+pipx run twine check dist/*
 ```
 
-Deprecation warnings about License classifiers are expected and harmless.
 Success looks like: `Successfully built tdxvcon-X.Y.Z.tar.gz and
 tdxvcon-X.Y.Z-py3-none-any.whl`.
 
@@ -87,11 +88,8 @@ pipx install --force --pip-args="--no-cache-dir" tdxvcon
 vcon --version
 ```
 
-`--no-cache-dir` is required: pipx caches the index and will otherwise
-install the previous version immediately after an upload.
-
-If the version still looks stale, check the simple index rather than the
-JSON API — the JSON API lags by minutes:
+If the version still looks stale, confirm the release is visible in the package
+index:
 
 ```bash
 curl -s https://pypi.org/simple/tdxvcon/ | grep -o 'tdxvcon-[0-9.]*\.whl' | tail -3
@@ -99,8 +97,6 @@ curl -s https://pypi.org/simple/tdxvcon/ | grep -o 'tdxvcon-[0-9.]*\.whl' | tail
 
 ## Gotchas
 
-- **`python3 -m build` fails** with `No module named build.__main__` —
-  Homebrew's python3 has no `build` module. Use `pipx run build`.
 - **The `.toe` bakes in DAT text at save time.** Rebuild the toe *after*
   the last source edit and *before* building the wheel.
 - **Bump `CONTROLLER_VERSION` before saving the toe** — that version is
@@ -110,4 +106,17 @@ curl -s https://pypi.org/simple/tdxvcon/ | grep -o 'tdxvcon-[0-9.]*\.whl' | tail
   from the `tdxvcon` package; a recipient needs `pipx install tdxvcon`.
 - **Panel layout** lives in `toe/panel_layout_captured.py` (canonical,
   SCALE ON) and `toe/panel_layout_variant.py` (SCALE OFF row deltas).
-  Both are applied by the build — capture before rebuilding, not after.
+  Capture before rebuilding and synchronize the runtime `_ROW_LAYOUTS` in
+  `toe/vcon_panel_callbacks.py` with the captured arrangements.
+
+## Before making the repository public
+
+- Run `python -m pytest` and review the package contents.
+- Review all published branches and tags for credentials and private material.
+  Removing a tracked file does not remove its previous versions from Git history.
+- Review the binary `.toe` projects in TouchDesigner for embedded media, paths,
+  linked DATs, and third-party assets. Text-based secret scans cannot fully inspect
+  compressed project contents. Confirm redistribution rights for bundled assets.
+- Test the packaged project on a clean machine without the maintainer's checkout.
+  The current authoring scripts still use local paths; see [CONTRIBUTING.md](CONTRIBUTING.md).
+- Confirm the intended GitHub visibility separately from publishing to PyPI.

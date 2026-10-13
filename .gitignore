@@ -34,5 +34,16 @@ src/vcon/data/transcoder.[0-9]*.toe
 src/vcon/data/CrashAutoSave*.toe
 
 # Original scratch toes this project started from (kept locally, not published)
-VideoConverter*.toepanel_settings.json
+VideoConverter*.toe
+panel_settings.json
 toe/panel_settings.json
+
+# Local tools, credentials, and TouchDesigner recovery files
+.claude/
+.tdmcp/
+.env
+.env.*
+!.env.example
+.pypirc
+src/vcon/data/Backup/
+src/vcon/data/transcoderBAK.toe

@@ -1,0 +1,4 @@
+include CONTRIBUTING.md PUBLISHING.md
+recursive-include toe *.py *.md
+recursive-include tests *.py
+recursive-include scripts *.sh
