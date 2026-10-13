@@ -11,7 +11,7 @@ CAPTURED_PANEL = {
         "geometry": {'x': 0, 'y': 0, 'w': 660, 'h': 640},
         "nodelayout": (-40, -120),
         "nodecolor": (0.5, 0.05000000074505806, 0.20000000298023224),
-        "pars": {'resizecomp': '/project1/vcon/panel', 'repocomp': '/project1/vcon/panel', 'bgcolorr': 0.2, 'bgcolorg': 0.2, 'bgcolorb': 0.2, 'bgalpha': 0.984000027179718, 'drop': 'usecallbacks', 'dragdropcallbacks': '/project1/vcon/panel_dnd'},
+        "pars": {'resizecomp': '/project1/vcon/panel', 'repocomp': '/project1/vcon/panel', 'bgcolorr': 0.2, 'bgcolorg': 0.2, 'bgcolorb': 0.2, 'bgalpha': 0.984, 'drop': 'usecallbacks', 'dragdropcallbacks': '/project1/vcon/panel_dnd'},
     },
     "output_l": {
         "geometry": {'x': 20, 'y': 5, 'w': 620, 'h': 30},
@@ -28,7 +28,7 @@ CAPTURED_PANEL = {
     "status_l": {
         "geometry": {'x': 20, 'y': 430, 'w': 620, 'h': 20},
         "nodelayout": (330, -2440),
-        "pars": {'resizecomp': '/project1/vcon/panel/status_l', 'repocomp': '/project1/vcon/panel/status_l', 'bgalpha': 0.0, 'Widgetlabel': 'Drag files into the queue area below or click ADD button', 'Labelwordwrap': True, 'Labelbgcolora': 0.0, 'Labelfontcolorr': 0.1, 'Labelfontcolorg': 0.1, 'Labelfontcolorb': 0.1, 'Labelhorizontalmode': 'fill', 'Labelwidth': 110, 'Label': None},
+        "pars": {'layer': 2.0, 'resizecomp': '/project1/vcon/panel/status_l', 'repocomp': '/project1/vcon/panel/status_l', 'bgalpha': 0.0, 'Widgetlabel': 'Drag files into the queue area below or click ADD button', 'Labelwordwrap': True, 'Labelbgcolora': 0.0, 'Labelfontcolorr': 0.1, 'Labelfontcolorg': 0.1, 'Labelfontcolorb': 0.1, 'Labelhorizontalmode': 'fill', 'Labelwidth': 110, 'Label': None},
     },
     "prog_fill": {
         "geometry": {'x': 20, 'y': 430, 'w': 0, 'h': 20},
@@ -43,43 +43,43 @@ CAPTURED_PANEL = {
     "start_b": {
         "geometry": {'x': 15, 'y': 450, 'w': 100, 'h': 30},
         "nodelayout": (20, -2080),
-        "pars": {'resizecomp': '/project1/vcon/panel/start_b', 'repocomp': '/project1/vcon/panel/start_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.Start()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'START', 'Buttononlabel': 'START', 'Buttonfont': 'Helvetica', 'Buttonofffacecolorr': 0.25, 'Buttonofffacecolorg': 0.25, 'Buttonofffacecolorb': 0.25, 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9},
+        "pars": {'resizecomp': '/project1/vcon/panel/start_b', 'repocomp': '/project1/vcon/panel/start_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.Start()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'START', 'Buttononlabel': 'START', 'Buttonfont': 'Helvetica', 'Buttonofffacecolorr': 0.25, 'Buttonofffacecolorg': 0.25, 'Buttonofffacecolorb': 0.25, 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9, 'Buttonwidth': 85},
     },
     "pause_b": {
         "geometry": {'x': 120, 'y': 450, 'w': 100, 'h': 30},
         "nodelayout": (210, -2080),
-        "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/pause_b', 'repocomp': '/project1/vcon/panel/pause_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.PauseResume()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'PAUSE', 'Buttononlabel': 'PAUSE', 'Buttonfont': 'Helvetica', 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9},
+        "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/pause_b', 'repocomp': '/project1/vcon/panel/pause_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.PauseResume()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'PAUSE', 'Buttononlabel': 'PAUSE', 'Buttonfont': 'Helvetica', 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9, 'Buttonwidth': 85},
     },
     "stop_b": {
         "geometry": {'x': 220, 'y': 450, 'w': 100, 'h': 30},
         "nodelayout": (400, -2080),
-        "pars": {'resizecomp': '/project1/vcon/panel/stop_b', 'repocomp': '/project1/vcon/panel/stop_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.Stop()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'STOP', 'Buttononlabel': 'STOP', 'Buttonfont': 'Helvetica', 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9},
+        "pars": {'resizecomp': '/project1/vcon/panel/stop_b', 'repocomp': '/project1/vcon/panel/stop_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.Stop()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'STOP', 'Buttononlabel': 'STOP', 'Buttonfont': 'Helvetica', 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9, 'Buttonwidth': 85},
     },
     "add_b": {
         "geometry": {'x': 320, 'y': 450, 'w': 100, 'h': 30},
         "nodelayout": (590, -2080),
-        "pars": {'resizecomp': '/project1/vcon/panel/add_b', 'repocomp': '/project1/vcon/panel/add_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.AddFiles()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'ADD', 'Buttononlabel': 'ADD', 'Buttonfont': 'Helvetica', 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9},
+        "pars": {'resizecomp': '/project1/vcon/panel/add_b', 'repocomp': '/project1/vcon/panel/add_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.AddFiles()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'ADD', 'Buttononlabel': 'ADD', 'Buttonfont': 'Helvetica', 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9, 'Buttonwidth': 85},
     },
     "remove_b": {
         "geometry": {'x': 420, 'y': 450, 'w': 100, 'h': 30},
         "nodelayout": (780, -2080),
         "widgettox": 'buttonMomentary',
-        "pars": {'resizecomp': '/project1/vcon/panel/remove_b', 'repocomp': '/project1/vcon/panel/remove_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.RemoveSelected()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'REMOVE', 'Buttononlabel': 'REMOVE', 'Buttonfont': 'Helvetica', 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9},
+        "pars": {'resizecomp': '/project1/vcon/panel/remove_b', 'repocomp': '/project1/vcon/panel/remove_b', 'Offtoonscript0': "op.vcon.op('panel_callbacks').module.RemoveSelected()", 'Widgetlabel': '', 'Labelwidth': 1, 'Buttonofflabel': 'REMOVE', 'Buttononlabel': 'REMOVE', 'Buttonfont': 'Helvetica', 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9, 'Buttonwidth': 85},
     },
     "audio_dd": {
-        "geometry": {'x': 12, 'y': 480, 'w': 168, 'h': 30},
+        "geometry": {'x': 12, 'y': 480, 'w': 221, 'h': 30},
         "nodelayout": (20, -1910),
-        "pars": {'resizecomp': '/project1/vcon/panel/audio_dd', 'repocomp': '/project1/vcon/panel/audio_dd', 'Value0': 'copy', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnAudioChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'AUDIO', 'Labelwidth': 41, 'Menunames': 'copy pcm_s16le pcm_s24le aac alac none', 'Menulabels': "'Copy (source)' 'PCM 16-bit' 'PCM 24-bit' AAC ALAC 'None (video only)'"},
+        "pars": {'resizecomp': '/project1/vcon/panel/audio_dd', 'repocomp': '/project1/vcon/panel/audio_dd', 'Value0': 'copy', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnAudioChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'AUDIO', 'Labelwidth': 90, 'Menunames': 'copy pcm_s16le pcm_s24le aac alac none', 'Menulabels': "'Copy (source)' 'PCM 16-bit' 'PCM 24-bit' AAC ALAC 'None (video only)'"},
     },
     "audio_sep_t": {
-        "geometry": {'x': 187, 'y': 480, 'w': 106, 'h': 30},
+        "geometry": {'x': 250, 'y': 480, 'w': 146, 'h': 30},
         "nodelayout": (210, -1910),
-        "pars": {'resizecomp': '/project1/vcon/panel/audio_sep_t', 'repocomp': '/project1/vcon/panel/audio_sep_t', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnAudioSepChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SEP AUDIO', 'Labelwidth': 64, 'Buttonofflabel': 'NO', 'Buttononlabel': 'YES', 'Buttonfontbold': False, 'Buttononfacecolorr': 0.3, 'Buttononfacecolorg': 0.3, 'Buttononfacecolorb': 0.3, 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9, 'Buttononfontcolorr': 0.9, 'Buttononfontcolorg': 0.9, 'Buttononfontcolorb': 0.9, 'Buttonwidth': 33},
+        "pars": {'resizecomp': '/project1/vcon/panel/audio_sep_t', 'repocomp': '/project1/vcon/panel/audio_sep_t', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnAudioSepChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SEPARATE AUDIO', 'Labelwidth': 96, 'Buttonofflabel': 'NO', 'Buttononlabel': 'YES', 'Buttonfontbold': False, 'Buttononfacecolorr': 0.3, 'Buttononfacecolorg': 0.3, 'Buttononfacecolorb': 0.3, 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9, 'Buttononfontcolorr': 0.9, 'Buttononfontcolorg': 0.9, 'Buttononfontcolorb': 0.9, 'Buttonwidth': 33},
     },
     "audio_sep_dd": {
-        "geometry": {'x': 291, 'y': 480, 'w': 176, 'h': 30},
+        "geometry": {'x': 395, 'y': 480, 'w': 247, 'h': 30},
         "nodelayout": (410, -1910),
-        "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/audio_sep_dd', 'repocomp': '/project1/vcon/panel/audio_sep_dd', 'Value0': 'copy', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SEP FORMAT', 'Labelwidth': 74, 'Menunames': 'wav16 wav24 aiff16 aiff24 aac mp3 copy', 'Menulabels': "'WAV 16-bit' 'WAV 24-bit' 'AIFF 16-bit' 'AIFF 24-bit' 'AAC 256k' 'MP3 320k' 'Copy source'"},
+        "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/audio_sep_dd', 'repocomp': '/project1/vcon/panel/audio_sep_dd', 'Value0': 'wav16', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SEPARATE AUDIO FORMAT', 'Labelwidth': 139, 'Menunames': 'wav16 wav24 aiff16 aiff24 aac mp3 copy', 'Menulabels': "'WAV 16-bit' 'WAV 24-bit' 'AIFF 16-bit' 'AIFF 24-bit' 'AAC 256k' 'MP3 320k' 'Copy source'"},
     },
     "fps_t": {
         "geometry": {'x': 12, 'y': 510, 'w': 85, 'h': 30},
@@ -95,32 +95,32 @@ CAPTURED_PANEL = {
     "scaled_t": {
         "geometry": {'x': 154, 'y': 510, 'w': 82, 'h': 30},
         "nodelayout": (400, -1730),
-        "pars": {'resizecomp': '/project1/vcon/panel/scaled_t', 'repocomp': '/project1/vcon/panel/scaled_t', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module._update_res_fields(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SCALE', 'Labelwidth': 42, 'Buttonofflabel': 'OFF', 'Buttononlabel': 'ON', 'Buttonfontbold': False, 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9, 'Buttononfontcolorr': 1.0, 'Buttononfontcolorg': 1.0, 'Buttononfontcolorb': 1.0, 'Buttonwidth': 33},
+        "pars": {'resizecomp': '/project1/vcon/panel/scaled_t', 'repocomp': '/project1/vcon/panel/scaled_t', 'Value0': True, 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module._update_res_fields(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SCALE', 'Labelwidth': 42, 'Buttonofflabel': 'OFF', 'Buttononlabel': 'ON', 'Buttonfontbold': False, 'Buttonofffontcolorr': 0.9, 'Buttonofffontcolorg': 0.9, 'Buttonofffontcolorb': 0.9, 'Buttononfontcolorr': 1.0, 'Buttononfontcolorg': 1.0, 'Buttononfontcolorb': 1.0, 'Buttonwidth': 33},
     },
     "scale_dd": {
         "geometry": {'x': 231, 'y': 510, 'w': 108, 'h': 30},
         "nodelayout": (590, -1730),
-        "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/scale_dd', 'repocomp': '/project1/vcon/panel/scale_dd', 'Value0': 'custom', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module._update_res_fields(); op.vcon.op('panel_callbacks').module.OnFitChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SIZE', 'Labelwidth': 32, 'Menunames': 'eighth quarter half 2x 4x 8x custom', 'Menulabels': 'Eighth Quarter Half 2X 4X 8X Custom'},
+        "pars": {'resizecomp': '/project1/vcon/panel/scale_dd', 'repocomp': '/project1/vcon/panel/scale_dd', 'Value0': 'custom', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module._update_res_fields(); op.vcon.op('panel_callbacks').module.OnFitChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'SIZE', 'Labelwidth': 32, 'Menunames': 'eighth quarter half 2x 4x 8x custom', 'Menulabels': 'Eighth Quarter Half 2X 4X 8X Custom'},
     },
     "fit_dd": {
         "geometry": {'x': 336, 'y': 510, 'w': 121, 'h': 30},
         "nodelayout": (780, -1730),
-        "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/fit_dd', 'repocomp': '/project1/vcon/panel/fit_dd', 'Value0': 'fitoutside', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFitChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'FIT', 'Labelwidth': 26, 'Menunames': 'fitbest fill fithorz fitvert fitoutside', 'Menulabels': "'Fit Best' Stretch 'Fit Width' 'Fit Height' Cover/Crop"},
+        "pars": {'resizecomp': '/project1/vcon/panel/fit_dd', 'repocomp': '/project1/vcon/panel/fit_dd', 'Value0': 'fitoutside', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFitChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'FIT', 'Labelwidth': 26, 'Menunames': 'fitbest fill fithorz fitvert fitoutside', 'Menulabels': "'Fit Best' Stretch 'Fit Width' 'Fit Height' Cover/Crop"},
     },
     "resw_f": {
         "geometry": {'x': 449, 'y': 510, 'w': 100, 'h': 30},
         "nodelayout": (970, -1730),
-        "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/resw_f', 'repocomp': '/project1/vcon/panel/resw_f', 'Value0': '1920', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFitChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'W', 'Labelwidth': 20},
+        "pars": {'resizecomp': '/project1/vcon/panel/resw_f', 'repocomp': '/project1/vcon/panel/resw_f', 'Value0': '1920', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFitChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'W', 'Labelwidth': 20},
     },
     "resh_f": {
         "geometry": {'x': 540, 'y': 510, 'w': 100, 'h': 30},
         "nodelayout": (1140, -1730),
-        "pars": {'display': False, 'resizecomp': '/project1/vcon/panel/resh_f', 'repocomp': '/project1/vcon/panel/resh_f', 'Value0': '1080', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFitChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'H', 'Labelwidth': 20},
+        "pars": {'resizecomp': '/project1/vcon/panel/resh_f', 'repocomp': '/project1/vcon/panel/resh_f', 'Value0': '1080', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnFitChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'H', 'Labelwidth': 20},
     },
     "format_dd": {
         "geometry": {'x': 12, 'y': 540, 'w': 230, 'h': 30},
         "nodelayout": (20, -1510),
-        "pars": {'resizecomp': '/project1/vcon/panel/format_dd', 'repocomp': '/project1/vcon/panel/format_dd', 'Value0': 'rgb', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'PIXEL FORMAT', 'Labelwidth': 90, 'Menunames': 'rgb rgba', 'Menulabels': "'RGB' 'RGB + Alpha'"},
+        "pars": {'resizecomp': '/project1/vcon/panel/format_dd', 'repocomp': '/project1/vcon/panel/format_dd', 'Value0': 'rgbu', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'PIXEL FORMAT', 'Labelwidth': 90, 'Menunames': 'rgbu rgbs', 'Menulabels': "'RGB (HDR)' 'RGB (HDR scRGB)'"},
     },
     "quality_dd": {
         "geometry": {'x': 250, 'y': 540, 'w': 190, 'h': 30},
@@ -138,9 +138,9 @@ CAPTURED_PANEL = {
         "pars": {'resizecomp': '/project1/vcon/panel/codec_dd', 'repocomp': '/project1/vcon/panel/codec_dd', 'Value0': 'hap', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.UpdateSubtypes(); op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'CODEC', 'Labelwidth': 60, 'Menunames': 'notchlc hap cineform prores h264 h265', 'Menulabels': "NotchLC Hap 'GoPro CineForm' 'Apple ProRes' H.264 H.265"},
     },
     "subtype_dd": {
-        "geometry": {'x': 440, 'y': 570, 'w': 200, 'h': 30},
+        "geometry": {'x': 448, 'y': 570, 'w': 122, 'h': 30},
         "nodelayout": (420, -1320),
-        "pars": {'resizecomp': '/project1/vcon/panel/subtype_dd', 'repocomp': '/project1/vcon/panel/subtype_dd', 'Value0': 'hap', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.UpdateSubtypes(); op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'TYPE', 'Labelwidth': 60, 'Menunames': 'hap hapq hapr haphdr', 'Menulabels': 'hap hapq hapr haphdr'},
+        "pars": {'resizecomp': '/project1/vcon/panel/subtype_dd', 'repocomp': '/project1/vcon/panel/subtype_dd', 'Value0': 'haphdr', 'Onvaluechangescript0': "op.vcon.op('panel_callbacks').module.UpdateSubtypes(); op.vcon.op('panel_callbacks').module.OnSelectionChanged(); op.vcon.op('panel_callbacks').module.PersistSettings()", 'Widgetlabel': 'TYPE', 'Labelwidth': 46, 'Menunames': 'hap hapq hapr haphdr', 'Menulabels': 'hap hapq hapr haphdr'},
     },
     "destination": {
         "geometry": {'x': 12, 'y': 600, 'w': 601, 'h': 30},

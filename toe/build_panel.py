@@ -879,6 +879,12 @@ def build():
     # ---- binds + preview hooks --------------------------------------------
     say("binding progress + status")
     if "status_l" in widgets:
+        # The captured layout overlays this label on the progress bar.
+        # Keep its text above both the track (0) and green fill (1),
+        # with transparent backgrounds so the bar remains visible.
+        setp(widgets["status_l"], "layer", 2)
+        setp(widgets["status_l"], "bgalpha", 0)
+        setp(widgets["status_l"], "Labelbgcolora", 0)
         try:
             # The panel callbacks OWN this label now (SyncStatusField:
             # output name + frame counter). Assigning .expr would put the
@@ -1315,10 +1321,29 @@ except Exception as exc:
 # quality, format, etc.). Written on every widget change via
 # _save_settings() in the callbacks module.
 try:
+    op.vcon.op('panel_callbacks').module._apply_defaults()
+    print("[panel] shipped defaults applied")
+except Exception as exc:
+    print(f"[panel] (defaults: {exc})")
+try:
     op.vcon.op('panel_callbacks').module._load_settings()
     print("[panel] persistent settings restored")
 except Exception as exc:
     print(f"[panel] (settings restore: {exc})")
+# AFTER the restore: the FPS/SCALE row layout follows the FINAL scaled_t
+# value, which defaults/settings may have just changed. Same for the
+# TYPE dropdown, whose visibility follows the restored codec (the
+# restore writes Value0 directly and fires no widget hooks).
+try:
+    op.vcon.op('panel_callbacks').module._update_res_fields()
+    print("[panel] FPS/SCALE row layout applied")
+except Exception as exc:
+    print(f"[panel] (row layout: {exc})")
+try:
+    op.vcon.op('panel_callbacks').module.UpdateSubtypes()
+    print("[panel] subtype menu/visibility applied")
+except Exception as exc:
+    print(f"[panel] (subtype refresh: {exc})")
 # AFTER the restore: a persisted SEP AUDIO=ON must reveal the format
 # dropdown, so this cannot run before _load_settings().
 try:

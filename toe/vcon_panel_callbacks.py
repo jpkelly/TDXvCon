@@ -225,6 +225,43 @@ def PersistSettings():
     _save_settings()
 
 
+#: Shipped selection defaults (JP 2026-09-16). Applied at build end
+#: BEFORE _load_settings(), so a saved settings file always wins and
+#: these only surface on a first run. Code-owned rather than captured:
+#: the canonical capture must be taken with SCALE ON, so it can never
+#: record scaled_t OFF as the default, and a captured destination would
+#: ship one machine's home folder. A leading '~' is expanded per-user;
+#: the folder is NOT created (JP: just seed the path, the user picks).
+_DEFAULT_SELECTIONS = {
+    "destination": "~/Desktop/converted",
+    "container_dd": "mov",
+    "codec_dd": "notchlc",
+    "format_dd": "rgb",
+    "quality_dd": "1.0",
+    "fps_t": False,
+    "scaled_t": False,
+    "audio_dd": "none",
+    "audio_sep_t": False,
+    "audio_sep_dd": "wav16",
+}
+
+
+def _apply_defaults():
+    """Seed the shipped selection defaults (a saved settings file, loaded
+    right after, overrides any of them)."""
+    for name, val in _DEFAULT_SELECTIONS.items():
+        w = widget(name)
+        if w is None:
+            continue
+        if isinstance(val, str) and val.startswith("~"):
+            val = os.path.expanduser(val)
+        try:
+            w.par.Value0.val = val
+        except Exception as exc:
+            note(f"default ({name}) failed: {exc}")
+    note(f"shipped defaults applied ({len(_DEFAULT_SELECTIONS)} widgets)")
+
+
 def ext():
     """The vCon extension (Global OP Shortcut 'vcon' — set by the builder)."""
     return op.vcon.ext.Vcon
@@ -423,11 +460,12 @@ def UpdateSubtypes():
 
     JP spec: 'none' is never offered. Every codec with subtypes defaults
     to its FIRST real subtype (Hap -> hap, ProRes -> prores422proxy);
-    codecs without subtypes (NotchLC, CineForm, delivery codecs) grey the
-    dropdown out — the same 'empty menu = grey' rule MvO uses. FORMAT
-    offers the codec's real pixel formats with the first as default
-    (Hap: rgb + rgba, rgb selected; NotchLC: rgb + rgba; CineForm: rgba;
-    ProRes: per-SUBTYPE menus, 422 set while no subtype is finer).
+    codecs without subtypes (NotchLC, CineForm, delivery codecs) HIDE the
+    dropdown entirely (JP 2026-09-16 — an empty greyed control still ate
+    a slot in the row). FORMAT offers the codec's real pixel formats with
+    the first as default (Hap: rgb + rgba, rgb selected; NotchLC: rgb +
+    rgba; CineForm: rgba; ProRes: per-SUBTYPE menus, 422 set while no
+    subtype is finer).
     """
     try:
         codec = _val("codec_dd") or "notchlc"
@@ -443,6 +481,10 @@ def UpdateSubtypes():
         # or keep a stale option.
         if sub_w is not None:
             subs = list(meta.get("subtypes", []))
+            try:
+                sub_w.par.display.val = 1 if subs else 0
+            except Exception as exc:
+                note(f"subtype visibility failed: {exc}")
             if subs:
                 setp_par(sub_w, "Menunames", " ".join(subs))
                 setp_par(sub_w, "Menulabels", " ".join(subs))
@@ -687,6 +729,71 @@ def OnSelectionChanged():
         note(f"selection sync failed: {exc}")
 
 
+#: FPS/SCALE row layouts — TWO hand-tuned arrangements (JP): SCALE ON
+#: keeps the full row; SCALE OFF repositions the FPS group (NOT
+#: hard-left) with the scale controls hidden.
+#: Entries are {par: value} — geometry (x/y/w/h/display) AND the label/
+#: button widths, which are per-layout too: a wider fps_t in OFF needs
+#: Labelwidth 90, and leaving that set broke the ON row (JP 2026-09-16).
+#: Baked from the captures: 'on' from toe/panel_layout_captured.py,
+#: 'off' from toe/panel_layout_variant.py (capture_variant prints
+#: paste-ready blocks after each capture).
+_ROW_LAYOUTS = {
+    'on': {
+        'fps_t': {'x': 12, 'y': 510, 'w': 85, 'h': 30, 'display': True,
+                  'Labelwidth': 29, 'Buttonwidth': 51},
+        'fps_f': {'x': 94, 'y': 510, 'w': 55, 'h': 30, 'display': True,
+                  'Labelwidth': 29, 'Labeldisplay': False},
+        'scaled_t': {'x': 154, 'y': 510, 'w': 82, 'h': 30, 'display': True,
+                     'Labelwidth': 42, 'Buttonwidth': 33},
+        'scale_dd': {'x': 231, 'y': 510, 'w': 108, 'h': 30,
+                     'Labelwidth': 32},
+        'fit_dd': {'x': 336, 'y': 510, 'w': 121, 'h': 30,
+                   'Labelwidth': 26},
+        'resw_f': {'x': 449, 'y': 510, 'w': 100, 'h': 30,
+                   'Labelwidth': 20},
+        'resh_f': {'x': 540, 'y': 510, 'w': 100, 'h': 30,
+                   'Labelwidth': 20},
+    },
+    'off': {
+        'fps_t': {'x': 12, 'y': 510, 'w': 154, 'h': 30, 'display': True,
+                  'Labelwidth': 90, 'Buttonwidth': 58},
+        'fps_f': {'x': 162, 'y': 510, 'w': 55, 'h': 30, 'display': True,
+                  'Labelwidth': 29, 'Labeldisplay': False},
+        'scaled_t': {'x': 250, 'y': 510, 'w': 101, 'h': 30, 'display': True,
+                     'Labelwidth': 60, 'Buttonwidth': 33},
+        'scale_dd': {'x': 231, 'y': 510, 'w': 108, 'h': 30,
+                     'Labelwidth': 32},
+        'fit_dd': {'x': 336, 'y': 510, 'w': 121, 'h': 30,
+                   'Labelwidth': 26},
+        'resw_f': {'x': 449, 'y': 510, 'w': 100, 'h': 30,
+                   'Labelwidth': 20},
+        'resh_f': {'x': 540, 'y': 510, 'w': 100, 'h': 30,
+                   'Labelwidth': 20},
+    },
+}
+
+
+def _apply_row_layout(scaled):
+    """Place + size the FPS/SCALE row per the SCALE ON/OFF layout.
+
+    Runs from _update_res_fields on every toggle flip and once at build
+    end — idempotent writes. Every key is written as a par, so geometry
+    and the label/button widths switch together; the scale group's
+    display flags are re-derived right after.
+    """
+    lay = _ROW_LAYOUTS.get('on' if scaled else 'off') or {}
+    for name, entry in lay.items():
+        w = panel().op(name)
+        if w is None:
+            continue
+        for key, val in entry.items():
+            try:
+                w.par[key].val = val
+            except Exception as exc:
+                note(f"row layout ({name}.{key}) failed: {exc}")
+
+
 def _update_res_fields():
     """Live-fit wiring + SCALE visibility, driven by the SCALED toggle.
 
@@ -705,6 +812,10 @@ def _update_res_fields():
     # buttonToggle's Value0 is a BOOLEAN (0/1), not a string — comparing
     # to 'scaled' never matched, so the toggle silently did nothing.
     scaled = bool(mode)
+    # 0) ROW LAYOUT: place the row per SCALE ON/OFF (JP's two-layout
+    #    row) BEFORE the visibility pass — the OFF arrangement moves the
+    #    FPS group out of the hard-left margin position.
+    _apply_row_layout(scaled)
     # 1) rewire NOW through the extension (toggle state is advisory; the
     #    controller re-applies per job, so a busy encoder is unaffected).
     try:

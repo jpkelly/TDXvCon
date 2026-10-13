@@ -69,6 +69,20 @@ p = op('/project1/vcon/panel')
 if p is None:
     raise RuntimeError('panel not found — build it first')
 
+# SOFT GUARD (two-layout workflow): the canonical capture must be taken
+# with SCALE ON — an OFF-state capture would bake the variant row
+# arrangement into the canonical. The in-toe runner routes OFF to the
+# variant capture automatically; this guards direct textport execs.
+try:
+    _scaled_t = p.op('scaled_t')
+    if _scaled_t is not None and not bool(_scaled_t.par.Value0.eval()):
+        print('[capture] NOTE: SCALE is OFF — this would record the '
+              'SCALED-OFF row arrangement as canonical. Flip SCALE ON '
+              'for the canonical capture (panel_capture_run routes by '
+              'the toggle itself).')
+except Exception:
+    pass
+
 #: panel widget name -> tox it came from (mirror of build_panel _WIDGETS)
 _TOX_OF = {
     "source": "fieldFileBrowser", "destination": "fieldFolderBrowser",
