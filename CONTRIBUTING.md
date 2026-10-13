@@ -20,7 +20,8 @@ require TouchDesigner; describe any manual encoding checks separately.
 The current authoring scripts contain maintainer-specific repository paths;
 `build_panel.py` also uses macOS palette paths. They are not yet a portable
 build system. Update their path constants for your checkout and TouchDesigner
-installation before running them. Installed CLI users do not need these scripts.
+installation before running them. Users opening the saved project or running
+the installed CLI do not need these scripts.
 
 Run builders in TouchDesigner's **Textport**, using `exec` rather than importing
 modules (TouchDesigner injects operator globals into the Textport namespace):

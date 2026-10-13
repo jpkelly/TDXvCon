@@ -1,7 +1,12 @@
-# Publishing tdxvcon
+# Publishing TDXvCon
 
-Release checklist. Follow in order — steps 1–3 must happen before step 4,
-because the `.toe` bakes in both the version and the file-linked DAT text.
+The primary deliverable is `src/vcon/data/transcoder.toe`, opened directly in
+TouchDesigner. Complete steps 1–3, test the panel from a clean copy, and attach
+the saved project to the GitHub release. Video encoding does not require the
+CLI; audio support is installed separately through Setup & Help.
+
+Steps 4–7 publish the optional `tdxvcon` Python package to PyPI. Build it only
+after saving the project, which bakes in the version and file-linked DAT text.
 
 ## 1. Bump the version (3 files, must match)
 
@@ -102,8 +107,9 @@ curl -s https://pypi.org/simple/tdxvcon/ | grep -o 'tdxvcon-[0-9.]*\.whl' | tail
 - **Bump `CONTROLLER_VERSION` before saving the toe** — that version is
   baked in, and the CLI refuses to drive a controller whose version does
   not match (`src/vcon/__main__.py`).
-- **The `.toe` alone is not shippable.** It drives the encoder over TCP
-  from the `tdxvcon` package; a recipient needs `pipx install tdxvcon`.
+- **The panel runs directly in TouchDesigner.** The CLI package is optional.
+  FFmpeg is required for audio muxing/export and is not bundled in the `.toe`;
+  users can install it through the panel's Setup & Help dialog.
 - **Panel layout** lives in `toe/panel_layout_captured.py` (canonical,
   SCALE ON) and `toe/panel_layout_variant.py` (SCALE OFF row deltas).
   Capture before rebuilding and synchronize the runtime `_ROW_LAYOUTS` in
