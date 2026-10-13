@@ -12,8 +12,8 @@ workflows.
 Requires TouchDesigner on macOS or Windows, licensed for your intended use.
 Codec availability and output limits depend on the build, platform, and license.
 
-1. Download [transcoder.toe](src/vcon/data/transcoder.toe) using GitHub's
-   **Download raw file** button, or clone this repository.
+1. Download [TDXvCon-1.0.0.toe](https://github.com/jpkelly/TDXvCon/releases/download/v1.0.0/TDXvCon-1.0.0.toe)
+   from the [v1.0.0 release](https://github.com/jpkelly/TDXvCon/releases/tag/v1.0.0).
 2. Open the project in TouchDesigner. The queue panel is at
    `/project1/vcon/panel` (right-click the component and select **View** if needed).
 3. Choose a **DESTINATION**, **CONTAINER**, and **CODEC**. Set the pixel format,

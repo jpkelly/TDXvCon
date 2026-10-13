@@ -32,7 +32,7 @@ from vcon.td_driver import TouchDesignerDriver
 from vcon.transcoder import Transcoder, TranscoderOptions
 from vcon.config import load_config, save_config, Config, find_touchdesigner
 
-__version__ = "0.1.6"
+__version__ = "1.0.0"
 
 __all__ = [
     "VconError",

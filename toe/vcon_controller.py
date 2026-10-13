@@ -44,10 +44,10 @@ import os
 import sys
 import time
 
-#: Controller build identifier. Written into the toe's custom "Version"
-#: parameter at build time so a stale toe is identifiable in the UI.
+#: Controller build identifier. The toe's custom "Version" parameter
+#: references this value so the UI follows the embedded controller.
 #: Keep in step with vcon.__version__ (tests assert this).
-CONTROLLER_VERSION = "0.1.6"
+CONTROLLER_VERSION = "1.0.0"
 
 PROTOCOL_VERSION = 1
 #: Default TCP port. Overridable per-instance via the COMP's Tcpport custom

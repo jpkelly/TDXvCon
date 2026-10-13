@@ -8,6 +8,9 @@ CLI; audio support is installed separately through Setup & Help.
 Steps 4–7 publish the optional `tdxvcon` Python package to PyPI. Build it only
 after saving the project, which bakes in the version and file-linked DAT text.
 
+The first major release uses Git tag `v1.0.0`, package/controller version `1.0.0`,
+and release asset name `TDXvCon-1.0.0.toe`.
+
 ## 1. Bump the version (3 files, must match)
 
 | File | Line |
@@ -44,7 +47,10 @@ exec(op.vcon.op('panel_build_run').text)
 ```
 
 Saving bakes the current text of every file-linked DAT into the `.toe`.
-Editing the `.py` files alone is **not** enough to ship.
+Editing the `.py` files alone is **not** enough to ship. Verify that the
+read-only **vCon version** parameter and **? → Setup & Help → Versions** both
+report the intended controller version. The custom parameter should use the
+expression `me.op('vcon_controller').module.CONTROLLER_VERSION`.
 
 Confirm the packaged toe is newer than every source it bakes in:
 

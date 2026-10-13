@@ -512,6 +512,8 @@ def build():
             debug(f"{par_name}: could not seed value: {exc}")
 
     add_readonly_str("Version", "vCon version", BUILD_VERSION)
+    # Follow the embedded controller after source reloads and panel-only rebuilds.
+    vcon.par.Version.expr = "me.op('vcon_controller').module.CONTROLLER_VERSION"
     add_readonly_str("Controller", "Controller file",
                      CONTROLLER_SRC if linked else "(embedded)")
     add_readonly_str("Linked", "Linked to file", "yes" if linked else "no")

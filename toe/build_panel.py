@@ -1358,6 +1358,14 @@ except Exception as exc:
 # would not help anyone who merely opens the toe, so the panel tick
 # clears it once instead (see _lister_errs_cleared in the callbacks).
 
+# Keep the main window title in step with the embedded controller version.
+try:
+    _window = op('/perform')
+    if _window is not None:
+        _window.par.title.expr = "'TDXvCon ' + op.vcon.par.Version.eval()"
+except Exception as exc:
+    print(f"[panel] (window title: {exc})")
+
 # ---- SAVE the project ------------------------------------------------
 # Without this the panel build lives only in the running TD session:
 # build_network.py saves, build_panel.py did not, so every panel
