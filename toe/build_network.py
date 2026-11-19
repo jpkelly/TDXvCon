@@ -167,6 +167,30 @@ def menu_set(par, candidates, label=None):
         f"valid = {names}")
     return None
 
+def menu_set_strict(par, candidates, label=None):
+    """Set a menu parameter, failing loudly on a real token mismatch.
+
+    Like menu_set(), but a non-empty menu missing every candidate raises
+    instead of being recorded and continued past. An EMPTY menu means the
+    operator has not populated it yet (Movie File In before a file loads),
+    so the first candidate is written as a best-effort default — the live
+    controller re-verifies once the file is loaded. Returns the token used.
+    """
+    names = list(par.menuNames or [])
+    for cand in candidates:
+        if cand in names:
+            par.val = cand
+            say(f"  {label or par.name} = {cand}")
+            return cand
+    if not names:
+        cand = candidates[0]
+        par.val = cand
+        say(f"  {label or par.name} = {cand} (menu not populated yet)")
+        return cand
+    raise ValueError(
+        f"{label or par.name}: none of {list(candidates)} in live menu {names}"
+    )
+
 def safe_set(par_collection, name, value):
     """Set an OPTIONAL parameter if it exists; never raise.
 
@@ -265,12 +289,15 @@ def build():
     # playmode menu = ['locked', 'specify', 'sequential', 'timecodeop']).
     menu_set(moviein.par.playmode, ["specify", "specifyindex", "index"],
              "moviein.playmode")
-    # indexunit MUST be 'index' (the movie's own frame number), NOT
-    # 'frames' (timeline frames, rescaled by project rate → 2.5x
-    # time-stretch on a 24fps movie in a 60fps project). menu_set
-    # falls through to 'frames' at build time because the Movie File
-    # In's menu isn't populated until a file is loaded. Hardcode it.
-    moviein.par.indexunit = "index"
+    # indexunit MUST be the movie's OWN frame number ('indices' on current
+    # builds, 'index' on older ones), NOT 'frames' (timeline frames, rescaled
+    # by project rate → 2.5x time-stretch on a 24fps movie in a 60fps
+    # project). Verify against the live menu: the Movie File In's menu may be
+    # empty at build time, in which case the preferred token is written and
+    # the controller re-verifies on load. A populated menu missing both
+    # tokens raises instead of silently falling back to 'frames'.
+    menu_set_strict(moviein.par.indexunit, ["indices", "index"],
+                    "moviein.indexunit")
     moviein.par.index = 0
     safe_set(moviein.par, "prereadframes", 2)    # cap VRAM pre-read buffer to 2 frames
     safe_set(moviein.par, "alwaysloadinitial", 1)  # never encode black frame 0
