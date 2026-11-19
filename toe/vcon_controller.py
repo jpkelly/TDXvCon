@@ -711,14 +711,16 @@ class VconExt:
         moviein.par.file = job["input"]
         # VERIFIED LIVE (JP's TD, 2026-09-13):
         #   playmode menu = ['locked','specify','sequential','timecodeop']
-        #   indexunit menu = ['index','frames','seconds','fraction']
+        #   indexunit menu = ['indices','frames','seconds','fraction']
+        #   (older builds used 'index' instead of 'indices'; both accepted)
         moviein.par.playmode = "specify"   # "Specify Index"
-        # 'index' = the movie's OWN frame number. 'frames' counts TIMELINE
-        # frames and rescales by the project rate, so a 24fps movie in a
-        # 60fps project advanced 0.4 frames per step — every source frame
-        # written ~2.5x and the whole encode time-stretched (measured
-        # 2.500 by toe/probe_timing.py).
-        moviein.par.indexunit = "index"
+        # 'indices'/'index' = the movie's OWN frame number. 'frames' counts
+        # TIMELINE frames and rescales by the project rate, so a 24fps movie
+        # in a 60fps project advanced 0.4 frames per step — every source
+        # frame written ~2.5x and the whole encode time-stretched (measured
+        # 2.500 by toe/probe_timing.py). Verify against the live menu so a
+        # token that falls back to entry 0 can never silently pick 'frames'.
+        self._set_indexunit_menu(moviein.par.indexunit)
         moviein.par.index = 0
         # Throttle pre-read buffer to 2 frames: default 30 frames at 15.3K
         # resolution allocates ~8 GB of VRAM and can cause Metal memory stalls.
@@ -1498,6 +1500,18 @@ class VconExt:
         build-to-build token drift ('custom' vs 'customresolution').
         Returns the token actually written.
         """
+        return self._menu_verified_write(par, "fit TOP", token, *aliases)
+
+    def _menu_verified_write(self, par, label, token, *aliases):
+        """Write a menu token only if the LIVE menu agrees.
+
+        TD silently substitutes menu entry 0 for an unknown token. An empty
+        menu means the operator has not populated it yet (e.g. Movie File In
+        before a file is loaded), so the preferred token is written as a
+        best-effort default; a non-empty menu missing every candidate is a
+        real mismatch and raises instead of silently picking the wrong unit.
+        Returns the token actually written.
+        """
         try:
             menu = list(getattr(par, "menuNames", None) or [])
         except Exception:
@@ -1506,7 +1520,16 @@ class VconExt:
             if not menu or cand in menu:
                 par.val = cand
                 return cand
-        raise ValueError(f"{token!r} not in live fit TOP menu {menu}")
+        raise ValueError(f"{token!r} not in live {label} menu {menu}")
+
+    def _set_indexunit_menu(self, par):
+        """Menu-verified write for Movie File In's Index Unit menu.
+
+        Live TD builds (2025.33230/33407) expose 'indices'; older builds used
+        'index'. Accept either so a menu reorder can never silently switch to
+        'frames' and time-stretch the encode.
+        """
+        return self._menu_verified_write(par, "indexunit", "indices", "index")
 
     def _apply_fitres(self, token, fit_mode=None):
         """Configure the fit TOP with a NATIVE Output Resolution token.
