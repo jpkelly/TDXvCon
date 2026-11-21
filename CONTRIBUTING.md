@@ -37,7 +37,9 @@ copy and retain any unsaved edits before rebuilding. The panel build reads
 used when maintaining the runtime row layouts.
 
 Changes to controller or panel source must be baked into
-`src/vcon/data/transcoder.toe` before release. Test the saved project without
+`src/vcon/data/transcoder.toe` before release. Pull requests do not need a
+rebuilt toe: the maintainer rebuilds it at release time, and only release
+tags run the toe check (`VCON_RELEASE_CHECK=1`). Test the saved project without
 access to the author's source paths: linked DATs must retain usable embedded
 source. Check a representative encode, output codec, frame count, audio, and
 panel interactions on each supported platform.
