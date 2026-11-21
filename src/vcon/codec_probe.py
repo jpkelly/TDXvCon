@@ -208,6 +208,103 @@ def _read_stsd(fh, body: int, end: int) -> CodecInfo | None:
     return CodecInfo(fourcc=fourcc, name=name, raw_offset=body + 12)
 
 
+def _child(fh, start: int, end: int, kind: bytes):
+    """(body, body_end) of the first direct child atom of ``kind``, or None."""
+    for atype, body, body_end in _iter_atoms_fh(fh, start, end):
+        if atype == kind:
+            return body, body_end
+    return None
+
+
+def _descend(fh, start: int, end: int, kinds: tuple[bytes, ...]):
+    """Follow a path of child atoms (e.g. minf → stbl); None if absent."""
+    span = (start, end)
+    for kind in kinds:
+        span = _child(fh, span[0], span[1], kind)
+        if span is None:
+            return None
+    return span
+
+
+def _video_frames_in_moov(fh, start: int, end: int) -> int | None:
+    """Sample count of the first VIDEO trak (handler 'vide').
+
+    The handler matters: after the audio mux a file holds a sound trak
+    too, and its sample count is not a frame count. ``hdlr`` carries the
+    handler type at body offset 8 in both QuickTime (component subtype)
+    and ISO MP4 (handler_type).
+    """
+    for atype, body, body_end in _iter_atoms_fh(fh, start, end):
+        if atype != b"trak":
+            continue
+        mdia = _child(fh, body, body_end, b"mdia")
+        if mdia is None:
+            continue
+        hdlr = _child(fh, mdia[0], mdia[1], b"hdlr")
+        if hdlr is None or _read_at(fh, hdlr[0] + 8, 4) != b"vide":
+            continue
+        stbl = _descend(fh, mdia[0], mdia[1], (b"minf", b"stbl"))
+        if stbl is None:
+            return None
+        # stsz / stz2: version+flags(4), size-or-reserved(4), count(4)
+        for kind in (b"stsz", b"stz2"):
+            box = _child(fh, stbl[0], stbl[1], kind)
+            if box is not None:
+                head = _read_at(fh, box[0], 12)
+                if len(head) == 12:
+                    return struct.unpack(">I", head[8:12])[0]
+        # stts: version+flags(4), entries(4), then (count, delta) pairs
+        box = _child(fh, stbl[0], stbl[1], b"stts")
+        if box is not None:
+            head = _read_at(fh, box[0], 8)
+            if len(head) == 8:
+                n = struct.unpack(">I", head[4:8])[0]
+                table = _read_at(fh, box[0] + 8, 8 * n)
+                if len(table) == 8 * n:
+                    return sum(struct.unpack(">I", table[i:i + 4])[0]
+                               for i in range(0, 8 * n, 8))
+        return None
+    return None
+
+
+def probe_video_frames(path: str | Path) -> int | None:
+    """Number of frames in a .mov/.mp4's video track, or None if unreadable.
+
+    Reads the sample table rather than decoding, using seeks like
+    :func:`probe_codec`, so it is cheap on multi-gigabyte files. None means
+    "could not tell" (incomplete file, other container), never zero.
+    """
+    p = Path(path)
+    if not p.exists():
+        return None
+    file_size = p.stat().st_size
+    if file_size < 16:
+        return None
+    with p.open("rb") as fh:
+        for atype, body, body_end in _iter_atoms_fh(fh, 0, file_size):
+            if atype == b"moov":
+                return _video_frames_in_moov(fh, body, body_end)
+    return None
+
+
+def verify_frame_count(path: str | Path, expected: int) -> tuple[bool, str]:
+    """Check the output's video frame count; returns (ok, human message).
+
+    Run after :func:`verify_output` has seen a readable ``moov``. A count
+    that cannot be read (e.g. a container without a QuickTime sample
+    table) passes with a note: this check only fails on a real mismatch.
+    """
+    found = probe_video_frames(path)
+    if found is None:
+        return True, "frame count not readable, not checked"
+    if found != expected:
+        return False, (
+            f"output has {found} video frames but {expected} were written "
+            f"— the file is incomplete or frames were dropped"
+        )
+    return True, f"{found} frames"
+
+
 def verify_output(
     path: str | Path,
     *,

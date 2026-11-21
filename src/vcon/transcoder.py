@@ -85,7 +85,9 @@ class Transcoder:
         """Run all queued jobs to completion; returns process exit code.
 
         0 = everything encoded; 1 = one or more jobs failed; 2 = backend died
-        (nothing can be trusted after that).
+        (nothing can be trusted after that); 3 = everything encoded, but at
+        least one output fell short of the request (job warnings, e.g. the
+        audio mux failed and the file is video-only).
         """
         jobs = [j for j in self.queue.jobs if not j.is_terminal]
         if not jobs:
@@ -131,7 +133,9 @@ class Transcoder:
             + ", ".join(f"{k}={v}" for k, v in self.queue.counts().items() if v),
         )
         self.bus.queue_idle()
-        return 0 if not self.queue.failed_jobs() else 1
+        if self.queue.failed_jobs():
+            return 1
+        return 3 if self.queue.warned_jobs() else 0
 
     # ------------------------------------------------------------------
     # Introspection (GUI seam)

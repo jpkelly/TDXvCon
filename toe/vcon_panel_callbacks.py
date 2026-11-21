@@ -443,6 +443,15 @@ def SyncStatusField():
                 text = f"{text}  {phase}".strip()
             _set_status_text(text)
             return
+        sel = next((it for it in _queue
+                    if _selected_path and it["input"] == _selected_path),
+                   None)
+        if sel is not None and sel["status"] in ("error", "warning"):
+            # A finished-badly row names what went wrong (issue #2).
+            detail = sel.get("error") or "; ".join(sel.get("warnings") or [])
+            _set_status_text(f"{sel['status']}: {detail}" if detail
+                             else sel["status"])
+            return
         if _selected_path and os.path.isfile(_selected_path):
             src = _full_path_for(
                 os.path.basename(_selected_path)) or _selected_path
@@ -1640,7 +1649,8 @@ def _batch_progress():
     this for the whole batch (JP), not the current file's 0-1."""
     if not _queue:
         return 0.0
-    done = sum(1 for it in _queue if it["status"] == "done")
+    done = sum(1 for it in _queue
+               if it["status"] in ("done", "warning", "error"))
     running = next((it for it in _queue if it["status"] == "running"),
                    None)
     if running is not None:
@@ -1904,6 +1914,37 @@ def _mark_done(output_path):
             pass
 
 
+def _job_outcome(e, item):
+    """How a running row's job ended, once the controller is idle:
+    'done', 'warning' (done, but the output fell short — e.g. video-only
+    after a failed audio mux) or 'error'. None while still unknown.
+
+    The controller's last_result is the authority (issue #2): "the
+    output file exists" also holds for a failed or cancelled job, whose
+    partial file Movie File Out finalizes. Controllers without
+    last_result fall back to the old existence check.
+    """
+    if not hasattr(e, "last_result"):
+        return "done" if os.path.exists(item["output"]) else None
+    res = e.last_result
+    if not isinstance(res, dict) or res.get("output") != item["output"]:
+        # Idle, yet no verdict for this row: the submit never reached
+        # the controller. Don't leave the row 'running' forever.
+        item["error"] = "job did not start"
+        return "error"
+    name = os.path.basename(item["input"])
+    if not res.get("ok"):
+        item["error"] = res.get("message") or res.get("code") or "failed"
+        note(f"  FAILED {name}: {item['error']}")
+        return "error"
+    if res.get("warnings"):
+        item["warnings"] = list(res["warnings"])
+        for w in item["warnings"]:
+            note(f"  WARNING {name}: {w}")
+        return "warning"
+    return "done"
+
+
 def _on_job_done(output_path):
     """Poll-based completion hook for the panel: refresh + run next."""
     _mark_done(output_path)
@@ -2032,18 +2073,22 @@ def onFrame():
     if e.is_busy:
         _refresh_queue()     # keeps the running row's bar moving
         return
-    # finished detection: a running row whose output now exists
+    # finished detection: the controller's verdict for each running row
     for item in list(_queue):
-        if item["status"] == "running" and os.path.exists(item["output"]):
-            item["status"] = "done"
+        if item["status"] == "running":
+            outcome = _job_outcome(e, item)
+            if outcome:
+                item["status"] = outcome
     # JP: finished items are REMOVED from the list (the bar + the row
-    # both clear — no stale 'done' rows)
+    # both clear — no stale 'done' rows). 'error' and 'warning' rows
+    # stay, so a failed or degraded output is never silently cleared.
     global _batch_started
     remaining = [it for it in _queue if it["status"] != "done"]
     if len(remaining) < len(_queue):
         _queue[:] = remaining
-    # close the batch gate + reset the bar when the queue empties
-    if not _queue:
+    # close the batch gate + reset the bar once nothing is left to run
+    # (error/warning/cancelled rows may remain; adds must wait for START)
+    if not any(it["status"] in ("queued", "running") for it in _queue):
         _batch_started = False
         try:
             op.vcon.par.Progress.val = 0.0
@@ -2053,7 +2098,8 @@ def onFrame():
         # its one PreviewOutput() while the finished row was still in the
         # queue, so it rendered that row's path. This is the first moment
         # the queue is actually empty.
-        PreviewOutput()
+        if not _queue:
+            PreviewOutput()
     _run_next()
     _refresh_queue()
 

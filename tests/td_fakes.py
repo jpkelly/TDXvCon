@@ -95,7 +95,8 @@ class FakeOp:
 class FakeMovieIn(FakeOp):
     """Movie File In: shows source frame ``par.index`` immediately."""
 
-    def __init__(self, frames=10, rate=24.0, width=1920, height=1080):
+    def __init__(self, frames=10, rate=24.0, width=1920, height=1080,
+                 has_audio=False):
         super().__init__(
             "moviein",
             file=Par(""),
@@ -108,6 +109,7 @@ class FakeMovieIn(FakeOp):
         self.rate = rate
         self.fileWidth = width
         self.fileHeight = height
+        self.has_audio = has_audio
 
     @property
     def shown_index(self):
@@ -115,7 +117,7 @@ class FakeMovieIn(FakeOp):
 
 
 class FakeInfo(FakeOp):
-    """Info CHOP on moviein: ``info['sample_rate'][0]``."""
+    """Info CHOP on moviein: ``info['sample_rate'][0]`` etc."""
 
     def __init__(self, moviein):
         super().__init__("info")
@@ -124,6 +126,8 @@ class FakeInfo(FakeOp):
     def __getitem__(self, chan):
         if chan == "sample_rate":
             return [self._moviein.rate]
+        if chan == "mv_has_audio":
+            return [1.0 if self._moviein.has_audio else 0.0]
         raise KeyError(chan)
 
 
@@ -148,6 +152,8 @@ class FakeMovieOut(FakeOp):
         self.files = {}
         self.current = None
         self.fail_addframe = False
+        #: False simulates a file that never lands on disk.
+        self.create_files = True
         super().__init__(
             "movieout",
             file=Par(""),
@@ -169,7 +175,8 @@ class FakeMovieOut(FakeOp):
             path = self.par.file.eval()
             self.current = path
             self.files[path] = []
-            Path(path).write_bytes(b"")
+            if self.create_files:
+                Path(path).write_bytes(b"")
         elif old and not new:
             self.current = None
 
@@ -227,9 +234,10 @@ def load_controller_module():
 class Rig:
     """A controller wired to fakes, plus helpers to drive it."""
 
-    def __init__(self, frames=10, rate=24.0):
+    def __init__(self, frames=10, rate=24.0, has_audio=False):
         self.mod = load_controller_module()
-        self.moviein = FakeMovieIn(frames=frames, rate=rate)
+        self.moviein = FakeMovieIn(frames=frames, rate=rate,
+                                   has_audio=has_audio)
         self.info = FakeInfo(self.moviein)
         self.movieout = FakeMovieOut(self.moviein)
         self.fit = FakeFit()

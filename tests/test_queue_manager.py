@@ -176,3 +176,62 @@ def test_has_pending_and_results(queue, sample_spec):
     assert queue.has_pending()
     queue.handle_message({"type": "done", "id": job.id, "total_frames": 5})
     assert not queue.has_pending()
+
+# ----------------------------------------------------------------------
+# #2 — done carries warnings and is checked against the file's frames
+# ----------------------------------------------------------------------
+
+
+def _video_mov(frames):
+    from tests.test_codec_probe import _mov, _trak
+
+    return _mov(_trak(b"vide", frames))
+
+
+def _capture(bus):
+    seen = []
+    bus.subscribe_jobs(lambda e: seen.append((e.type, e.data)))
+    return seen
+
+
+def test_done_with_warnings_stays_done_and_reports_them(bus, queue, sample_spec):
+    seen = _capture(bus)
+    job = queue.submit(sample_spec)
+    queue.handle_message({"type": "accepted", "id": job.id, "total_frames": 48})
+    job.spec.output.write_bytes(_video_mov(48))
+    queue.handle_message({"type": "done", "id": job.id,
+                          "path": str(job.spec.output), "total_frames": 48,
+                          "frames_written": 48, "seconds": 1.0,
+                          "warnings": ["audio mux failed — video-only"]})
+
+    assert job.status == JobStatus.DONE
+    assert job.warnings == ["audio mux failed — video-only"]
+    assert queue.warned_jobs() == [job]
+    done = [d for t, d in seen if t == "job_done"][-1]
+    assert done["warnings"] == ["audio mux failed — video-only"]
+    assert "48 frames" in job.verify_note
+
+
+def test_done_fails_when_file_has_fewer_frames_than_written(bus, queue, sample_spec):
+    seen = _capture(bus)
+    job = queue.submit(sample_spec)
+    queue.handle_message({"type": "accepted", "id": job.id, "total_frames": 48})
+    job.spec.output.write_bytes(_video_mov(40))
+    queue.handle_message({"type": "done", "id": job.id,
+                          "path": str(job.spec.output), "total_frames": 48,
+                          "frames_written": 48, "seconds": 1.0, "warnings": []})
+
+    assert job.status == JobStatus.FAILED
+    assert "40 video frames but 48 were written" in job.error
+    err = [d for t, d in seen if t == "job_error"][-1]
+    assert err["code"] == "frame-count-mismatch"
+
+
+def test_done_from_older_controller_checks_total_frames(queue, sample_spec):
+    """No frames_written field: total_frames is what it set out to write."""
+    job = queue.submit(sample_spec)
+    job.spec.output.write_bytes(_video_mov(47))
+    queue.handle_message({"type": "done", "id": job.id,
+                          "path": str(job.spec.output), "total_frames": 48,
+                          "seconds": 1.0})
+    assert job.status == JobStatus.FAILED

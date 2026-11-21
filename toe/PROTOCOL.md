@@ -62,16 +62,34 @@ with `error/cancelled`.
 | `hello` | startup, once | `version: 1` |
 | `accepted` | input loaded, encoding starting | `id`, `total_frames` |
 | `progress` | every ≤10 frames and at completion of frame count | `id`, `frame`, `total_frames` |
-| `done` | file finalized on disk | `id`, `path`, `total_frames`, `seconds` |
+| `done` | file finalized on disk | `id`, `path`, `total_frames`, `frames_written`, `seconds`, `warnings` |
 | `error` | any failure (input missing, busy, cancelled, encode error) | `id`, `message`, `code` |
 
 Error `code` values (stable): `protocol`, `busy`, `input-missing`,
 `input-error`, `output-error`, `cancelled`, `encode-error`.
 
+`done` fields added after v1.0.0 (additive; older front-ends ignore them):
+
+- `frames_written`: the `addframe` pulses actually issued. `total_frames`
+  is the count the job set out to write. The front-end checks the output
+  file's own video frame count against `frames_written` (falling back to
+  `total_frames` for older controllers) and fails the job with
+  `frame-count-mismatch` when they differ.
+- `warnings`: list of strings. Problems that did not fail the job but left
+  the output short of the request — e.g. the audio mux failed and the file
+  is video-only, or audio was requested but the source has none. The CLI
+  prints them and exits with status 3 when every job finished but at
+  least one has warnings.
+
+A `done` is never sent for a file that does not exist: if the output has
+not appeared ~300 frames after recording stops, the job fails with
+`output-error`.
+
 ## Encoding requirements
 
-- **Frame accuracy is the contract.** `progress.frame` counts *written*
-  frames (Movie File Out Info CHOP `total_frames_written`), not seeks.
+- **Frame accuracy is the contract.** `progress.frame` counts the
+  `addframe` pulses issued. Movie File Out exposes no frames-written count
+  to Python, so the written count is verified from the file itself.
 - Frame-stepped, non-realtime: Movie File In `playmode = Specify Index`,
   stepping `index`; Movie File Out `pause = 1` + `addframe` pulse per frame.
 - The toe **must** verify the first frame is loaded
