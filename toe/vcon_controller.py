@@ -761,6 +761,12 @@ class VconExt:
         if self.state != "loading" or self.job is None:
             return
         moviein = self.moviein
+        why = self._input_open_error()
+        if why:
+            self._fail(f"TouchDesigner could not open the input "
+                       f"{os.path.basename(self.job['input'])} — {why}",
+                       "input-error")
+            return
         # Documented: Movie File In TOP exposes numImages (frame count).
         # (The Info CHOP's 'length' channel is a CHOP channel length, NOT
         # the movie's frame count — earlier assumption was wrong.)
@@ -875,6 +881,30 @@ class VconExt:
     # ------------------------------------------------------------------
     # Per-frame encode loop (driven by onFrame / Execute DAT)
     # ------------------------------------------------------------------
+
+    def _input_open_error(self):
+        """Why Movie File In did not open the job's input, or None.
+
+        A failed open is not an error state on the TOP: it shows a 256x256
+        placeholder with numImages == 1 and sample_rate 1. Without this
+        check an unreadable input "encoded" as one placeholder frame and
+        reported done. Signals verified live (TD 2025.33407) for corrupt,
+        truncated, non-movie and missing files alike: the TOP's warning
+        "Failed to open file" and the Info CHOP's true_length == 0.
+        """
+        try:
+            warn = str(self.moviein.warnings() or "")
+        except Exception:
+            warn = ""
+        if "failed to open" in warn.lower():
+            return "unsupported or damaged file (Movie File In: " \
+                   + warn.replace("Warning:", "").strip() + ")"
+        try:
+            if float(self.info["true_length"][0]) <= 0:
+                return "Movie File In reports no frames (true_length 0)"
+        except Exception:
+            pass   # channel unavailable on this build: rely on the warning
+        return None
 
     def _plan_frame_rate(self, moviein):
         """Decide how many frames to write, and which source frame each one

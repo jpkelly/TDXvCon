@@ -312,3 +312,38 @@ def test_last_result_records_cancel_and_rejected_submit(media):
     assert rig.ext.last_result == {**rig.ext.last_result, "ok": False,
                                    "code": "input-missing"}
     assert rig.ext.last_result["output"] == str(out_dir / "b.mov")
+
+
+# ----------------------------------------------------------------------
+# #1 — an input Movie File In could not open must not "encode"
+# ----------------------------------------------------------------------
+
+
+def test_unopenable_input_fails_instead_of_encoding_placeholder(media):
+    """Found live: a corrupt file showed TD's 256x256 placeholder with
+    numImages 1, and the job wrote that one frame and reported done."""
+    src, out_dir = media
+    rig = Rig(frames=48)
+    rig.moviein.opens = False
+    out = out_dir / "a.mov"
+    rig.submit(src, out)
+    rig.run()
+
+    assert not rig.events("done")
+    err = rig.events("error")[-1]
+    assert err["code"] == "input-error"
+    assert "could not open the input" in err["message"]
+    assert str(out) not in rig.movieout.files       # recording never began
+    assert rig.ext.last_result["ok"] is False
+
+
+def test_true_length_zero_alone_also_fails(media):
+    """Second signal, for builds whose warning text differs."""
+    src, out_dir = media
+    rig = Rig(frames=48)
+    rig.moviein.opens = False
+    rig.moviein.warnings = lambda: ""
+    rig.submit(src, out_dir / "a.mov")
+    rig.run()
+
+    assert rig.events("error")[-1]["code"] == "input-error"
