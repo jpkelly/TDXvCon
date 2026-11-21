@@ -22,3 +22,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e . pytest
       - run: python -m pytest
+        env:
+          # Tag pushes are releases: also require the packaged toe to
+          # contain the current controller and panel source
+          # (tests/test_toe_manifest.py, PUBLISHING.md step 3).
+          VCON_RELEASE_CHECK: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '0' }}

@@ -52,13 +52,17 @@ read-only **vCon version** parameter and **? → Setup & Help → Versions** bot
 report the intended controller version. The custom parameter should use the
 expression `me.op('vcon_controller').module.CONTROLLER_VERSION`.
 
-Confirm the packaged toe is newer than every source it bakes in:
+Record what the saved toe contains, then confirm it is the current source.
+This reads the DAT text baked into the toe with TouchDesigner's `toeexpand`
+(file dates cannot show this: a git checkout scrambles them):
 
 ```bash
-ls -lt src/vcon/data/transcoder.toe toe/*.py | head -5
+python scripts/toe_manifest.py
+VCON_RELEASE_CHECK=1 python -m pytest tests/test_toe_manifest.py
 ```
 
-`src/vcon/data/transcoder.toe` must be at the top.
+Commit `src/vcon/data/transcoder.toe` and `transcoder.toe.sources.json`
+together. CI repeats this check on every tag push.
 
 ## 4. Build
 
