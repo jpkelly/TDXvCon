@@ -581,14 +581,25 @@ class VconExt:
 
     def _abort_active_job(self, reason):
         """Drop the active job and return to idle, stopping any recording."""
+        job_id = (self.job or {}).get("id", "?")
+        debug(f"vcon: aborting job {job_id} ({reason})")
+        self._release_job()
+
+    def _release_job(self):
+        """Release everything a job holds and return to idle.
+
+        Shared by cancel/reconnect (_abort_active_job) and failure
+        (_fail), so neither can leave Movie File Out recording or ffmpeg
+        running. A failure that skipped record=0 left MvO recording; the
+        next job's record=1 was then no off→on edge, so it never started
+        a new file.
+        """
         try:
             movieout = self.movieout
             if movieout is not None:
                 movieout.par.record = 0
         except Exception as exc:
-            debug(f"abort: could not stop recording: {exc}")
-        job_id = (self.job or {}).get("id", "?")
-        debug(f"vcon: aborting job {job_id} ({reason})")
+            debug(f"vCon: could not stop recording: {exc}")
         self._kill_mux()
         self._kill_extract()
         self.job = None
@@ -598,9 +609,9 @@ class VconExt:
         self._src_step = 1.0
         self._loading_ticks = 0
         self._finishing_ticks = 0
-        # Reset the Progress par — the success (_closed) and failure
-        # (_fail) paths both reset it; the CANCEL path was the one that
-        # left the bar stuck at its last value (JP: "progress stops but
+        self._paused = False
+        # Reset the Progress par so a cancelled or failed job doesn't
+        # leave the bar stuck at its last value (JP: "progress stops but
         # does not reset when we stop").
         try:
             self.ownerComp.par.Progress.val = 0.0
@@ -1746,20 +1757,16 @@ class VconExt:
                 debug(f"vCon: project.quit() failed: {exc}")
 
     def _fail(self, message, code):
-        """Report failure for the active job and return to idle."""
+        """Report failure for the active job and return to idle.
+
+        Releases the job exactly like a cancel (stops recording, kills
+        any mux/extract ffmpeg) — see _release_job.
+        """
         self.last_error = f"[{code}] {message}"
         self._set_status(f"error: {message}")
         self._send({"type": "error", "id": (self.job or {}).get("id", "?"),
                     "message": message, "code": code})
-        # Reset the Progress par so a failed job doesn't leave it stuck
-        # mid-way. (Success path resets it in _finish.)
-        try:
-            self.ownerComp.par.Progress.val = 0.0
-        except Exception:
-            pass
-        self._paused = False
-        self.job = None
-        self.state = "idle"
+        self._release_job()
 
 
 # The extension class above is instantiated by TD when the module is listed
