@@ -194,3 +194,106 @@ def test_verify_retries_until_moov_is_readable(tmp_path, monkeypatch):
     ok, msg = cp.verify_output(p, retries=5, retry_delay=0.01)
     assert ok, msg
     assert calls["n"] == 3
+
+
+# ----------------------------------------------------------------------
+# Frame count (issue #2): the file must hold every frame that was written
+# ----------------------------------------------------------------------
+
+
+def _trak(handler: bytes, frames: int, table: bytes = b"stsz") -> bytes:
+    hdlr = _atom(b"hdlr", b"\x00" * 4 + b"mhlr" + handler + b"\x00" * 12)
+    entry = struct.pack(">I", 16) + (b"nclc" if handler == b"vide"
+                                     else b"lpcm") + b"\x00" * 8
+    stsd = _atom(b"stsd", b"\x00" * 4 + struct.pack(">I", 1) + entry)
+    if table == b"stsz":
+        counts = _atom(b"stsz", b"\x00" * 4 + struct.pack(">II", 0, frames)
+                       + struct.pack(">I", 100) * frames)
+    else:  # stts only: two runs that add up to `frames`
+        first = frames // 2
+        counts = _atom(b"stts", b"\x00" * 4 + struct.pack(">I", 2)
+                       + struct.pack(">II", first, 1000)
+                       + struct.pack(">II", frames - first, 1001))
+    stbl = _atom(b"stbl", stsd + counts)
+    mdia = _atom(b"mdia", hdlr + _atom(b"minf", stbl))
+    return _atom(b"trak", mdia)
+
+
+def _mov(*traks: bytes) -> bytes:
+    ftyp = _atom(b"ftyp", b"qt  " + struct.pack(">I", 0x200) + b"qt  ")
+    return ftyp + _atom(b"mdat", b"\x00" * 32) + _atom(b"moov", b"".join(traks))
+
+
+def test_probe_video_frames_reads_stsz(tmp_path):
+    from vcon.codec_probe import probe_video_frames
+
+    p = tmp_path / "v.mov"
+    p.write_bytes(_mov(_trak(b"vide", 48)))
+    assert probe_video_frames(p) == 48
+
+
+def test_probe_video_frames_skips_audio_track(tmp_path):
+    """After the audio mux the file has a sound trak; its sample count is
+    not a frame count, even when it comes first."""
+    from vcon.codec_probe import probe_video_frames
+
+    p = tmp_path / "av.mov"
+    p.write_bytes(_mov(_trak(b"soun", 96000), _trak(b"vide", 48)))
+    assert probe_video_frames(p) == 48
+
+
+def test_probe_video_frames_falls_back_to_stts(tmp_path):
+    from vcon.codec_probe import probe_video_frames
+
+    p = tmp_path / "t.mov"
+    p.write_bytes(_mov(_trak(b"vide", 49, table=b"stts")))
+    assert probe_video_frames(p) == 49
+
+
+def test_probe_video_frames_unreadable_is_none_not_zero(tmp_path):
+    from vcon.codec_probe import probe_video_frames
+
+    p = tmp_path / "plain.mov"
+    p.write_bytes(_mov_with_fourcc(b"nclc"))     # no hdlr / sample table
+    assert probe_video_frames(p) is None
+    assert probe_video_frames(tmp_path / "missing.mov") is None
+
+
+def test_verify_frame_count(tmp_path):
+    from vcon.codec_probe import verify_frame_count
+
+    p = tmp_path / "v.mov"
+    p.write_bytes(_mov(_trak(b"vide", 48)))
+    assert verify_frame_count(p, 48) == (True, "48 frames")
+    ok, note = verify_frame_count(p, 50)
+    assert not ok and "48 video frames but 50 were written" in note
+
+    plain = tmp_path / "plain.mov"
+    plain.write_bytes(_mov_with_fourcc(b"nclc"))
+    ok, note = verify_frame_count(plain, 50)
+    assert ok and "not checked" in note
+
+
+@pytest.mark.skipif(__import__("shutil").which("ffmpeg") is None,
+                    reason="needs ffmpeg to make real movie files")
+@pytest.mark.parametrize("name, args", [
+    ("prores_pcm.mov", ["-c:v", "prores_ks", "-c:a", "pcm_s24le"]),
+    ("h264_bframes.mp4", ["-c:v", "libx264", "-bf", "2", "-c:a", "aac"]),
+    ("audio_first.mov", ["-map", "1:a", "-map", "0:v", "-c:v", "libx264",
+                         "-c:a", "aac"]),
+    ("faststart.mp4", ["-c:v", "libx264", "-c:a", "aac",
+                       "-movflags", "+faststart"]),
+])
+def test_probe_video_frames_on_real_files(tmp_path, name, args):
+    import subprocess
+
+    from vcon.codec_probe import probe_video_frames
+
+    out = tmp_path / name
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y",
+         "-f", "lavfi", "-i", "testsrc2=size=160x120:rate=24",
+         "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+         "-frames:v", "48", "-t", "2", *args, str(out)],
+        check=True)
+    assert probe_video_frames(out) == 48

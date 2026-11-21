@@ -164,3 +164,150 @@ def test_failure_resets_pause_and_progress(media):
 
     assert rig.ext._paused is False
     assert rig.comp.par.Progress.eval() == 0.0
+
+
+# ----------------------------------------------------------------------
+# #2 — `done` must describe what was actually produced
+# ----------------------------------------------------------------------
+
+
+class _FakeFfmpeg:
+    """Replaces subprocess.Popen for the mux/extract: writes ``log`` to the
+    process log, creates the output on success, exits with ``rc``."""
+
+    def __init__(self, rc, log=b""):
+        self.rc, self.log = rc, log
+        self.calls = []
+
+    def __call__(self, cmd, stdout=None, stderr=None, stdin=None):
+        import types
+        from pathlib import Path
+
+        self.calls.append(cmd)
+        if stdout is not None:
+            stdout.write(self.log)
+            stdout.flush()
+        if self.rc == 0:
+            Path(cmd[-1]).write_bytes(b"muxed")
+        return types.SimpleNamespace(poll=lambda: self.rc, kill=lambda: None)
+
+
+@pytest.fixture
+def ffmpeg(monkeypatch):
+    """Install a fake ffmpeg; returns a setter for its exit code/log."""
+    import subprocess
+
+    state = {}
+
+    def install(rig, rc, log=b""):
+        fake = _FakeFfmpeg(rc, log)
+        monkeypatch.setattr(subprocess, "Popen", fake)
+        rig.mod.VconExt._ffmpeg_cache = "/fake/ffmpeg"
+        state["fake"] = fake
+        return fake
+
+    return install
+
+
+def test_done_reports_frames_written_and_no_warnings(media):
+    src, out_dir = media
+    rig = Rig(frames=12)
+    rig.submit(src, out_dir / "a.mov")
+    rig.run()
+
+    done = rig.events("done")[-1]
+    assert done["frames_written"] == 12 and done["total_frames"] == 12
+    assert done["warnings"] == []
+    assert rig.ext.last_result["ok"] is True
+
+
+def test_missing_output_fails_instead_of_reporting_done(media):
+    src, out_dir = media
+    rig = Rig(frames=5)
+    rig.movieout.create_files = False
+    rig.submit(src, out_dir / "a.mov")
+    rig.run(max_ticks=2000)
+
+    assert not rig.events("done")
+    assert rig.events("error")[-1]["code"] == "output-error"
+    assert rig.ext.last_result["ok"] is False
+
+
+def test_failed_mux_is_done_with_a_warning(media, ffmpeg):
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)
+    ffmpeg(rig, rc=1, log=b"...\nConversion failed!\n")
+    out = out_dir / "a.mov"
+    rig.submit(src, out, audio="pcm_s24le")
+    rig.run()
+
+    done = rig.events("done")[-1]
+    assert len(done["warnings"]) == 1
+    assert "audio mux failed (ffmpeg exit 1): Conversion failed!" \
+        in done["warnings"][0]
+    assert rig.ext.last_result["warnings"] == done["warnings"]
+    assert out.exists()                  # the video-only file is kept
+
+
+def test_successful_mux_has_no_warnings(media, ffmpeg):
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)
+    ffmpeg(rig, rc=0)
+    out = out_dir / "a.mov"
+    rig.submit(src, out, audio="pcm_s24le")
+    rig.run()
+
+    assert rig.events("done")[-1]["warnings"] == []
+    assert out.read_bytes() == b"muxed"
+
+
+@pytest.mark.parametrize("audio, warned", [("auto", False), ("aac", True)])
+def test_silent_source_warns_only_when_audio_was_requested(
+        media, ffmpeg, audio, warned):
+    src, out_dir = media
+    rig = Rig(frames=5)
+    ffmpeg(rig, rc=1, log=b"Stream map '1:a:0' matches no streams.\n")
+    rig.submit(src, out_dir / "a.mov", audio=audio)
+    rig.run()
+
+    warnings = rig.events("done")[-1]["warnings"]
+    assert bool(warnings) is warned
+    if warned:
+        assert "source has no audio track" in warnings[0]
+
+
+def test_missing_ffmpeg_warns_when_source_has_audio(media):
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)  # fakes find no ffmpeg by default
+    rig.submit(src, out_dir / "a.mov")
+    rig.run()
+
+    warnings = rig.events("done")[-1]["warnings"]
+    assert warnings and "ffmpeg not found" in warnings[0]
+
+
+def test_warnings_do_not_leak_into_the_next_job(media, ffmpeg):
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)
+    ffmpeg(rig, rc=1, log=b"Conversion failed!\n")
+    rig.submit(src, out_dir / "a.mov", audio="aac")
+    rig.run()
+    ffmpeg(rig, rc=0)
+    rig.submit(src, out_dir / "b.mov", audio="aac")
+    rig.run()
+
+    assert rig.events("done")[-1]["warnings"] == []
+
+
+def test_last_result_records_cancel_and_rejected_submit(media):
+    src, out_dir = media
+    rig = Rig(frames=50)
+    rig.submit(src, out_dir / "a.mov")
+    rig.tick_until("encoding")
+    rig.ext.Cancel()
+    assert rig.ext.last_result["code"] == "cancelled"
+
+    rig.submit(out_dir / "missing.mov", out_dir / "b.mov")
+    assert rig.ext.last_result == {**rig.ext.last_result, "ok": False,
+                                   "code": "input-missing"}
+    assert rig.ext.last_result["output"] == str(out_dir / "b.mov")

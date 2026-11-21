@@ -154,22 +154,42 @@ class QueueManager:
             job.status = JobStatus.DONE
             job.progress_frame = job.total_frames or job.progress_frame
             job.finished_at = time.time()
+            # Older controllers send no frames_written; their
+            # total_frames is the count they set out to write.
+            written = msg.get("frames_written", msg.get("total_frames"))
+            job.frames_written = int(written) if written is not None else None
+            job.warnings = [str(w) for w in (msg.get("warnings") or [])]
             # Verify the output is actually in the requested codec. TD menu
             # parameters silently fall back to entry 0 on a bad value, which
             # yields a valid file in the WRONG codec with no error anywhere.
             job.verified, job.verify_note = self._verify_output(job)
+            code = "codec-mismatch"
+            if job.verified and job.frames_written is not None:
+                # ...and that the file holds every frame that was written.
+                from vcon.codec_probe import verify_frame_count
+
+                frames_ok, frames_note = verify_frame_count(
+                    job.spec.output, job.frames_written)
+                job.verify_note = f"{job.verify_note}; {frames_note}"
+                if not frames_ok:
+                    job.verified = False
+                    job.verify_note = frames_note
+                    code = "frame-count-mismatch"
             if not job.verified:
                 job.status = JobStatus.FAILED
                 job.error = job.verify_note
                 self.bus.job_event("job_error", jid, message=job.verify_note,
-                                   code="codec-mismatch")
+                                   code=code)
                 self._persist()
                 return
+            for warning in job.warnings:
+                self.bus.log("warning", f"job {jid}: {warning}")
             self.bus.job_event(
                 "job_done", jid, output=str(job.spec.output),
                 total_frames=job.total_frames or 0,
                 seconds=float(msg.get("seconds", 0.0)) or None,
                 codec_note=job.verify_note,
+                warnings=list(job.warnings),
             )
         elif mtype == "error":
             job.status = JobStatus.FAILED
@@ -243,6 +263,11 @@ class QueueManager:
 
     def failed_jobs(self) -> list[Job]:
         return [j for j in self._jobs.values() if j.status == JobStatus.FAILED]
+
+    def warned_jobs(self) -> list[Job]:
+        """Finished jobs whose output fell short of the request (warnings)."""
+        return [j for j in self._jobs.values()
+                if j.status == JobStatus.DONE and j.warnings]
 
     # ------------------------------------------------------------------
     # Persistence (crash resume — cheap insurance, ffmpeg-free)

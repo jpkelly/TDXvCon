@@ -336,8 +336,13 @@ notes:
     are mezzanine codecs (~5:1 against RAW, not against H.264).
   - A codec's available subtypes and pixel formats vary; alpha requires a
     format that carries it (e.g. ProRes needs -t 4444, Hap HDR has none).
-  - Every output is verified: vCon reads the codec back out of the finished
-    file and fails the job if TouchDesigner produced something else.
+  - Every output is verified: vCon reads the codec and frame count back out
+    of the finished file and fails the job if they are not what was written.
+
+exit status:
+  0  every job encoded       1  a job failed       2  TouchDesigner failed
+  3  every job encoded, but a warning was printed (e.g. the audio mux
+     failed and the output is video-only)
 """
 
 

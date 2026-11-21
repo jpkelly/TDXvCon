@@ -44,9 +44,14 @@ def _fake_notchlc_mov(frames: int) -> bytes:
     # stsd: version/flags(4) entryCount(4) then one entry: size(4) fourcc(4)
     entry = struct.pack(">I", 16) + b"nclc" + b"\x00" * 8
     stsd = atom(b"stsd", b"\x00\x00\x00\x00" + struct.pack(">I", 1) + entry)
-    stbl = atom(b"stbl", stsd)
+    # stsz: version/flags(4) uniform size(4) count(4) — the frame count the
+    # real probe checks against the controller's frames_written.
+    stsz = atom(b"stsz", b"\x00" * 4 + struct.pack(">II", 1, frames))
+    stbl = atom(b"stbl", stsd + stsz)
     minf = atom(b"minf", stbl)
-    mdia = atom(b"mdia", minf)
+    # hdlr marks this trak as video: version/flags(4) type(4) subtype(4)
+    hdlr = atom(b"hdlr", b"\x00" * 4 + b"mhlr" + b"vide" + b"\x00" * 12)
+    mdia = atom(b"mdia", hdlr + minf)
     trak = atom(b"trak", mdia)
     moov = atom(b"moov", trak)
     return ftyp + mdat + moov

@@ -52,7 +52,9 @@ Specify a codec for each output; output options precede its path. Use `-y` to
 overwrite, `vcon -h` for options, and `vcon -codecs` for registry entries.
 The CLI attaches to a running controller or launches the packaged project.
 `-doctor` checks the installation and probes an existing controller without
-launching TouchDesigner. Set `VCON_TDPATH` or pass `-td-path PATH` if detection fails.
+launching TouchDesigner. The exit status is 0 when every job encoded, 1 when
+a job failed, 2 when TouchDesigner failed, and 3 when every job encoded but
+one printed a warning (for example, a failed audio mux left a video-only file). Set `VCON_TDPATH` or pass `-td-path PATH` if detection fails.
 
 ## Development and limitations
 

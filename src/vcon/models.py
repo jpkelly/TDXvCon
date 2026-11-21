@@ -184,6 +184,12 @@ class Job:
     #: Output codec was checked to match the request.
     verified: bool | None = None
     verify_note: str = ""
+    #: Frames the controller reports writing (``done.frames_written``);
+    #: the output file's own frame count is checked against it.
+    frames_written: int | None = None
+    #: Problems that did not fail the job but left the output short of the
+    #: request (``done.warnings``, e.g. the audio mux failed → video-only).
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def is_terminal(self) -> bool:
@@ -207,4 +213,6 @@ class Job:
             "finished_at": self.finished_at,
             "verified": self.verified,
             "verify_note": self.verify_note,
+            "frames_written": self.frames_written,
+            "warnings": list(self.warnings),
         }

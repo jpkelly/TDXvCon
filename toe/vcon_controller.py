@@ -87,6 +87,14 @@ class VconExt:
         self._ticks = 0
         self.seconds_taken = 0.0
         self.last_error = None
+        #: Outcome of the most recent job that reached a verdict, for the
+        #: panel (which has no TCP stream): dict with id, input, output,
+        #: ok, code, message, warnings, frames_written. None until then.
+        self.last_result = None
+        #: Problems that did not fail the active job but left its output
+        #: short of what was asked (e.g. audio mux failed → video-only).
+        #: Sent in `done` and kept in last_result.
+        self._warnings = []
         #: Set by onDestroyTD so a re-inited (replaced) extension stops
         #: driving the network. See the docs' re-init gotcha.
         self._destroyed = False
@@ -583,6 +591,8 @@ class VconExt:
         """Drop the active job and return to idle, stopping any recording."""
         job_id = (self.job or {}).get("id", "?")
         debug(f"vcon: aborting job {job_id} ({reason})")
+        if self.job is not None:
+            self._record_result(False, code="cancelled", message=reason)
         self._release_job()
 
     def _release_job(self):
@@ -692,24 +702,21 @@ class VconExt:
             "origin": msg.get("origin", "tcp"),
         }
         if not os.path.isfile(job["input"]):
-            self._send({"type": "error", "id": job["id"],
-                        "message": f"input not found: {job['input']}",
-                        "code": "input-missing"})
+            self._reject(job, f"input not found: {job['input']}",
+                         "input-missing")
             return
         out_dir = os.path.dirname(job["output"]) or "."
         if not os.path.isdir(out_dir):
-            self._send({"type": "error", "id": job["id"],
-                        "message": f"output folder not found: {out_dir}",
-                        "code": "output-error"})
+            self._reject(job, f"output folder not found: {out_dir}",
+                         "output-error")
             return
         if not os.path.splitext(job["output"])[1]:
-            self._send({"type": "error", "id": job["id"],
-                        "message": f"output has no file extension: "
-                                   f"{job['output']!r} (a folder was given "
-                                   f"as the output path?)",
-                        "code": "output-error"})
+            self._reject(job, f"output has no file extension: "
+                              f"{job['output']!r} (a folder was given "
+                              f"as the output path?)", "output-error")
             return
         self.job = job
+        self._warnings = []
         self._loading_ticks = 0
         self._paused = False   # a fresh job always starts unpaused
         self.state = "loading"
@@ -980,18 +987,21 @@ class VconExt:
         # still be flushing several frames after record=0. Reporting
         # "size=0" here (and skipping the mux) meant the file simply
         # hadn't landed yet, not that the encode failed.
-        if not os.path.isfile(out) and self._finishing_ticks < 300:
-            self._set_status("finalizing file…")
-            return   # stay in "finishing"; _tick calls back next frame
-        movieout = self.movieout
+        if not os.path.isfile(out):
+            if self._finishing_ticks < 300:
+                self._set_status("finalizing file…")
+                return   # stay in "finishing"; _tick calls back next frame
+            # Never report success for a file that does not exist.
+            self._fail(f"output file was not written: {out}",
+                       "output-error")
+            return
         seconds = getattr(self, "seconds_taken", 0.0) or round(
             time.time() - self.t0, 3)
-        frames = self.total
-        try:
-            frames = int(movieout["total_frames_written"][0]) or self.total
-        except Exception:
-            pass  # info channel unavailable; report the expected count
-        self._done_frames = frames
+        # The addframe pulses actually issued. (Movie File Out exposes no
+        # frames-written count to Python — `movieout[...]` raises
+        # TypeError on a TOP — so the CLI verifies the count in the file
+        # itself; see vcon.codec_probe.probe_video_frames.)
+        self._done_frames = self.frame
         self._done_seconds = seconds
         debug(f"vCon: closed — output={out!r}, exists={os.path.exists(out)}, "
               f"size={os.path.getsize(out) if os.path.exists(out) else 0}, "
@@ -1036,7 +1046,8 @@ class VconExt:
             debug(f"vCon: audio extracted — {s['out']}, size={size}")
             note = s["note"] + f", sep audio: {os.path.basename(s['out'])}"
         else:
-            debug(f"vCon: audio extraction failed (rc={rc})")
+            self._warn("separate audio export failed"
+                       + (f" (ffmpeg exit {rc})" if rc else " (timed out)"))
             note = s["note"] + ", sep audio failed"
         try:
             if os.path.exists(s["log_path"]):
@@ -1054,10 +1065,13 @@ class VconExt:
         """
         frames = getattr(self, "_done_frames", self.total)
         seconds = getattr(self, "_done_seconds", 0.0)
+        warnings = list(self._warnings)
         if self.job is not None:
             self._send({"type": "done", "id": self.job["id"],
-                        "path": out, "total_frames": frames,
-                        "seconds": seconds})
+                        "path": out, "total_frames": self.total,
+                        "frames_written": frames,
+                        "seconds": seconds, "warnings": warnings})
+            self._record_result(True, frames_written=frames, output=out)
         self._set_progress(1.0)
         self._set_status(f"idle — last: {os.path.basename(out)} "
                          f"({frames} frames, {seconds}s{note})")
@@ -1142,16 +1156,19 @@ class VconExt:
 
         Returns True if the process launched (state -> "muxing").
         """
-        ffmpeg = self._find_ffmpeg()
-        if ffmpeg is None:
-            debug("vCon: no ffmpeg found — output is video-only "
-                  "(install imageio-ffmpeg or ffmpeg for audio)")
-            return False
         # Audio codec from the job params (panel's audio_dd selection).
         # Falls back to container-based defaults for CLI jobs without it.
         audio = (self.job.get("params") or {}).get("audio", "auto")
         if audio == "none":
             debug("vCon: audio=none — skipping mux (video only)")
+            return False
+        ffmpeg = self._find_ffmpeg()
+        if ffmpeg is None:
+            # Asked-for audio (or auto with audio in the source) that cannot
+            # be delivered is a warning, not silence.
+            if self._audio_requested() or self._source_has_audio() is not False:
+                self._warn("audio not muxed: ffmpeg not found — output is "
+                           "video-only (install imageio-ffmpeg or ffmpeg)")
             return False
         if audio == "auto" or not audio:
             ext = os.path.splitext(video_output)[1].lower()
@@ -1193,7 +1210,8 @@ class VconExt:
             proc = subprocess.Popen(cmd, stdout=log, stderr=log,
                                     stdin=subprocess.DEVNULL)
         except Exception as exc:
-            debug(f"vCon: could not launch ffmpeg: {exc}")
+            self._warn(f"audio not muxed: could not launch ffmpeg ({exc}) "
+                       f"— output is video-only")
             return False
         # Registration must not be able to fail separately from the
         # launch: an exception between Popen and _mux being set orphans
@@ -1213,7 +1231,8 @@ class VconExt:
             self._set_status(
                 f"muxing audio 0% — {os.path.basename(video_output)}")
         except Exception as exc:
-            debug(f"vCon: mux bookkeeping failed ({exc}) — aborting ffmpeg")
+            self._warn(f"audio not muxed: mux setup failed ({exc}) — "
+                       f"output is video-only")
             try:
                 proc.kill()
             except Exception:
@@ -1293,7 +1312,8 @@ class VconExt:
                       f"{took}s")
                 note = f", audio {m['acodec']}"
             except Exception as exc:
-                debug(f"vCon: could not replace output after mux: {exc}")
+                self._warn(f"audio mux finished but could not replace the "
+                           f"output ({exc}) — output is video-only")
                 note = " — mux swap failed"
         elif rc:
             err = ""
@@ -1305,9 +1325,19 @@ class VconExt:
             if "matches no streams" in err:
                 debug("vCon: source has no audio track — video only")
                 note = ", no audio in source"
+                if self._audio_requested():
+                    self._warn(f"{m['acodec']} audio was requested but the "
+                               f"source has no audio track")
             else:
                 debug(f"vCon: ffmpeg mux failed (rc={rc}): {err}")
+                last = (err.strip().splitlines() or [""])[-1][:200]
+                self._warn(f"audio mux failed (ffmpeg exit {rc})"
+                           + (f": {last}" if last else "")
+                           + " — output is video-only")
                 note = " — audio mux failed"
+        else:
+            # Not ok, no exit code: the 1h timeout killed ffmpeg.
+            self._warn("audio mux timed out — output is video-only")
         for path in (m["tmp"], m["prog"], m["log_path"]):
             try:
                 if os.path.exists(path):
@@ -1326,11 +1356,12 @@ class VconExt:
             return
         ffmpeg = self._find_ffmpeg()
         if ffmpeg is None:
-            debug("vCon: no ffmpeg for audio extraction — skipping")
+            self._warn("separate audio not exported: ffmpeg not found")
             self._job_complete(video_output, note + ", no sep audio")
             return
         src = self.job.get("input", "")
         if not src or not os.path.isfile(src):
+            self._warn("separate audio not exported: source file is gone")
             self._job_complete(video_output, note + ", no sep audio")
             return
         # ffmpeg picks the muxer from the EXTENSION, so every entry must
@@ -1364,7 +1395,8 @@ class VconExt:
             proc = subprocess.Popen(cmd, stdout=log, stderr=log,
                                     stdin=subprocess.DEVNULL)
         except Exception as exc:
-            debug(f"vCon: could not launch audio extraction: {exc}")
+            self._warn(f"separate audio not exported: could not launch "
+                       f"ffmpeg ({exc})")
             self._job_complete(video_output, note + ", sep audio failed")
             return
         try:
@@ -1375,7 +1407,7 @@ class VconExt:
             self._set_status(f"extracting audio — {os.path.basename(out)}")
             debug(f"vCon: extracting audio — {sep} → {out}")
         except Exception as exc:
-            debug(f"vCon: extraction bookkeeping failed ({exc}) — aborting")
+            self._warn(f"separate audio not exported: setup failed ({exc})")
             try:
                 proc.kill()
             except Exception:
@@ -1766,7 +1798,51 @@ class VconExt:
         self._set_status(f"error: {message}")
         self._send({"type": "error", "id": (self.job or {}).get("id", "?"),
                     "message": message, "code": code})
+        self._record_result(False, code=code, message=message)
         self._release_job()
+
+    def _reject(self, job, message, code):
+        """Refuse a submit before it starts (bad paths). Unlike _fail there
+        is nothing to release, but the verdict is still recorded so the
+        panel does not wait on a job that never ran."""
+        self.last_error = f"[{code}] {message}"
+        self._send({"type": "error", "id": job.get("id"),
+                    "message": message, "code": code})
+        self._record_result(False, code=code, message=message, job=job)
+
+    def _record_result(self, ok, code="", message="", job=None,
+                       frames_written=None, output=None):
+        """Set last_result — the panel's view of how the last job ended."""
+        job = job if job is not None else (self.job or {})
+        self.last_result = {
+            "id": job.get("id"),
+            "input": job.get("input"),
+            "output": output or job.get("output"),
+            "ok": bool(ok),
+            "code": code,
+            "message": message,
+            "warnings": list(self._warnings) if ok else [],
+            "frames_written": frames_written,
+        }
+
+    def _warn(self, message):
+        """Record a problem that leaves the job's output short of what was
+        asked without failing it; reported in `done` and last_result."""
+        debug(f"vCon: WARNING — {message}")
+        self._warnings.append(message)
+
+    def _audio_requested(self):
+        """True when the job asked for a specific audio codec (not auto/none)."""
+        audio = (self.job or {}).get("params", {}).get("audio", "auto")
+        return bool(audio) and audio not in ("auto", "none")
+
+    def _source_has_audio(self):
+        """Info CHOP's mv_has_audio for the loaded movie: True/False, or
+        None when the channel is unavailable."""
+        try:
+            return bool(self.info["mv_has_audio"][0])
+        except Exception:
+            return None
 
 
 # The extension class above is instantiated by TD when the module is listed

@@ -141,3 +141,26 @@ def test_load_corrupt_config_raises(tmp_path):
     p.write_text("{not json")
     with pytest.raises(ConfigError, match="unreadable"):
         load_config(p)
+
+def test_run_exits_3_when_a_job_finished_with_warnings(tmp_path, sample_input,
+                                                       monkeypatch):
+    """#2: an output short of the request (e.g. audio mux failed → video-
+    only) is not silent success for scripts: distinct exit status 3."""
+    import asyncio
+
+    from vcon.mock_driver import MockDriver
+    from vcon.models import JobSpec
+
+    real_emit = MockDriver._emit_simple
+
+    def emit_with_warning(self, job_id, mtype, **fields):
+        if mtype == "done":
+            fields["warnings"] = ["audio mux failed — output is video-only"]
+        return real_emit(self, job_id, mtype, **fields)
+
+    monkeypatch.setattr(MockDriver, "_emit_simple", emit_with_warning)
+    t = Transcoder(TranscoderOptions(backend="mock", workdir=tmp_path / "w"))
+    t.add(JobSpec(input=sample_input, output=tmp_path / "o.mov",
+                  codec="notchlc"))
+    assert asyncio.run(t.run()) == 3
+    assert t.queue.counts()[JobStatus.DONE] == 1
