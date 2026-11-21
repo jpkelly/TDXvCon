@@ -93,7 +93,11 @@ class FakeOp:
 
 
 class FakeMovieIn(FakeOp):
-    """Movie File In: shows source frame ``par.index`` immediately."""
+    """Movie File In: shows source frame ``par.index`` immediately.
+
+    ``opens = False`` models a file TD cannot open: as measured live, the
+    TOP then shows a 256x256 placeholder (numImages 1, sample_rate 1),
+    warns "Failed to open file" and the Info CHOP's true_length is 0."""
 
     def __init__(self, frames=10, rate=24.0, width=1920, height=1080,
                  has_audio=False):
@@ -105,11 +109,31 @@ class FakeMovieIn(FakeOp):
             index=Par(0),
             prereadframes=Par(30),
         )
-        self.numImages = frames
-        self.rate = rate
-        self.fileWidth = width
-        self.fileHeight = height
+        self.frames = frames
+        self._rate = rate
+        self._size = (width, height)
         self.has_audio = has_audio
+        self.opens = True
+
+    @property
+    def numImages(self):
+        return self.frames if self.opens else 1
+
+    @property
+    def rate(self):
+        return self._rate if self.opens else 1.0
+
+    @property
+    def fileWidth(self):
+        return self._size[0] if self.opens else 256
+
+    @property
+    def fileHeight(self):
+        return self._size[1] if self.opens else 256
+
+    def warnings(self):
+        return "" if self.opens else \
+            "Warning: Failed to open file. (/project1/vcon/moviein)"
 
     @property
     def shown_index(self):
@@ -128,6 +152,8 @@ class FakeInfo(FakeOp):
             return [self._moviein.rate]
         if chan == "mv_has_audio":
             return [1.0 if self._moviein.has_audio else 0.0]
+        if chan == "true_length":
+            return [float(self._moviein.frames if self._moviein.opens else 0)]
         raise KeyError(chan)
 
 
