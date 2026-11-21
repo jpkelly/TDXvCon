@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from vcon.argparse_ff import ParsedArgs, ParseError, parse_args
@@ -65,8 +67,10 @@ def test_mock_and_td_path_flags():
     p = parse_args(["-mock", "-td-path", "/usr/bin/td", "-toe-path", "/t.toe",
                     "-port", "8000", "-i", "a.mov", "o.mov"])
     assert p.backend == "mock"
-    assert str(p.td_path) == "/usr/bin/td"
-    assert str(p.toe_path) == "/t.toe"
+    # Compare as paths: str() uses the OS separator, so on Windows
+    # str(Path("/usr/bin/td")) is "\\usr\\bin\\td".
+    assert p.td_path == Path("/usr/bin/td")
+    assert p.toe_path == Path("/t.toe")
     assert p.port == 8000
 
 
