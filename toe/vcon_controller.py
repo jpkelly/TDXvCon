@@ -1832,9 +1832,11 @@ class VconExt:
         self._warnings.append(message)
 
     def _audio_requested(self):
-        """True when the job asked for a specific audio codec (not auto/none)."""
+        """True when the job asked for a specific audio codec. Not for
+        auto/none, nor 'copy' — "whatever the source has" (the panel's
+        default), for which a silent source is not a shortfall."""
         audio = (self.job or {}).get("params", {}).get("audio", "auto")
-        return bool(audio) and audio not in ("auto", "none")
+        return bool(audio) and audio not in ("auto", "none", "copy")
 
     def _source_has_audio(self):
         """Info CHOP's mv_has_audio for the loaded movie: True/False, or

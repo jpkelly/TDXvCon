@@ -261,7 +261,8 @@ def test_successful_mux_has_no_warnings(media, ffmpeg):
     assert out.read_bytes() == b"muxed"
 
 
-@pytest.mark.parametrize("audio, warned", [("auto", False), ("aac", True)])
+@pytest.mark.parametrize("audio, warned", [("auto", False), ("copy", False),
+                                           ("aac", True)])
 def test_silent_source_warns_only_when_audio_was_requested(
         media, ffmpeg, audio, warned):
     src, out_dir = media
