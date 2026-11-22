@@ -38,10 +38,16 @@ KNOWN_FOURCCS: dict[bytes, str] = {
     b"apcs": "Apple ProRes 422 LT",
     b"apco": "Apple ProRes 422 Proxy",
     b"cfhd": "CineForm",
+    # Hap marks its variant, alpha included, in the fourcc. Hap1/Hap5/HapY/
+    # HapM verified on TouchDesigner 2025.33230 encodes; the rest are from
+    # the Hap specification.
     b"Hap1": "Hap",
-    b"Hap5": "Hap Q",
-    b"HapY": "Hap Alpha",
-    b"HapA": "Hap Q Alpha",
+    b"Hap5": "Hap Alpha",
+    b"HapY": "Hap Q",
+    b"HapM": "Hap Q Alpha",
+    b"HapA": "Hap Alpha-Only",
+    b"Hap7": "Hap R",
+    b"HapH": "Hap HDR",
     b"lc  ": "NotchLC",   # observed form in some builds
     b"nclc": "NotchLC",   # observed form in others
     b"Notc": "NotchLC",
@@ -57,11 +63,11 @@ NOTCHLC_FOURCCS = {b"lc  ", b"nclc", b"Notc", b"LC  ", b"NCLC"}
 #: would wrongly fail every valid ProRes/Hap/H.264 job.
 #:
 #: Multiple fourccs per codec where the container may legitimately differ
-#: (Hap writes Hap1/Hap5/HapY/HapA depending on variant and alpha).
+#: (Hap writes a different fourcc per variant and alpha: see KNOWN_FOURCCS).
 FOURCCS_BY_CODEC: dict[str, set[bytes]] = {
     "notchlc": NOTCHLC_FOURCCS,
     "prores": {b"apco", b"apcs", b"apcn", b"apch", b"ap4h", b"ap4x"},
-    "hap": {b"Hap1", b"Hap5", b"HapY", b"HapA"},
+    "hap": {b"Hap1", b"Hap5", b"HapY", b"HapM", b"HapA", b"Hap7", b"HapH"},
     "cineform": {b"cfhd", b"CFHD"},
     "h264": {b"avc1", b"avc3"},
     "h265": {b"hvc1", b"hev1"},

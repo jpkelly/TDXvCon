@@ -143,6 +143,9 @@ def test_fourccs_for_each_registry_codec():
     assert b"ap4x" in fourccs_for_codec("prores")
     assert b"ap4h" in fourccs_for_codec("prores")
     assert b"Hap5" in fourccs_for_codec("hap")
+    # Hap Q with alpha (measured on TD 2025.33230); was missing, so a
+    # correct hapq+alpha encode failed verification as the wrong codec.
+    assert b"HapM" in fourccs_for_codec("hap")
     assert b"avc1" in fourccs_for_codec("h264")
     assert fourccs_for_codec("notchlc") is not None
     assert fourccs_for_codec("no-such-codec") is None
@@ -297,3 +300,12 @@ def test_probe_video_frames_on_real_files(tmp_path, name, args):
          "-frames:v", "48", "-t", "2", *args, str(out)],
         check=True)
     assert probe_video_frames(out) == 48
+
+
+def test_hap_fourcc_names_match_the_variants_td_writes():
+    """TD 2025.33230: hap rgb → Hap1, hap rgba → Hap5, hapq rgb → HapY,
+    hapq rgba → HapM."""
+    assert KNOWN_FOURCCS[b"Hap1"] == "Hap"
+    assert KNOWN_FOURCCS[b"Hap5"] == "Hap Alpha"
+    assert KNOWN_FOURCCS[b"HapY"] == "Hap Q"
+    assert KNOWN_FOURCCS[b"HapM"] == "Hap Q Alpha"
