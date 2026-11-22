@@ -49,7 +49,7 @@ import time
 #: Controller build identifier. The toe's custom "Version" parameter
 #: references this value so the UI follows the embedded controller.
 #: Keep in step with vcon.__version__ (tests assert this).
-CONTROLLER_VERSION = "1.1.1"
+CONTROLLER_VERSION = "1.2.0"
 
 PROTOCOL_VERSION = 1
 #: Default TCP port. Overridable per-instance via the COMP's Tcpport custom
