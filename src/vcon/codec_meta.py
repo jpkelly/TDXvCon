@@ -69,6 +69,9 @@ class CodecMeta:
     default_quality: str | None = None
     #: Platforms where encoding works.
     platforms: frozenset[str] = frozenset({"mac", "windows"})
+    #: Per-SUBTYPE platform limits (keyed by TD token); a subtype not
+    #: listed works wherever the codec does.
+    subtype_platforms: dict[str, frozenset[str]] = field(default_factory=dict)
     #: The encoder cannot write an odd width or height. Measured on TD
     #: 2025.33230 (macOS) at 1281x721: H.264 and H.265 silently cropped to
     #: 1280x720 whatever the pixel format; VVC wrote no file. VP8, VP9,
@@ -127,6 +130,15 @@ CATALOG: dict[str, CodecMeta] = {
             "haphdr": None,   # HDR variant exposes no alpha format
         },
         platforms=frozenset({"mac", "windows"}),
+        # MEASURED on TD 2025.33230, macOS: Movie File Out never opens a
+        # recording for Hap R or Hap HDR (no file, no error, no warning).
+        # Derivative's docs list no platform limit for either; Windows is
+        # not measured, so this records "not on macOS", not "Windows only".
+        # Re-test on new builds (#16).
+        subtype_platforms={
+            "hapr": frozenset({"windows"}),
+            "haphdr": frozenset({"windows"}),
+        },
         caveat="Playback-focused: Snappy-style block compression, very fast to "
                "decode, larger files than NotchLC at equal quality.",
     ),
@@ -139,7 +151,9 @@ CATALOG: dict[str, CodecMeta] = {
         speed="gpu",
         pixel_formats=("rgba",),   # VERIFIED LIVE: CineForm offers only rgba
         alpha_pixel_format="rgba",
-        platforms=frozenset({"mac", "windows"}),
+        # MEASURED on TD 2025.33230, macOS: Movie File Out errors with
+        # "Cineform not supported in this OS." and writes nothing (#16).
+        platforms=frozenset({"windows"}),
     ),
     # ---------------------------------------------------------------- pro
     "prores": CodecMeta(
@@ -230,9 +244,11 @@ CATALOG: dict[str, CodecMeta] = {
         pixel_formats=("yuv420", "yuv420p10bit"),
         alpha_pixel_format=None,
         even_dimensions=True,
-        platforms=frozenset({"mac", "windows"}),
-        caveat="Delivery codec; software encode is slow. NVIDIA hardware "
-               "required on Windows.",
+        # MEASURED on TD 2025.33230, macOS: Movie File Out errors with
+        # "NVIDIA AV1 codec is not supported on this OS." (#16).
+        platforms=frozenset({"windows"}),
+        caveat="Delivery codec. Windows only, and it needs NVIDIA hardware "
+               "(TouchDesigner's AV1 encoder is NVIDIA's).",
     ),
     "vvc": CodecMeta(
         cli_name="vvc",

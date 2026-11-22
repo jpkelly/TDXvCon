@@ -41,6 +41,7 @@ Protocol (v1, matching vcon.protocol):
 
 import json
 import os
+import re
 import sys
 import time
 
@@ -1051,6 +1052,18 @@ class VconExt:
         self.frame += 1
         if self.frame == 1:
             debug(f"vCon: first frame written (addframe pulsed)")
+        if self.frame == self.RECORD_CHECK_FRAME and not self._recording():
+            # A codec TouchDesigner cannot encode here starts the job like
+            # any other and never writes a file (#16): stop now and say why
+            # rather than encode on and report a missing file at the end.
+            # TD posts its reason only once recording stops (AV1, TD
+            # 2025.33230), so stop first, then read it.
+            try:
+                movieout.par.record = 0
+            except Exception:
+                pass
+            self._fail(self._not_recording_message(), "codec-unavailable")
+            return
         if self.frame % 10 == 0 or self.frame == self.total:
             self._set_status(f"encoding {self.frame}/{self.total}")
             frac = self.frame / float(self.total) if self.total else 0.0
@@ -1101,7 +1114,9 @@ class VconExt:
                 self._set_status("finalizing file…")
                 return   # stay in "finishing"; _tick calls back next frame
             # Never report success for a file that does not exist.
-            self._fail(f"output file was not written: {self.job['output']}",
+            err = self._mvo_errors()
+            self._fail(f"output file was not written: {self.job['output']}"
+                       + (f" (TouchDesigner: {err})" if err else ""),
                        "output-error")
             return
         seconds = getattr(self, "seconds_taken", 0.0) or round(
@@ -1128,6 +1143,60 @@ class VconExt:
 
     #: Longest wait for Movie File Out to finish a file after record=0.
     FINALIZE_TIMEOUT = 600
+
+    #: Frame by which Movie File Out must have opened its recording.
+    RECORD_CHECK_FRAME = 5
+
+    def _recording(self):
+        """False when Movie File Out has not opened a recording although
+        frames were sent: TD 2025.33230 on macOS does that for codecs it
+        cannot encode (Hap R, Hap HDR, AV1, CineForm), with active_records
+        and total_frames_written both 0 and no file. True otherwise, and
+        for toes without the mvo_info CHOP, which cannot tell.
+        """
+        info = self.ownerComp.op("mvo_info")
+        if info is None:
+            return True
+        try:
+            info.cook(force=True)
+            return (float(info["active_records"][0]) > 0
+                    or float(info["total_frames_written"][0]) > 0)
+        except Exception as exc:
+            debug(f"vCon: mvo_info unreadable: {exc}")
+            return True
+
+    def _mvo_errors(self):
+        """Movie File Out's own error text, without the operator path, e.g.
+        "NVIDIA AV1 codec is not supported on this OS." ('' if none)."""
+        try:
+            # Cook first, so an error from the last parameter change shows.
+            self.movieout.cook(force=True)
+        except Exception:
+            pass
+        try:
+            text = self.movieout.errors() or ""
+        except Exception:
+            return ""
+        lines = []
+        for line in text.splitlines():
+            line = re.sub(r"^/\S*:\s*", "", line.strip())      # op path
+            line = re.sub(r"\s*\(/[^)]*\)$", "", line)        # (op path)
+            line = re.sub(r"^Error:\s*", "", line)
+            if line:
+                lines.append(line)
+        return "; ".join(lines)
+
+    def _not_recording_message(self):
+        params = self.job.get("params") or {}
+        what = params.get("videocodec_label") or params.get("videocodec")
+        if params.get("videocodectype"):
+            what = f"{what} ({params['videocodectype']})"
+        err = self._mvo_errors()
+        return (f"Movie File Out did not start recording {what}: "
+                + (f"TouchDesigner says \"{err.rstrip('.')}\"" if err else
+                   "TouchDesigner gave no error")
+                + ". This codec is not available in this TouchDesigner "
+                  "build or on this OS.")
 
     def _mvo_writing(self):
         """True while Movie File Out is still writing after record=0.

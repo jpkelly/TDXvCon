@@ -95,6 +95,8 @@ class CodecSpec:
     alpha_pixel_format_by_subtype: dict[str, str] = field(default_factory=dict)
     #: The encoder cannot write odd dimensions (see CodecMeta).
     even_dimensions: bool = False
+    #: Per-subtype platform limits, keyed by TD token (see CodecMeta).
+    subtype_platforms: dict[str, frozenset[str]] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
     def pixel_formats_for(self, resolved_subtype: str | None) -> tuple[str, ...]:
@@ -120,8 +122,20 @@ class CodecSpec:
     options: dict[str, tuple[Any, ...]] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
-    def supports_platform(self, machine: str) -> bool:
-        return machine in self.platforms
+    def supports_platform(self, machine: str, subtype: str | None = None) -> bool:
+        """Whether this codec (and ``subtype``, a CLI alias or TD token)
+        can encode on ``machine``."""
+        if machine not in self.platforms:
+            return False
+        token = self.subtypes.get(subtype, subtype) if subtype else None
+        allowed = self.subtype_platforms.get(token) if token else None
+        return allowed is None or machine in allowed
+
+    def unavailable_subtypes(self, machine: str) -> list[str]:
+        """CLI subtype names (aliases included) that cannot encode here."""
+        return sorted(name for name, token in self.subtypes.items()
+                      if machine not in self.subtype_platforms.get(
+                          token, self.platforms))
 
     def resolve_subtype(self, requested: str | None) -> str | None:
         """Validate a CLI subtype against the table; None = codec default."""
@@ -286,6 +300,7 @@ def spec_from_meta(meta: CodecMeta) -> CodecSpec:
         },
         alpha_pixel_format_by_subtype=dict(meta.alpha_pixel_format_by_subtype),
         even_dimensions=meta.even_dimensions,
+        subtype_platforms=dict(meta.subtype_platforms),
         default_ext=meta.container,
         platforms=meta.platforms,
         caveat=meta.caveat,
@@ -331,6 +346,7 @@ class Registry:
                     "label": c.label,
                     "platforms": sorted(c.platforms),
                     "available_here": c.supports_platform(machine),
+                    "unavailable_subtypes": c.unavailable_subtypes(machine),
                     "subtypes": sorted(c.subtypes) if c.subtypes else None,
                     "qualities": list(c.qualities) or None,
                     "caveat": c.caveat,
@@ -339,18 +355,25 @@ class Registry:
             )
         return rows
 
-    def preflight(self, name: str, machine: str | None = None) -> CodecSpec:
-        """Fetch a codec and confirm it can encode on this machine.
+    def preflight(self, name: str, machine: str | None = None,
+                  subtype: str | None = None) -> CodecSpec:
+        """Fetch a codec and confirm it (and ``subtype``) can encode on
+        this machine.
 
         Raises CodecError with an actionable message otherwise.
         """
         spec = self.get(name)
         machine = machine or platform_of_current_machine()
+        where = "this platform" if machine == "other" else f"{machine}"
         if not spec.supports_platform(machine):
-            where = "this platform" if machine == "other" else f"{machine}"
             raise CodecError(
                 f"codec '{name}' cannot encode on {where} "
                 f"(supported: {', '.join(sorted(spec.platforms))})"
+            )
+        if not spec.supports_platform(machine, subtype):
+            raise CodecError(
+                f"{name} -t {subtype} is not available on {where}: "
+                f"TouchDesigner writes no file for it there"
             )
         if spec.caveat:
             # Caveat text is advisory; preflight surfaces it as an error only

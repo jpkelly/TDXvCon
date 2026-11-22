@@ -415,3 +415,22 @@ def test_only_codecs_that_cannot_encode_odd_sizes_ask_for_even_ones():
     1280x720 and VVC wrote nothing; the rest kept the odd size."""
     asking = {s.name for s in BUILTIN_CODECS if s.td_params().get("even_dims")}
     assert asking == {"h264", "h265", "av1", "vvc"}
+
+
+
+# #16, measured on TD 2025.33230 (macOS): CineForm and AV1 error, and Hap R /
+# Hap HDR never start recording. The CLI refuses them before encoding.
+
+def test_codecs_and_subtypes_unavailable_on_mac():
+    r = Registry()
+    for name in ("cineform", "av1"):
+        with pytest.raises(CodecError, match="cannot encode on mac"):
+            r.preflight(name, machine="mac")
+        assert r.preflight(name, machine="windows")
+    for sub in ("hapr", "haphdr", "hdr"):
+        with pytest.raises(CodecError, match=f"hap -t {sub} is not available on mac"):
+            r.preflight("hap", machine="mac", subtype=sub)
+        assert r.preflight("hap", machine="windows", subtype=sub)
+    assert r.preflight("hap", machine="mac", subtype="hapq")
+    assert r.get("hap").unavailable_subtypes("mac") == ["haphdr", "hapr", "hdr"]
+    assert r.get("hap").unavailable_subtypes("windows") == []

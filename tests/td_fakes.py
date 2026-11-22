@@ -180,6 +180,10 @@ class FakeMovieOut(FakeOp):
         self.fail_addframe = False
         #: False simulates a file that never lands on disk.
         self.create_files = True
+        #: True models a codec this OS cannot encode (TD 2025.33230, macOS):
+        #: record=1 opens no recording, writes nothing, sets ``error_text``.
+        self.fail_open = False
+        self.error_text = ""
         super().__init__(
             "movieout",
             file=Par(""),
@@ -196,7 +200,15 @@ class FakeMovieOut(FakeOp):
         self.inputs = [moviein]
         self.inputConnectors = [Connector(self)]
 
+    def errors(self, recurse=False):
+        return self.error_text
+
+    def cook(self, force=False):
+        pass
+
     def _on_record(self, old, new):
+        if not old and new and self.fail_open:
+            return
         if not old and new:
             path = self.par.file.eval()
             self.current = path
@@ -266,9 +278,15 @@ class FakeMvoInfo(FakeOp):
             self.flush_left -= 1
 
     def __getitem__(self, chan):
+        mvo = self._movieout
         if chan == "active_records":
-            busy = self._movieout.par.record.eval() or self.flush_left != 0
+            if mvo.fail_open:
+                return [0.0]
+            busy = mvo.par.record.eval() or self.flush_left != 0
             return [1.0 if busy else 0.0]
+        if chan == "total_frames_written":
+            return [float(len(mvo.files.get(mvo.current, [])))
+                    if mvo.current else 0.0]
         raise KeyError(chan)
 
 

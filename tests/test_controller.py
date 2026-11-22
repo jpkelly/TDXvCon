@@ -692,3 +692,76 @@ def test_callbacks_refuse_and_ignore_remote_peers():
     assert ns["onConnect"](None, local) == 1
     ns["onReceive"](None, 0, '{"type": "ping"}', b"", local)
     assert calls == ["connect", '{"type": "ping"}']
+
+
+# ----------------------------------------------------------------------
+# #16 — a codec TD cannot encode here fails at once, with TD's reason
+# ----------------------------------------------------------------------
+
+_CINEFORM_ERROR = ("/project1/vcon/movieout:  Error: Cineform not supported "
+                   "in this OS. (/project1/vcon/movieout)")
+
+
+def test_recording_that_never_opens_fails_early_with_tds_error(media):
+    src, out_dir = media
+    rig = Rig(frames=100, flush_cooks=0)
+    rig.movieout.fail_open = True
+    rig.movieout.error_text = _CINEFORM_ERROR
+    rig.submit(src, out_dir / "a.mov", videocodec="cineform")
+    rig.run()
+
+    err = rig.events("error")[-1]
+    assert err["code"] == "codec-unavailable"
+    assert 'TouchDesigner says "Cineform not supported in this OS".' in err["message"]
+    assert rig.ext.frame == 0 and rig.ext.state == "idle"
+    assert not rig.events("done")
+
+
+def test_silent_refusal_is_reported_too(media):
+    """Hap R on macOS: no recording, and no error text from TD."""
+    src, out_dir = media
+    rig = Rig(frames=100, flush_cooks=0)
+    rig.movieout.fail_open = True
+    rig.movieout.par.videocodectype.menuNames = ["hap", "hapq", "hapr",
+                                                 "haphdr"]
+    rig.submit(src, out_dir / "a.mov", videocodec="hap",
+               videocodectype="hapr")
+    rig.run()
+
+    err = rig.events("error")[-1]
+    assert err["code"] == "codec-unavailable"
+    assert "hap (hapr)" in err["message"] and "gave no error" in err["message"]
+
+
+def test_working_codec_passes_the_recording_check(media):
+    src, out_dir = media
+    rig = Rig(frames=20, flush_cooks=0)
+    rig.submit(src, out_dir / "a.mov")
+    rig.run()
+    assert rig.events("done") and not rig.events("error")
+
+
+def test_toe_without_mvo_info_skips_the_check(media):
+    """Older toes cannot tell; they keep the end-of-job file check."""
+    src, out_dir = media
+    rig = Rig(frames=20)                      # no mvo_info
+    rig.movieout.fail_open = True
+    rig.movieout.error_text = _CINEFORM_ERROR
+    rig.submit(src, out_dir / "a.mov", videocodec="cineform")
+    rig.run(max_ticks=2000)
+    err = rig.events("error")[-1]
+    assert err["code"] == "output-error"
+    assert "(TouchDesigner: Cineform not supported in this OS.)" in err["message"]
+
+
+@pytest.mark.parametrize("raw, clean", [
+    ("/project1/vcon/movieout:  Error: Cineform not supported in this OS. "
+     "(/project1/vcon/movieout)", "Cineform not supported in this OS."),
+    ("  Error: NVIDIA AV1 codec is not supported on this OS. "
+     "(/project1/vcon/movieout)", "NVIDIA AV1 codec is not supported on this OS."),
+    ("Codec: something odd", "Codec: something odd"),
+    ("", "")])
+def test_movie_file_out_error_text_is_cleaned(raw, clean):
+    rig = Rig()
+    rig.movieout.error_text = raw
+    assert rig.ext._mvo_errors() == clean
