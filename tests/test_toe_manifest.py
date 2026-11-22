@@ -107,7 +107,7 @@ def test_strip_removes_only_the_dev_component(tmp_path):
 
     assert sorted(removed) == ["TDMCP.n", "TDMCP.parm", "TDMCP.vfs",
                                "TDMCP/View.n", "TDMCP/server/x.text"]
-    left = sorted(str(p.relative_to(expanded)) for p in expanded.rglob("*")
+    left = sorted(p.relative_to(expanded).as_posix() for p in expanded.rglob("*")
                   if p.is_file())
     assert left == ["TDMCPlike.n", "project1.n", "project1/vcon.n"]
     toc = (tmp_path / "t.toe.toc").read_text(encoding="utf-8").split()
@@ -181,3 +181,19 @@ def test_release_refuses_a_toe_with_logged_protocol_messages(tmp_path):
                                     b'"input": "/Users/someone/clip.mov"}',
         "project1/vcon/other.fifo": b"1\n0\n*  message"})
     assert _release().received_messages(expanded) == ["project1/vcon/tcpip.fifo"]
+
+
+def test_release_resets_personal_panel_values(tmp_path):
+    """The dev panel shows the maintainer's own destination and SCALE;
+    neither should become a new user's default."""
+    expanded = _fake_expanded(tmp_path, {
+        "project1/vcon/panel/destination.parm":
+            b"display 0 on\nValue0 67108928 /Users/someone/Desktop/out\n",
+        "project1/vcon/panel/scaled_t.parm": b"Value0 67108928 on\n",
+        "project1/vcon/panel/codec_dd.parm": b"Value0 67108928 hap\n"})
+    assert sorted(_release().reset_widget_values(expanded)) == [
+        "destination", "scaled_t"]
+    panel = expanded / "project1" / "vcon" / "panel"
+    assert (panel / "destination.parm").read_bytes() == b"display 0 on\n"
+    assert b"Value0" not in (panel / "scaled_t.parm").read_bytes()
+    assert (panel / "codec_dd.parm").read_bytes() == b"Value0 67108928 hap\n"
