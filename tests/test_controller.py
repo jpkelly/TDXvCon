@@ -880,3 +880,20 @@ def test_unavailable_sidecar_encoder_does_not_disable_mux(media, ffmpeg, monkeyp
     assert len(fake.calls) == 1
     assert 'separate audio not exported: FFmpeg missing encoder pcm_s24be' in (
         rig.events('done')[-1]['warnings'][0])
+
+
+def test_panel_job_waits_for_install_before_audio(media, ffmpeg):
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)
+    fake = ffmpeg(rig, rc=0)
+    rig.ext.audio_install_pending = True
+    out = out_dir / 'installed.mov'
+    rig.ext.Transcode(str(src), str(out), audio='aac')
+    rig.tick_until('finishing')
+    for _ in range(10):
+        rig.ext.onFrame()
+    assert rig.ext.state == 'finishing'
+    assert not fake.calls
+    rig.ext.audio_install_pending = False
+    rig.run()
+    assert out.read_bytes() == b'muxed'

@@ -37,11 +37,31 @@ one search. Each audio operation uses the first copy in this order that
 supports its container and codec:
 
 1. `IMAGEIO_FFMPEG_EXE`, then the binary in an importable `imageio-ffmpeg` package.
-2. vCon's downloaded copy, pipx environments, and user Python packages.
+2. vCon’s downloaded copy, shared TDTools and LTCfileGen copies, then pipx environments and user Python packages.
 3. The current Python environment's binary, then FFmpeg on `PATH`.
 4. Standard package-manager locations: Homebrew (`/opt/homebrew/bin` and
    `/usr/local/bin`) and MacPorts (`/opt/local/bin`) on macOS; WinGet,
    Chocolatey, and Scoop on Windows.
+
+In **Setup & Help → FFmpeg source…**, choose Automatic, a detected source
+listed with its version, or a custom executable. A named source stays pinned
+across upgrades. Set `VCON_FFMPEG` to an executable path to override the
+saved selection. An unavailable or incompatible pinned source is reported
+in Setup & Help and on the help button.
+
+Sharing is on by default. vCon looks under the per-user data directory
+(`~/Library/Application Support` on macOS, `%LOCALAPPDATA%` on Windows,
+`~/.local/share` on Linux), in each of `vCon`, `TDTools`, and `LTCfileGen`
+under `pylibs/imageio_ffmpeg/binaries/ffmpeg-*`. Other tools can find
+vCon’s download there. **Turn sharing off** excludes shared tool folders
+and automatically discovered user Python packages. Install Now always
+writes to vCon’s own folder.
+
+When a queued panel batch requests audio and FFmpeg is unavailable,
+START offers **Install now**, **Continue video only**, or **Cancel**.
+Installation runs alongside video encoding. The audio step waits for
+installation and validation. Continuing video only skips muxing and
+separate audio export for that batch and preserves your saved choices.
 
 Validation runs in the background: FFmpeg must successfully report its
 version, output muxers, and audio encoders. **Setup & Help** shows its version,
