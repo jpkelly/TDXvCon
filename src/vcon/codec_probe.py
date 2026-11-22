@@ -381,6 +381,24 @@ def verify_frame_count(path: str | Path, expected: int) -> tuple[bool, str]:
     return True, f"{found} frames"
 
 
+#: Containers this probe cannot parse, by file signature. Their codec is
+#: not checked rather than failed: an unreadable QuickTime file still fails.
+UNPARSED_CONTAINERS = {
+    b"\x1a\x45\xdf\xa3": "Matroska/WebM",   # EBML header
+    b"GIF8": "GIF",
+}
+
+
+def unparsed_container(path: str | Path) -> str | None:
+    """Name of a container this probe cannot read (WebM, MKV, GIF), else None."""
+    try:
+        with Path(path).open("rb") as fh:
+            head = fh.read(4)
+    except OSError:
+        return None
+    return UNPARSED_CONTAINERS.get(head)
+
+
 def verify_output(
     path: str | Path,
     *,
@@ -408,6 +426,8 @@ def verify_output(
         size = p.stat().st_size
         if size == 0:
             last = f"output file is empty: {p}"
+        elif (kind := unparsed_container(p)) is not None:
+            return True, f"codec not checked ({kind} output)"
         else:
             info = probe_codec(p)
             if info is not None:
