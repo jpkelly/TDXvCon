@@ -216,7 +216,7 @@ _PERSIST_WIDGETS = (
 def _save_settings():
     """Write the panel's runtime selections to JSON (called on every
     relevant widget change via Onvaluechangescript0 hooks)."""
-    out = {}
+    out = {"ffmpeg": ext().FFmpegPreferences()}
     for name in _PERSIST_WIDGETS:
         w = widget(name)
         if w is None:
@@ -245,6 +245,8 @@ def _load_settings():
         debug(f"panel settings load failed: {exc}")
         return
     for name, val in data.items():
+        if name not in _PERSIST_WIDGETS:
+            continue
         w = widget(name)
         if w is None:
             continue
@@ -1527,10 +1529,48 @@ def Start():
     SOURCE field removed (JP): the queue IS the input — files arrive via
     +ADD, drag/drop, or a folder drop. Encoding begins only on START.
     """
-    global _batch_started
-    if not _queue:
+    global _batch_started, _start_pending, _batch_video_only
+    if _batch_started:
+        return
+    if not any(item["status"] == "queued" for item in _queue):
+        _start_pending = False
         note("queue is empty — add files first")
         return
+    _batch_video_only = False
+    _start_pending = False
+    if ((_audio_value() != "none" or _val("audio_sep_t"))
+            and _queued_may_have_audio()):
+        support = _ffmpeg_status()
+        if support["state"] == "checking":
+            _start_pending = True
+            _set_output_text("Checking audio support…")
+            return
+        if support["state"] != "ready" and _install is None:
+            can_install = _install_can_help(support)
+            buttons = ["Install now" if can_install else "FFmpeg source…",
+                       "Continue video only", "Cancel"]
+            hint = "" if can_install else (
+                "\n\nYour chosen FFmpeg source can't be used. Choose "
+                "another, or set it back to Automatic.")
+            choice = ui.messageBox(
+                "vCon — Audio unavailable",
+                support["error"] + hint + "\n\nChoose how to start this batch."
+                "\n(To skip audio for every batch, turn audio off in the panel.)",
+                buttons=buttons)
+            if choice == 0 and can_install:
+                InstallAudioSupport(support=support)
+                if _install is None:
+                    _set_output_text("Audio installation could not start — see Setup & Help")
+                    return
+            elif choice == 0:
+                _choose_ffmpeg_source()
+                PreviewOutput()
+                return
+            elif choice == 1:
+                _batch_video_only = True
+            else:
+                PreviewOutput()
+                return
     _batch_started = True
     _refresh_queue()
     n = sum(1 for it in _queue if it["status"] == "queued")
@@ -1542,6 +1582,8 @@ def Start():
 #: adding a movie must NOT begin the encode). Set True by Start(),
 #: False by Stop() and when the queue empties.
 _batch_started = False
+_start_pending = False
+_batch_video_only = False
 
 
 def _run_next():
@@ -1600,8 +1642,8 @@ def _run_next():
     # 2025.33230). Sent per job, the panel value wins over whatever a CLI
     # job left behind (#4).
     container = _td_container(codec)
-    audio = _audio_value()
-    audio_sep = bool(_val("audio_sep_t"))
+    audio = "none" if _batch_video_only else _audio_value()
+    audio_sep = not _batch_video_only and bool(_val("audio_sep_t"))
     audio_sep_fmt = _val("audio_sep_dd") or "wav16" if audio_sep else None
     note(f"  codec={codec} sub={subtype} fmt={fmt} fps={fps} "
          f"res={res} scale={scale} fit={fitmode} "
@@ -1645,7 +1687,8 @@ def PauseResume():
 
 def Stop():
     """Cancel the active job, stop the batch, clear the queue."""
-    global _batch_started
+    global _batch_started, _start_pending
+    _start_pending = False
     _batch_started = False      # re-close the gate (JP: adds must wait)
     ext().Cancel()
     for item in _queue:
@@ -2135,7 +2178,14 @@ def onFrame():
     # 1e) background audio-support install, if one is running
     try:
         if _install is not None:
-            _install_tick()
+            try:
+                _install_tick()
+            finally:
+                e.audio_install_pending = _install is not None
+        if _start_pending:
+            Start()
+        if _source_menu_pending:
+            _choose_ffmpeg_source()
     except Exception as exc:
         _tick_err("audio install", exc)
 
@@ -2318,6 +2368,78 @@ def _latest_release(timeout=2.0):
         return None
 
 
+_source_menu_pending = False
+
+
+def _install_can_help(support):
+    """Install Now fetches vCon's own copy. That fixes Automatic or a
+    pinned "vCon download", never another pinned source, a custom path
+    or VCON_FFMPEG: those must be fixed or changed (#24)."""
+    return support.get("selection", "Automatic") in ("Automatic", "vCon download")
+
+
+def _queued_may_have_audio():
+    """False when every queued file is known to have no sound track, so
+    a batch of silent clips starts without the no-FFmpeg prompt (#25)."""
+    controller = ext()
+    return any(controller.SourceMayHaveAudio(item.get("input"))
+               for item in _queue if item["status"] == "queued")
+
+
+def _set_ffmpeg_preference(**changes):
+    controller = ext()
+    prefs = controller.FFmpegPreferences()
+    prefs.update(changes)
+    controller.SetFFmpegPreferences(prefs)
+    _save_settings()
+    AudioSupportStatus()
+
+
+def _choose_ffmpeg_source():
+    global _source_menu_pending
+    controller = ext()
+    inventory = controller.FFmpegSources()
+    _source_menu_pending = inventory["state"] == "checking"
+    if _source_menu_pending:
+        return
+    choices = ["Automatic"]
+    labels = ["Automatic"]
+    if inventory["state"] == "ready":
+        for candidate in (inventory, *inventory.get("alternatives", ())):
+            source = candidate["source"]
+            if source not in choices:
+                choices.append(source)
+                labels.append(f"{source} ({candidate['version']})")
+    prefs = controller.FFmpegPreferences()
+    current = os.environ.get("VCON_FFMPEG") or prefs.get("path") or prefs.get("source", "Automatic")
+    shared = prefs.get("shared", True)
+    toggle = "Turn sharing off" if shared else "Turn sharing on"
+    # Native message boxes have limited width. Page through the sources.
+    page = 0
+    while True:
+        visible = labels[page:page + 3]
+        buttons = visible + (["More…"] if len(labels) > 3 else [])
+        buttons += ["Custom path…", toggle, "Close"]
+        override = ("\nVCON_FFMPEG overrides the saved choice." if os.environ.get("VCON_FFMPEG")
+                    else "")
+        index = ui.messageBox("vCon — FFmpeg source",
+                              f"Selected: {current}{override}\nUse FFmpeg installed by other tools: "
+                              + ("On" if shared else "Off"), buttons=buttons)
+        action = buttons[index] if 0 <= index < len(buttons) else "Close"
+        if action == "More…":
+            page = page + 3 if page + 3 < len(labels) else 0
+            continue
+        if action == "Custom path…":
+            path = ui.chooseFile(title="Choose an FFmpeg executable")
+            if path:
+                _set_ffmpeg_preference(source="Custom", path=path)
+        elif action == toggle:
+            _set_ffmpeg_preference(shared=not shared)
+        elif action in visible:
+            _set_ffmpeg_preference(source=choices[page + index], path="")
+        return
+
+
 def ShowSetupDialog():
     """SETUP button: a modal dialog with live status + actions.
 
@@ -2358,6 +2480,9 @@ def ShowSetupDialog():
         lines.append(f"Separate audio ffmpeg: {support['sidecar_path']}")
     if not ready:
         lines += [support["error"], ""]
+    if not ready and not _install_can_help(support):
+        lines += ["Your chosen FFmpeg source can't be used. Choose another",
+                  "with FFmpeg source…, or set it back to Automatic.", ""]
     if support["state"] in ("missing", "invalid", "unsupported"):
         lines += [
             "The selected audio operation is unavailable.",
@@ -2404,8 +2529,9 @@ def ShowSetupDialog():
     msg = "\n".join(lines)
     manual_cmd = (f'"{py}" -m pip install --upgrade '
                   f'--target "{dest}" imageio-ffmpeg')
-    buttons = ["Re-check", "Copy Command", "Close"]
-    if support["state"] in ("missing", "invalid", "unsupported"):
+    buttons = ["Re-check", "FFmpeg source…", "Copy Command", "Close"]
+    if (support["state"] in ("missing", "invalid", "unsupported")
+            and _install_can_help(support)):
         buttons.insert(0, "Install Now")
     try:
         choice = ui.messageBox("vCon — Setup & Help", msg, buttons=buttons)
@@ -2423,6 +2549,8 @@ def ShowSetupDialog():
     action = buttons[choice] if 0 <= choice < len(buttons) else "Close"
     if action == "Re-check":
         AudioSupportStatus()
+    elif action == "FFmpeg source…":
+        _choose_ffmpeg_source()
     elif action == "Install Now":
         # Use the report the user acted on. A timed background refresh
         # must not turn their Install click into a no-op.
@@ -2524,6 +2652,7 @@ def InstallAudioSupport(support=None):
         return
     _install = {"proc": proc, "log": log, "log_path": log_path,
                 "dest": dest, "t0": time.time()}
+    ext().audio_install_pending = True
     _set_output_text("Installing audio support — downloading ffmpeg…")
 
 
@@ -2605,14 +2734,15 @@ def _install_tick():
             note("  Encodes will now carry audio. Nothing else to do.")
             note("-" * 64)
             _set_output_text("Audio support installed — ready to encode")
-            try:
-                ui.messageBox(
-                    "vCon — Audio Support Installed",
-                    "ffmpeg is now available:\n\n"
-                    f"{exe}\n\n"
-                    "Encodes will carry the source audio from now on.")
-            except Exception:
-                pass
+            if not _batch_started:
+                try:
+                    ui.messageBox(
+                        "vCon — Audio Support Installed",
+                        "ffmpeg is now available:\n\n"
+                        f"{exe}\n\n"
+                        "Encodes will carry the source audio from now on.")
+                except Exception:
+                    pass
         else:
             note(f"audio install: pip succeeded but validation failed: {support['error']}")
             _set_output_text("Audio validation failed — see Setup & Help")
@@ -2631,6 +2761,8 @@ def _install_tick():
         note(tail)
     ShowAudioSetupHelp()
     _set_output_text("Audio install failed — see textport for details")
+    if _batch_started:
+        return
     try:
         ui.messageBox(
             "vCon — Audio Install Failed",
