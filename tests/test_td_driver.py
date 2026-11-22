@@ -256,3 +256,26 @@ def test_attach_true_when_controller_present(tmp_path, fake_controller):
     assert attached is True
     # shutdown() resets the flag; no process was launched or killed
     assert still_attached is False
+
+def test_launch_passes_only_the_project_path(tmp_path, monkeypatch):
+    """TouchDesigner exits on any argument it does not know ('-quiet' on
+    2025.33230), so the launch line is the binary, any caller flags, and
+    the toe — nothing else."""
+    td = tmp_path / "TouchDesigner"
+    toe = tmp_path / "transcoder.toe"
+    td.write_text("")
+    toe.write_text("")
+    seen = {}
+
+    async def fake_exec(*args, **kwargs):
+        seen["args"] = list(args)
+        seen["env"] = kwargs.get("env") or {}
+        return object()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
+    ctx = DriverContext(workdir=tmp_path, td_path=td, toe_path=toe,
+                        td_flags=["-n", "1"])
+    asyncio.run(TouchDesignerDriver(ctx)._launch_td())
+
+    assert seen["args"] == [str(td), "-n", "1", str(toe)]
+    assert seen["env"].get("VCON_LAUNCHED") == "1"
