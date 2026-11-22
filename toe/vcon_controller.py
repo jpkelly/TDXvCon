@@ -42,6 +42,7 @@ Protocol (v1, matching vcon.protocol):
 import json
 import os
 import re
+import struct
 import sys
 import time
 
@@ -59,6 +60,96 @@ IDLE_QUIT_SECONDS = 300  # safety net: exit TD when idle this long
 #: Share of the progress bar given to the encode; the audio mux fills
 #: the remainder, so a job's bar rises monotonically across both phases.
 _ENCODE_SHARE = 0.92
+
+
+# ---------------------------------------------------------------------
+# Variable frame rate (#17). TouchDesigner reports a VFR movie as constant
+# rate (numImages = duration x nominal rate), so the movie's own sample
+# table is read. Mirrors vcon.codec_probe.is_variable_frame_rate, which
+# the toe cannot import.
+# ---------------------------------------------------------------------
+
+
+def _atoms(fh, start, end, limit=256):
+    """(type, body_start, body_end) of the atoms in [start, end), by seeks."""
+    pos, seen = start, 0
+    while pos + 8 <= end and seen < limit:
+        seen += 1
+        fh.seek(pos)
+        head = fh.read(8)
+        if len(head) < 8:
+            return
+        size, kind, body = struct.unpack(">I", head[:4])[0], head[4:8], pos + 8
+        if size == 1:                               # 64-bit size
+            ext = fh.read(8)
+            if len(ext) < 8:
+                return
+            size, body = struct.unpack(">Q", ext)[0], pos + 16
+        elif size == 0:                             # to the end
+            size = end - pos
+        if size < 8:
+            return
+        yield kind, body, min(pos + size, end)
+        pos += size
+
+
+def _child(fh, start, end, kind):
+    for atype, body, body_end in _atoms(fh, start, end):
+        if atype == kind:
+            return body, body_end
+    return None
+
+
+def video_frame_durations(path):
+    """The first video track's stts runs [(frames, duration), ...] in a
+    QuickTime/MP4 file, or None if there is none to read."""
+    try:
+        with open(path, "rb") as fh:
+            moov = _child(fh, 0, os.path.getsize(path), b"moov")
+            if not moov:
+                return None
+            for atype, body, body_end in _atoms(fh, *moov):
+                if atype != b"trak":
+                    continue
+                mdia = _child(fh, body, body_end, b"mdia")
+                hdlr = mdia and _child(fh, mdia[0], mdia[1], b"hdlr")
+                if not hdlr:
+                    continue
+                fh.seek(hdlr[0] + 8)
+                if fh.read(4) != b"vide":
+                    continue
+                minf = _child(fh, mdia[0], mdia[1], b"minf")
+                stbl = minf and _child(fh, minf[0], minf[1], b"stbl")
+                stts = stbl and _child(fh, stbl[0], stbl[1], b"stts")
+                if not stts:
+                    return None
+                fh.seek(stts[0] + 4)
+                count = fh.read(4)
+                if len(count) < 4:
+                    return None
+                n = struct.unpack(">I", count)[0]
+                table = fh.read(8 * n)
+                if len(table) < 8 * n:
+                    return None
+                return [struct.unpack(">II", table[i:i + 8])
+                        for i in range(0, 8 * n, 8)]
+    except (OSError, struct.error):
+        return None
+    return None
+
+
+def is_variable_frame_rate(path, tolerance=1.1):
+    """True when the longest frame lasts more than ``tolerance`` times the
+    shortest (a last single-frame run ignored); None when unreadable."""
+    runs = video_frame_durations(path)
+    if not runs:
+        return None
+    if len(runs) > 1 and runs[-1][0] == 1:
+        runs = runs[:-1]
+    deltas = [delta for count, delta in runs if count and delta]
+    if not deltas:
+        return None
+    return max(deltas) > tolerance * min(deltas)
 
 
 def partial_path(output):
@@ -813,6 +904,16 @@ class VconExt:
                        f"{os.path.basename(self.job['input'])} — {why}",
                        "input-error")
             return
+        if (self.job.get("origin") != "tcp"
+                and is_variable_frame_rate(self.job["input"])):
+            # Frames are written in order at a constant rate while the
+            # audio keeps its real timing, so the picture drifts (#9). The
+            # CLI warns at submit; panel jobs are warned here (#17).
+            self._warn(
+                f"{os.path.basename(self.job['input'])} has a variable frame "
+                f"rate: its video will drift against the audio. Convert it to "
+                f"a constant rate first, e.g. ffmpeg -i in.mp4 -fps_mode cfr "
+                f"-r 30 -c:a copy constant.mov")
         # Documented: Movie File In TOP exposes numImages (frame count).
         # (The Info CHOP's 'length' channel is a CHOP channel length, NOT
         # the movie's frame count — earlier assumption was wrong.)
