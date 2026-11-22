@@ -1110,6 +1110,11 @@ class VconExt:
             size = os.path.getsize(s["out"]) if os.path.exists(s["out"]) else 0
             debug(f"vCon: audio extracted — {s['out']}, size={size}")
             note = s["note"] + f", sep audio: {os.path.basename(s['out'])}"
+            tracks = self._input_audio_tracks(s["log_path"])
+            if s.get("single_track") and tracks > 1:
+                self._warn(f"the source has {tracks} audio tracks; "
+                           f"{os.path.basename(s['out'])} holds only the "
+                           f"first (export to .mka to keep them all)")
         else:
             self._warn("separate audio export failed"
                        + (f" (ffmpeg exit {rc})" if rc else " (timed out)"))
@@ -1121,6 +1126,18 @@ class VconExt:
             pass
         self._sep = None
         self._job_complete(s["video_out"], note)
+
+    @staticmethod
+    def _input_audio_tracks(log_path):
+        """Audio streams of ffmpeg's first input, read from its log."""
+        try:
+            with open(log_path, "r", errors="replace") as fh:
+                text = fh.read()
+        except Exception:
+            return 0
+        head = text.split("Output #0", 1)[0]
+        return sum(1 for line in head.splitlines()
+                   if "Stream #0:" in line and ": Audio:" in line)
 
     def _job_complete(self, out, note=""):
         """Finalize: tell the client, clear the job, return to idle.
@@ -1211,7 +1228,42 @@ class VconExt:
         debug(f"vCon: ffmpeg {'found at ' + found if found else 'NOT FOUND'}")
         return found or None
 
-    def _mux_start(self, source, video_output):
+    #: ffmpeg audio arguments per audio choice (panel audio_dd tokens).
+    _AUDIO_ARGS = {
+        "copy": ["-c:a", "copy"],
+        "pcm_s16le": ["-c:a", "pcm_s16le"],
+        "pcm_s24le": ["-c:a", "pcm_s24le"],
+        "aac": ["-c:a", "aac", "-b:a", "256k"],
+        "alac": ["-c:a", "alac"],
+        "mp3": ["-c:a", "libmp3lame", "-b:a", "320k"],
+        "opus": ["-c:a", "libopus", "-b:a", "192k"],
+    }
+
+    @staticmethod
+    def _audio_plan(audio, ext):
+        """(codec, fallback if that fails, warn on fallback) for a mux.
+
+        'auto' (CLI jobs) keeps the source audio as it is, in every
+        track (#7): before, everything but .mp4 got 16-bit PCM, cutting
+        24-bit and float audio. Where the container cannot take the
+        source codec, copying fails and the fallback re-encodes it:
+        24-bit PCM for .mov/.mkv, Opus for .webm, which holds only
+        Opus/Vorbis. .mp4 stays AAC: copying PCM into it "works" but
+        writes ipcm/fpcm audio most players cannot play. An explicit
+        'copy' (the panel default) falls back too, with a warning.
+        """
+        fallback = {".mp4": "aac", ".webm": "opus"}.get(ext, "pcm_s24le")
+        if audio == "auto" or not audio:
+            if ext == ".mp4":
+                return "aac", None, False
+            if ext == ".gif":
+                return "none", None, False   # GIF holds no audio
+            return "copy", fallback, False
+        if audio == "copy":
+            return "copy", fallback, True
+        return audio, None, False
+
+    def _mux_start(self, source, video_output, audio=None):
         """Launch the audio mux as a BACKGROUND ffmpeg process.
 
         Never blocks: subprocess.run() froze TD's whole UI for the length
@@ -1220,10 +1272,17 @@ class VconExt:
         to a file too, so a full pipe buffer can't deadlock it.
 
         Returns True if the process launched (state -> "muxing").
+        ``audio`` overrides the job's choice (the retry after a failed copy).
         """
-        # Audio codec from the job params (panel's audio_dd selection).
-        # Falls back to container-based defaults for CLI jobs without it.
-        audio = (self.job.get("params") or {}).get("audio", "auto")
+        # Audio codec from the job params (panel's audio_dd selection);
+        # CLI jobs send none, which is 'auto'.
+        retry = audio is not None
+        if audio is None:
+            audio = (self.job.get("params") or {}).get("audio", "auto")
+        ext = os.path.splitext(video_output)[1].lower()
+        audio, fallback, warn_fallback = self._audio_plan(audio, ext)
+        if retry:
+            fallback = None                  # one retry, never a loop
         if audio == "none":
             debug("vCon: audio=none — skipping mux (video only)")
             return False
@@ -1235,28 +1294,7 @@ class VconExt:
                 self._warn("audio not muxed: ffmpeg not found — output is "
                            "video-only (install imageio-ffmpeg or ffmpeg)")
             return False
-        if audio == "auto" or not audio:
-            ext = os.path.splitext(video_output)[1].lower()
-            if ext == ".mp4":
-                audio = "aac"
-            else:
-                audio = "pcm_s16le"
-        # Build ffmpeg args from the audio codec selection
-        if audio == "copy":
-            aargs = ["-c:a", "copy"]
-        elif audio == "pcm_s16le":
-            aargs = ["-c:a", "pcm_s16le"]
-        elif audio == "pcm_s24le":
-            aargs = ["-c:a", "pcm_s24le"]
-        elif audio == "aac":
-            aargs = ["-c:a", "aac", "-b:a", "256k"]
-        elif audio == "alac":
-            aargs = ["-c:a", "alac"]
-        elif audio == "mp3":
-            aargs = ["-c:a", "libmp3lame", "-b:a", "320k"]
-        else:
-            aargs = ["-c:a", "pcm_s16le"]
-        ext = os.path.splitext(video_output)[1].lower()
+        aargs = self._AUDIO_ARGS.get(audio, self._AUDIO_ARGS["pcm_s24le"])
         # Temp name keeps the real extension — ffmpeg infers the
         # muxer from it, and ".tmp" matches nothing.
         stem = os.path.splitext(video_output)[0]
@@ -1267,7 +1305,9 @@ class VconExt:
                "-progress", prog_path,
                "-i", video_output,
                "-i", source,
-               "-map", "0:v:0", "-map", "1:a:0",
+               # Every audio track: masters often carry stems or discrete
+               # mono channels as separate tracks (#7).
+               "-map", "0:v:0", "-map", "1:a",
                "-c:v", "copy"] + aargs + [tmp]
         try:
             import subprocess
@@ -1285,6 +1325,8 @@ class VconExt:
             self._mux = {
                 "proc": proc, "log": log, "tmp": tmp, "out": video_output,
                 "prog": prog_path, "log_path": log_path, "acodec": audio,
+                "source": source, "fallback": fallback,
+                "warn_fallback": warn_fallback,
                 "t0": time.time(), "frac": 0.0,
                 # expected duration in microseconds, for the progress fraction
                 "total_us": self._expected_duration_us(),
@@ -1393,6 +1435,8 @@ class VconExt:
                 if self._audio_requested():
                     self._warn(f"{m['acodec']} audio was requested but the "
                                f"source has no audio track")
+            elif m.get("fallback") and self._mux_retry(m, err):
+                return                       # muxing again, with the fallback
             else:
                 debug(f"vCon: ffmpeg mux failed (rc={rc}): {err}")
                 last = (err.strip().splitlines() or [""])[-1][:200]
@@ -1412,6 +1456,22 @@ class VconExt:
         out = m["out"]
         self._mux = None
         self._maybe_extract_audio(out, note)
+
+    def _mux_retry(self, m, err):
+        """The source audio could not be copied into this container: mux
+        again, re-encoding to the fallback codec. True if relaunched."""
+        for path in (m["tmp"], m["prog"], m["log_path"]):
+            self._remove_quietly(path)
+        self._mux = None
+        ext = os.path.splitext(m["out"])[1]
+        debug(f"vCon: audio copy into {ext} failed, retrying as "
+              f"{m['fallback']}: {err.strip()[-200:]}")
+        if not self._mux_start(m["source"], m["out"], audio=m["fallback"]):
+            return False
+        if m.get("warn_fallback"):
+            self._warn(f"the source audio could not be copied into {ext}; "
+                       f"it was re-encoded as {m['fallback']}")
+        return True
 
     def _maybe_extract_audio(self, video_output, note=""):
         """Run separate audio extraction if audio_sep was requested.
@@ -1462,8 +1522,12 @@ class VconExt:
                 "aac": ["-c:a", "aac", "-b:a", "256k"],
                 "mp3": ["-c:a", "libmp3lame", "-b:a", "320k"],
                 "copy": ["-c:a", "copy"]}.get(sep, ["-c:a", "pcm_s16le"])
+        # .mka holds any number of tracks; the other formats hold one, so
+        # they take track 1 and _extract_done warns if there were more (#7).
+        # Without a -map, ffmpeg picks the track with the most channels.
+        amap = ["-map", "0:a"] if ext == ".mka" else ["-map", "0:a:0"]
         cmd = [ffmpeg, "-y", "-nostdin", "-nostats",
-               "-i", src, "-vn"] + args + [out]
+               "-i", src, "-vn"] + amap + args + [out]
         try:
             import subprocess
             log_path = stem + ".audio_sep.log"
@@ -1477,6 +1541,7 @@ class VconExt:
             return
         try:
             self._sep = {"proc": proc, "log": log, "out": out,
+                         "single_track": ext != ".mka",
                          "log_path": log_path, "video_out": video_output,
                          "note": note, "t0": time.time()}
             self.state = "extracting"
