@@ -13,7 +13,10 @@ and this file contains UTF-8 (em-dashes in prose).
 The script auto-runs build() when __name__ == '__main__'; if your textport's
 __name__ differs, just type `build()` on the next line.
 
-The script saves the project as src/vcon/data/transcoder.toe automatically.
+The script saves the project as the local DEV toe, dev/TDXvCon-dev.toe
+(gitignored; it keeps the /TDMCP server for development). It never writes the
+shipped src/vcon/data/transcoder.toe: scripts/release_toe.py derives that
+from the dev toe with /TDMCP removed (PUBLISHING.md, step 3).
 
 Resulting network (/project1/vcon):
 
@@ -686,12 +689,12 @@ def build():
         say(f"  (captured vcon layout: {_exc})")
 
     # ---- save -----------------------------------------------------------
-    toe_dir = os.path.abspath(
-        os.path.join(REPO_TOE_DIR, "..", "src", "vcon", "data")
-    )
+    # Save the DEV toe only. The shipped transcoder.toe is made from it by
+    # scripts/release_toe.py, which removes the /TDMCP development server.
+    toe_dir = os.path.abspath(os.path.join(REPO_TOE_DIR, "..", "dev"))
     if not os.path.isdir(toe_dir):
         os.makedirs(toe_dir)
-    toe_path = os.path.join(toe_dir, "transcoder.toe")
+    toe_path = os.path.join(toe_dir, "TDXvCon-dev.toe")
     say(f"saving project → {toe_path}")
     try:
         project.save(toe_path)

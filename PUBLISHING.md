@@ -2,7 +2,14 @@
 
 The primary deliverable is `src/vcon/data/transcoder.toe`, opened directly in
 TouchDesigner. Complete steps 1–3, test the panel from a clean copy, and attach
-the saved project to the GitHub release. Video encoding does not require the
+the shipped project to the GitHub release.
+
+Development happens in a separate local project, `dev/TDXvCon-dev.toe`. It is
+gitignored and is never committed or shipped, because it keeps `/TDMCP`, the
+TouchDesigner MCP server (port 13315) that lets an AI assistant drive the open
+project. The shipped toe is always made from the dev toe by
+`scripts/release_toe.py`, which removes `/TDMCP`. Never save the dev project
+over `transcoder.toe`. Video encoding does not require the
 CLI; audio support is installed separately through Setup & Help.
 
 Steps 4–7 publish the optional `tdxvcon` Python package to PyPI. Build it only
@@ -28,7 +35,8 @@ grep -h -E 'version = "|__version__ = "|CONTROLLER_VERSION = "' \
 
 ## 2. Rebuild the panel in TouchDesigner
 
-In the TD **textport**:
+Open `dev/TDXvCon-dev.toe` in the current TouchDesigner release, not a beta
+build: the shipped toe keeps the build that saved it. In the TD **textport**:
 
 ```python
 exec(op.vcon.op('panel_build_run').text)
@@ -38,28 +46,34 @@ exec(op.vcon.op('panel_build_run').text)
 > the build sweeps and destroys that DAT while it is executing. The textport
 > form reads `.text` into a string first, so it is safe.
 
-## 3. Save the `.toe` into the package
+## 3. Make the shipped `.toe` from the dev toe
 
-`File → Save As…` in TD, destination:
+The panel build saves `dev/TDXvCon-dev.toe`. Saving bakes the current text of
+every file-linked DAT into the `.toe`; editing the `.py` files alone is
+**not** enough to ship. Before that save, verify that the read-only
+**vCon version** parameter and **? → Setup & Help → Versions** both report
+the intended controller version (the custom parameter should use the
+expression `me.op('vcon_controller').module.CONTROLLER_VERSION`). Clear the
+panel queue and undo any test settings too: the shipped toe inherits the dev
+toe's saved state.
 
-```
-<checkout>/src/vcon/data/transcoder.toe
-```
-
-Saving bakes the current text of every file-linked DAT into the `.toe`.
-Editing the `.py` files alone is **not** enough to ship. Verify that the
-read-only **vCon version** parameter and **? → Setup & Help → Versions** both
-report the intended controller version. The custom parameter should use the
-expression `me.op('vcon_controller').module.CONTROLLER_VERSION`.
-
-Record what the saved toe contains, then confirm it is the current source.
-This reads the DAT text baked into the toe with TouchDesigner's `toeexpand`
-(file dates cannot show this: a git checkout scrambles them):
+Then, with TouchDesigner's `toeexpand` and `toecollapse` (no TD window needed):
 
 ```bash
-python scripts/toe_manifest.py
+python scripts/release_toe.py
 VCON_RELEASE_CHECK=1 python -m pytest tests/test_toe_manifest.py
 ```
+
+`release_toe.py` copies the dev toe without `/TDMCP` to
+`src/vcon/data/transcoder.toe`, checks that the copy kept every other
+operator and the same controller and panel text, and records what it contains
+in `transcoder.toe.sources.json`. The release check confirms that the toe
+holds the current source (file dates cannot show this: a git checkout
+scrambles them) and no `/TDMCP`.
+
+Open the shipped toe once to confirm it works without the dev server: run a
+short encode with `vcon`, which launches TouchDesigner with it. Don't save
+the dev project over it.
 
 Commit `src/vcon/data/transcoder.toe` and `transcoder.toe.sources.json`
 together. CI repeats this check on every tag push.
@@ -114,6 +128,9 @@ curl -s https://pypi.org/simple/tdxvcon/ | grep -o 'tdxvcon-[0-9.]*\.whl' | tail
 
 - **The `.toe` bakes in DAT text at save time.** Rebuild the toe *after*
   the last source edit and *before* building the wheel.
+- **Ship only what `release_toe.py` writes.** A toe saved from TouchDesigner
+  into `src/vcon/data/` would ship the `/TDMCP` server; the release check
+  fails on it.
 - **Bump `CONTROLLER_VERSION` before saving the toe** — that version is
   baked in, and the CLI refuses to drive a controller whose version does
   not match (`src/vcon/__main__.py`).
