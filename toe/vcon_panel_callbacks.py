@@ -1996,19 +1996,19 @@ _platform_menus_done = False
 
 
 def _platform_menus():
-    """Once per session: drop the codecs and subtypes this machine cannot
-    encode from the CODEC and SUBTYPE menus (#16).
+    """Once per session: rebuild the CODEC and SUBTYPE menus for this
+    machine, leaving out what it cannot encode (#16).
 
-    The menus baked into the toe come from the build machine. The module
-    reloads on every .toe open, so this runs once on each user's machine.
-    The selection changes only if it named an unavailable codec.
+    The menus baked into the toe are the build machine's: a toe saved on
+    macOS has no CineForm or Hap R. So this runs on every platform, adding
+    back what Windows can encode as well as removing what macOS cannot.
+    The module reloads on every .toe open, so it runs once per open. The
+    selection changes only if it named an unavailable codec.
     """
     global _platform_menus_done
     if _platform_menus_done:
         return
     _platform_menus_done = True
-    if not _UNAVAILABLE.get(_platform()):
-        return
     try:
         w = widget("codec_dd")
         if w is None:
