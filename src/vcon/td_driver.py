@@ -117,15 +117,16 @@ class TouchDesignerDriver(Driver):
                 f"toe/build_network.py inside TouchDesigner"
             )
 
-        # Documented TouchDesigner launcher options are ONLY:
-        #   -build <build> | -help | -n <number> | -quiet
-        # with the project path positional. There is NO '-perform' switch —
-        # passing one makes TD show an "unknown argument" dialog and exit.
-        # Perform Mode is a project setting (Window COMP → Start in Perform
-        # Mode), not a launcher flag; the toe handles its own windowing.
+        # Pass the project path and nothing else. TouchDesigner treats any
+        # argument it does not know as fatal: it shows an "unknown argument"
+        # dialog and exits, so vCon sees TD quit before opening its port.
+        # TD 2025.33230 rejects '-quiet' that way (vCon passed it until
+        # 1.0.0, so the CLI could never launch TD itself), and no build has
+        # a '-perform' switch: Perform Mode is a project setting (Window
+        # COMP → Start in Perform Mode); the toe handles its own windowing.
         args: list[str] = [str(td)]
         args += list(self.ctx.td_flags)   # extra flags, caller-controlled
-        args += ["-quiet", str(toe)]
+        args.append(str(toe))
 
         creationflags = 0x08000000 if sys.platform.startswith("win") else 0
 
