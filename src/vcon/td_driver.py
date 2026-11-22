@@ -27,6 +27,7 @@ from vcon.config import find_touchdesigner, resolve_toe_path
 from vcon.driver import Driver, DriverContext
 from vcon.models import Job
 from vcon.protocol import (
+    Cancel,
     MAX_LINE,
     PROTOCOL_PORT,
     Submit,
@@ -221,9 +222,35 @@ class TouchDesignerDriver(Driver):
                 await self._writer.drain()
                 # Wait for done/error before the next submit — keeps the
                 # wire strictly sequential (the toe encodes one at a time).
-                await self._await_completion(job.id)
+                try:
+                    await self._await_completion(job.id)
+                except asyncio.CancelledError:
+                    await self._cancel_in_td(job.id)
+                    raise
         except (ConnectionError, BrokenPipeError) as exc:
             raise TDProcessError(f"controller connection lost: {exc}") from exc
+
+    async def _cancel_in_td(self, job_id: str, wait: float = 2.0) -> None:
+        """Ctrl-C: cancel the running job in TouchDesigner as well.
+
+        Otherwise the controller kept encoding after vcon exited and moved
+        the finished file to the output name, unseen. A cancelled job
+        deletes its .partial recording, so give the controller a moment to
+        acknowledge before the driver shuts down (and, if it launched TD,
+        terminates it). Best effort: the connection may already be gone.
+        """
+        try:
+            assert self._writer is not None
+            self._writer.write(encode_msg(Cancel(job_id=job_id)))
+            await asyncio.wait_for(self._writer.drain(), timeout=1.0)
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + wait
+            while loop.time() < deadline:
+                if self._completion_hook is not None and self._completion_hook(job_id):
+                    return
+                await asyncio.sleep(0.02)
+        except Exception:  # noqa: BLE001 — shutting down either way
+            pass
 
     async def _await_completion(self, job_id: str) -> None:
         """Poll the completion hook until the job is terminal, or watchdog."""

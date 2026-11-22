@@ -279,3 +279,50 @@ def test_launch_passes_only_the_project_path(tmp_path, monkeypatch):
 
     assert seen["args"] == [str(td), "-n", "1", str(toe)]
     assert seen["env"].get("VCON_LAUNCHED") == "1"
+
+
+def test_interrupted_run_cancels_the_job_in_td(tmp_path, fake_controller):
+    """Ctrl-C cancels the asyncio run. Before, the controller kept encoding
+    after vcon exited and the finished file appeared later, unseen (#8)."""
+    import json
+
+    def reply(m):
+        if m["type"] == "cancel":
+            return json.dumps({"type": "error", "id": "j1",
+                               "message": "cancelled", "code": "cancelled"}).encode()
+        return json.dumps({"type": "accepted", "id": "j1",
+                           "total_frames": 100}).encode()
+
+    fake_controller.responses["j1"] = [reply]   # accepted, then never done
+
+    async def scenario():
+        await fake_controller.start()
+        driver = None
+        seen: list[dict] = []
+        try:
+            ctx = DriverContext(workdir=tmp_path, port=fake_controller.port,
+                                watchdog_timeout=30.0)
+            driver = TouchDesignerDriver(ctx)
+            driver.set_on_message(lambda m: seen.append(m))
+            driver.set_completion_hook(lambda jid: any(
+                m.get("id") == jid and m["type"] in ("done", "error")
+                for m in seen))
+            await driver._start_session()
+            await driver._hello_future()
+            run = asyncio.create_task(driver._drive(_make_jobs(tmp_path)))
+            while not any(m["type"] == "accepted" for m in seen):
+                await asyncio.sleep(0.01)
+            run.cancel()                                  # what Ctrl-C does
+            with pytest.raises(asyncio.CancelledError):
+                await run
+        finally:
+            if driver is not None:
+                await driver.shutdown()
+            await fake_controller.stop()
+        return seen
+
+    seen = asyncio.run(scenario())
+    cancels = [m for m in fake_controller.received if m["type"] == "cancel"]
+    assert [c["id"] for c in cancels] == ["j1"]
+    assert seen[-1] == {"type": "error", "id": "j1", "message": "cancelled",
+                        "code": "cancelled"}   # waited for the acknowledgement
