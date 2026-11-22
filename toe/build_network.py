@@ -347,6 +347,16 @@ def build():
     menu_set(movieout.par.moviecontainer, [".mov", "mov"], "movieout.container")
     movieout.par.pause = 1              # addframe requires pause ON
     safe_set(movieout.par, "stallforopen", 1)   # ensure frame 0 is recorded
+
+    # Movie File Out keeps writing after record=0: VP9 and VVC flush
+    # their encoders for seconds. Its Info CHOP's active_records stays 1
+    # until the file is complete; the controller waits for 0 before it
+    # muxes, renames or reports done (measured on TD 2025.33230).
+    say("creating mvo_info CHOP (is Movie File Out still writing?)")
+    mvo_info = vcon.create(find_type("infoCHOP"), "mvo_info")
+    mvo_info.nodeX = 0
+    mvo_info.nodeY = -120
+    set_op_par(mvo_info, "op", movieout)
     # quality menu is set per job by the controller
     # NOTE: audio is NOT wired here — TD's stop-frame mode (record=1,
     # pause=1, addframe.pulse) can't feed audio samples (the Audio

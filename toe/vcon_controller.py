@@ -87,6 +87,7 @@ class VconExt:
         self.frame = 0
         self.total = 0
         self.t0 = 0.0
+        self._finish_t0 = 0.0
         self.state = "idle"      # idle | loading | encoding | finishing | muxing | extracting
         self.last_activity = time.time()
         #: frame counters for the state machine driven by onFrame()
@@ -1033,6 +1034,7 @@ class VconExt:
         closes and finalizes the movie file."""
         self.state = "finishing"
         self._finishing_ticks = 0
+        self._finish_t0 = time.time()
         self.seconds_taken = round(time.time() - self.t0, 3)
         debug(f"vCon: finishing — record=0, {self.frame}/{self.total} "
               f"frames written, output={self.job['output']!r}")
@@ -1048,6 +1050,19 @@ class VconExt:
             self.state = "idle"
             return
         out = self.job.get("partial") or self.job["output"]
+        # Movie File Out keeps writing after record=0 until its encoder has
+        # flushed: seconds for VP9 and VVC, while the file sat at 0 bytes.
+        # Muxing, renaming or reporting done before then handed out an
+        # empty or unreadable file.
+        if self._mvo_writing():
+            if time.time() - self._finish_t0 < self.FINALIZE_TIMEOUT:
+                self._set_status("finalizing file…")
+                return
+            self._fail(f"Movie File Out was still writing "
+                       f"{os.path.basename(out)} after "
+                       f"{self.FINALIZE_TIMEOUT // 60} minutes",
+                       "output-error")
+            return
         # Movie File Out finalizes on its own schedule — a large file can
         # still be flushing several frames after record=0. Reporting
         # "size=0" here (and skipping the mux) meant the file simply
@@ -1081,6 +1096,26 @@ class VconExt:
         else:
             debug("vCon: mux SKIPPED (source or output missing)")
         self._maybe_extract_audio(out)
+
+    #: Longest wait for Movie File Out to finish a file after record=0.
+    FINALIZE_TIMEOUT = 600
+
+    def _mvo_writing(self):
+        """True while Movie File Out is still writing after record=0.
+
+        Read from the mvo_info Info CHOP's active_records (1 while a
+        recording is open, 0 once the file is complete). False for toes
+        built without that CHOP, which keep the earlier behaviour.
+        """
+        info = self.ownerComp.op("mvo_info")
+        if info is None:
+            return False
+        try:
+            info.cook(force=True)
+            return float(info["active_records"][0]) > 0
+        except Exception as exc:
+            debug(f"vCon: mvo_info unreadable: {exc}")
+            return False
 
     def _extract_tick(self):
         """Poll the background audio extraction; complete when done."""
@@ -1584,7 +1619,7 @@ class VconExt:
 
     def _cancel(self, job_id):
         if self.job and self.job["id"] == job_id and self.state in (
-                "loading", "encoding", "muxing", "extracting"):
+                "loading", "encoding", "finishing", "muxing", "extracting"):
             self._abort_active_job("cancelled by client")
             self._send({"type": "error", "id": job_id, "message": "cancelled",
                         "code": "cancelled"})

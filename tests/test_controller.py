@@ -586,3 +586,50 @@ def test_separate_audio_names_its_track_and_warns_on_dropped_ones(
     assert bool(warnings) is warned
     if warned:
         assert "2 audio tracks" in warnings[0]
+
+
+# ----------------------------------------------------------------------
+# Movie File Out keeps writing after record=0 (VP9/VVC, TD 2025.33230)
+# ----------------------------------------------------------------------
+
+
+def test_done_waits_until_movie_file_out_has_finished_writing(media):
+    src, out_dir = media
+    rig = Rig(frames=5, flush_cooks=40)
+    out = out_dir / "a.webm"
+    rig.submit(src, out)
+    rig.tick_until("finishing")
+    for _ in range(30):
+        rig.ext.onFrame()
+    assert rig.ext.state == "finishing" and not rig.events("done")
+    assert not out.exists()                    # not renamed while writing
+
+    rig.run()
+    assert rig.events("done") and out.exists()
+    assert rig.mvo_info.flush_left == 0
+
+
+def test_cancel_while_movie_file_out_is_still_writing(media):
+    src, out_dir = media
+    rig = Rig(frames=5, flush_cooks=-1)        # still writing, indefinitely
+    out = out_dir / "a.webm"
+    rig.submit(src, out)
+    rig.tick_until("finishing")
+    for _ in range(20):
+        rig.ext.onFrame()
+    assert rig.ext.state == "finishing"
+    rig.ext.Cancel()
+    assert not Path(rig.mod.partial_path(str(out))).exists()
+    assert rig.ext.state == "idle"
+    assert rig.events("error")[-1]["code"] == "cancelled"
+
+
+def test_a_file_that_never_finishes_fails_after_the_timeout(media):
+    src, out_dir = media
+    rig = Rig(frames=5, flush_cooks=-1)        # never reaches 0
+    rig.ext.FINALIZE_TIMEOUT = 0
+    rig.submit(src, out_dir / "a.webm")
+    rig.run()
+    err = rig.events("error")[-1]
+    assert err["code"] == "output-error" and "still writing" in err["message"]
+    assert not rig.events("done")
