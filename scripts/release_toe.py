@@ -83,6 +83,14 @@ def strip_components(expanded: Path, names: tuple[str, ...]) -> list[str]:
     return removed
 
 
+def received_messages(expanded: Path) -> list[str]:
+    """DATs whose saved table holds protocol messages. A TCP/IP DAT keeps
+    the lines it received, and saving bakes them (with the job paths they
+    name) into the toe."""
+    return sorted(str(f.relative_to(expanded)) for f in expanded.rglob("*.fifo")
+                  if b'{"type"' in f.read_bytes())
+
+
 def make_release(dev: Path, out: Path, toeexpand: str) -> dict:
     toecollapse = find_toecollapse(toeexpand)
     with tempfile.TemporaryDirectory() as tmp:
@@ -92,6 +100,12 @@ def make_release(dev: Path, out: Path, toeexpand: str) -> dict:
         dev_dir = tm.expand_into(dev, work / "dev", toeexpand)
         dev_top = tm.top_level_in(dev_dir)
         dev_hashes = tm.hashes_in(dev_dir)
+        logged = received_messages(dev_dir)
+        if logged:
+            raise RuntimeError(
+                f"{', '.join(logged)} still hold received protocol messages "
+                f"(job paths from this machine). Pulse the TCP/IP DAT's "
+                f"Clear parameter in TouchDesigner, save, and run again.")
         removed = strip_components(dev_dir, tm.DEV_ONLY)
 
         # toecollapse writes <name>.toe from <name>.toe.dir + <name>.toe.toc.
@@ -118,6 +132,18 @@ def make_release(dev: Path, out: Path, toeexpand: str) -> dict:
     return {"removed": removed, "top_level": top, "hashes": hashes}
 
 
+def newer_saves(dev: Path) -> list[Path]:
+    """Numbered saves of the dev toe newer than it (TouchDesigner's
+    incremental save writes TDXvCon-dev.1.toe, .2, ... beside it)."""
+    stem = dev.name[: -len(".toe")]
+    found = []
+    for sibling in dev.parent.glob(f"{stem}.*.toe"):
+        middle = sibling.name[len(stem) + 1: -len(".toe")]
+        if middle.isdigit() and sibling.stat().st_mtime > dev.stat().st_mtime + 1:
+            found.append(sibling)
+    return sorted(found, key=lambda q: q.stat().st_mtime)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--dev", type=Path, default=DEV_TOE,
@@ -132,6 +158,11 @@ def main() -> int:
                  f"TouchDesigner first (see CONTRIBUTING.md)")
     if args.dev.resolve() == args.out.resolve():
         sys.exit("--dev and --out are the same file")
+    newer = newer_saves(args.dev)
+    if newer:
+        sys.exit(f"{newer[-1]} was saved after {args.dev} (TouchDesigner's "
+                 f"incremental save). Pass --dev {newer[-1]}, or save the "
+                 f"project over {args.dev.name} first.")
 
     print(f"=== stripping {'/'.join(tm.DEV_ONLY)} from {args.dev} ===")
     result = make_release(args.dev, args.out,

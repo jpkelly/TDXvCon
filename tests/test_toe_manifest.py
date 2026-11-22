@@ -153,3 +153,31 @@ def test_packaged_toe_matches_its_source():
         f"{', '.join(stale)} — it would ship stale logic. Rebuild and save "
         f"the dev toe in TouchDesigner, then run scripts/release_toe.py "
         f"(PUBLISHING.md steps 2-3).")
+
+
+def test_release_refuses_a_dev_toe_older_than_a_numbered_save(tmp_path):
+    """TouchDesigner's incremental save writes TDXvCon-dev.N.toe; releasing
+    the unnumbered file would then ship stale work."""
+    import os
+
+    dev = tmp_path / "TDXvCon-dev.toe"
+    dev.write_bytes(b"old")
+    same = tmp_path / "TDXvCon-dev.1.toe"
+    same.write_bytes(b"old")                 # TD writes this twin each save
+    newer = tmp_path / "TDXvCon-dev.2.toe"
+    newer.write_bytes(b"new")
+    os.utime(dev, (1000, 1000))
+    os.utime(same, (1000, 1000))
+    os.utime(newer, (2000, 2000))
+    assert _release().newer_saves(dev) == [newer]
+    os.utime(newer, (1000, 1000))
+    assert _release().newer_saves(dev) == []
+
+
+def test_release_refuses_a_toe_with_logged_protocol_messages(tmp_path):
+    """The TCP/IP DAT keeps received lines; a save bakes their job paths in."""
+    expanded = _fake_expanded(tmp_path, {
+        "project1/vcon/tcpip.fifo": b'1\n0\n*  message {"type": "submit", '
+                                    b'"input": "/Users/someone/clip.mov"}',
+        "project1/vcon/other.fifo": b"1\n0\n*  message"})
+    assert _release().received_messages(expanded) == ["project1/vcon/tcpip.fifo"]
