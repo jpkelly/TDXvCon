@@ -259,7 +259,36 @@ class VconExt:
         may not be ready (docs: "Cannot use an extension during its
         initialization").
         """
+        self._bind_loopback()
         self._set_status("idle — listening on port {}".format(self.port))
+
+    #: Where the TCP server listens. The protocol has no authentication,
+    #: so only this machine may drive the encoder (#11).
+    LOCAL_ADDRESS = "127.0.0.1"
+
+    def _bind_loopback(self):
+        """Make the TCP server listen on loopback only.
+
+        Toes built before #11 left the TCP/IP DAT's Local Address empty,
+        which listens on every network interface: anyone on the LAN could
+        submit, cancel or pause jobs, reading and writing any path this
+        account can. An address someone set on purpose is left alone.
+        """
+        try:
+            par = getattr(self.tcpip.par, "localaddress", None)
+            if par is not None and not str(par.eval()).strip():
+                par.val = self.LOCAL_ADDRESS
+                debug(f"vCon: TCP server now listens on {self.LOCAL_ADDRESS} "
+                      f"only (was every interface)")
+        except Exception as exc:
+            debug(f"vCon: could not set the TCP local address: {exc}")
+
+    @staticmethod
+    def peer_allowed(address):
+        """Whether a TCP peer may talk to the controller: this machine only."""
+        a = str(address or "").strip().lower()
+        return (a in ("localhost", "::1") or a.startswith("127.")
+                or a.startswith("::ffff:127."))
 
     def onDestroyTD(self):
         """Called when this extension is REPLACED by a re-init.
