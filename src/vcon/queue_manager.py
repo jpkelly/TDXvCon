@@ -132,7 +132,8 @@ class QueueManager:
             self.bus.log(
                 "warning",
                 f"cannot tell whether {spec.input.name} has alpha (its "
-                f"container does not say); encoding without alpha")
+                f"container does not say); encoding without alpha. Add "
+                f"-alpha before the output to keep it")
             return False
         return has_alpha
 

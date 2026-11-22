@@ -138,3 +138,31 @@ def test_help_request():
 def test_version_flag():
     p = parse_args(["-version"])
     assert p.version
+
+def test_alpha_switch_binds_to_its_output():
+    """#15: -alpha forces alpha on for sources vCon cannot read (NotchLC)."""
+    p = parse_args(["-i", "a.mov", "-c", "prores", "-t", "4444", "-alpha",
+                    "keep.mov", "-c", "prores", "-t", "4444", "drop.mov"])
+    assert p.outputs[0]["alpha"] is True
+    assert "alpha" not in p.outputs[1]
+
+
+def test_alpha_and_no_alpha_together_is_an_error():
+    import pytest
+
+    from vcon.argparse_ff import ParseError
+
+    with pytest.raises(ParseError, match="-alpha and -no-alpha"):
+        parse_args(["-i", "a.mov", "-c", "prores", "-alpha", "-no-alpha",
+                    "o.mov"])
+
+
+@pytest.mark.parametrize("flags, expected", [
+    ([], None), (["-alpha"], True), (["-no-alpha"], False)])
+def test_alpha_options_reach_the_job_spec(flags, expected):
+    """None = follow the source (decided at submit); True/False = forced."""
+    from vcon.__main__ import _build_specs
+
+    p = parse_args(["-i", "a.mov", "-c", "prores", "-t", "4444", *flags,
+                    "o.mov"])
+    assert _build_specs(p)[0].alpha is expected
