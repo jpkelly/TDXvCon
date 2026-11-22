@@ -333,7 +333,7 @@ class VconExt:
                   subtype=None, quality=None, fps="auto",
                   pixel_format=None, container=None,
                   resolution="auto", fit=None, scale=None,
-                  audio="auto", audio_sep=None):
+                  audio="auto", audio_sep=None, even_dims=False):
         """Encode one file. The embedder/panel-facing entry point.
 
         Promoted (capitalised) so it reads as a method of the component::
@@ -348,7 +348,8 @@ class VconExt:
         mirrors that menu; the fit TOP applies it natively, no source
         dimensions needed) or a legacy float factor, for which the
         controller computes WxH from the movie's real dimensions after
-        load.
+        load. ``even_dims`` says the codec cannot encode an odd width or
+        height (H.264, H.265, VVC, AV1); the controller then evens the size.
 
         Returns True if the job was accepted, False if the component is busy.
         Completion is asynchronous — poll `Isbusy` / watch the Status
@@ -371,6 +372,8 @@ class VconExt:
             params["audio"] = audio
         if audio_sep:
             params["audio_sep"] = audio_sep
+        if even_dims:
+            params["even_dims"] = True
         if scale is not None:
             params["scale"] = scale
             # The fit mode travels with the token too — _apply_fitres
@@ -851,6 +854,19 @@ class VconExt:
                 self._apply_resolution(resolution, params.get("fit"))
             except Exception as exc:
                 self._fail(f"resolution rejected: {exc}", "fit-error")
+                return
+        if params.get("even_dims"):
+            if consumed:
+                sized_by = "token"
+            elif scale is None and resolution and resolution != "auto":
+                sized_by = "explicit"
+            else:
+                sized_by = None    # source size, or the even float path
+            try:
+                self._make_size_even(moviein, params, sized_by, resolution)
+            except Exception as exc:
+                self._fail(f"could not make the frame size even: {exc}",
+                           "fit-error")
                 return
 
         movieout = self.movieout
@@ -1698,6 +1714,42 @@ class VconExt:
         # fit permanently (builder); only MvO's input source changes here.
         self._switch_mvo_input(f)
         self._set_status(f"encoding at {w}x{h} ({mode})")
+
+    def _make_size_even(self, moviein, params, sized_by, resolution):
+        """Even the frame size for a codec that cannot encode odd ones (#6).
+
+        Measured on TD 2025.33230: H.264 and H.265 silently crop an odd
+        width or height by a pixel, and VVC writes no file at all. vCon
+        chooses the even size instead, one pixel smaller, and the fit TOP
+        scales into it. ``sized_by`` is where the size came from:
+        'explicit' (a WxH the user typed; rounding it is a warning),
+        'token' (a fit TOP scale such as 'half'), or None (the source size,
+        or the float-scale path, which is already even).
+        """
+        if sized_by == "explicit":
+            w, _, h = str(resolution).partition("x")
+            w, h = int(w), int(h)
+        elif sized_by == "token":
+            f = self.fit
+            f.cook(force=True)     # TD decides how 'half' of an odd size rounds
+            w, h = int(f.width), int(f.height)
+        else:
+            if resolution and resolution != "auto":
+                return             # float path: computed even already
+            w = int(getattr(moviein, "fileWidth", 0) or moviein.width)
+            h = int(getattr(moviein, "fileHeight", 0) or moviein.height)
+        if w % 2 == 0 and h % 2 == 0:
+            return
+        even_w, even_h = max(2, w // 2 * 2), max(2, h // 2 * 2)
+        # A relative size keeps the source's shape, so 'fill' trims the
+        # pixel without letterbox slivers; a typed size keeps its fit mode.
+        mode = params.get("fit") if sized_by == "explicit" else "fill"
+        self._apply_resolution(f"{even_w}x{even_h}", mode)
+        if sized_by == "explicit":
+            label = params.get("videocodec_label") or params.get("videocodec")
+            self._warn(f"{label} cannot encode an odd width or height: "
+                       f"{w}x{h} was encoded as {even_w}x{even_h}")
+        debug(f"vCon: frame size {w}x{h} -> {even_w}x{even_h} (even)")
 
     def _set_fit_custom_res(self, f, w, h):
         """Write the fit TOP's custom resolution — par names drift across

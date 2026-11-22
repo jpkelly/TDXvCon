@@ -214,7 +214,13 @@ class FakeMovieOut(FakeOp):
 
 
 class FakeFit(FakeOp):
-    def __init__(self):
+    """Fit TOP fed by Movie File In: its output size follows
+    ``outputresolution`` (a scale token, 'custom', or the input size)."""
+
+    SCALES = {"eighth": 1 / 8, "quarter": 1 / 4, "half": 1 / 2,
+              "twotimes": 2, "fourtimes": 4, "eighttimes": 8}
+
+    def __init__(self, moviein=None):
         super().__init__(
             "fit",
             fit=Par("fitbest", FIT_MENU),
@@ -222,6 +228,27 @@ class FakeFit(FakeOp):
             resolutionw=Par(1280),
             resolutionh=Par(720),
         )
+        self._moviein = moviein
+        self.cooks = 0
+
+    def cook(self, force=False):
+        self.cooks += 1
+
+    def _size(self):
+        res = self.par.outputresolution.eval()
+        if res == "custom":
+            return self.par.resolutionw.eval(), self.par.resolutionh.eval()
+        w, h = self._moviein.fileWidth, self._moviein.fileHeight
+        k = self.SCALES.get(res, 1)
+        return int(w * k), int(h * k)
+
+    @property
+    def width(self):
+        return self._size()[0]
+
+    @property
+    def height(self):
+        return self._size()[1]
 
 
 class FakeTcp(FakeOp):
@@ -260,13 +287,15 @@ def load_controller_module():
 class Rig:
     """A controller wired to fakes, plus helpers to drive it."""
 
-    def __init__(self, frames=10, rate=24.0, has_audio=False):
+    def __init__(self, frames=10, rate=24.0, has_audio=False,
+                 width=1920, height=1080):
         self.mod = load_controller_module()
         self.moviein = FakeMovieIn(frames=frames, rate=rate,
+                                   width=width, height=height,
                                    has_audio=has_audio)
         self.info = FakeInfo(self.moviein)
         self.movieout = FakeMovieOut(self.moviein)
-        self.fit = FakeFit()
+        self.fit = FakeFit(self.moviein)
         self.tcp = FakeTcp()
         self.comp = FakeComp([self.moviein, self.info, self.movieout,
                               self.fit, self.tcp])

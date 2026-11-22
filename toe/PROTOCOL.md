@@ -38,6 +38,13 @@ fast rather than timing out on connect.
 - `params` values are pre-resolved by the front-end codec registry — the
   toe applies them directly to Movie File Out's parameters without
   interpreting them.
+- Movie File Out is shared between jobs, so a job sends every parameter
+  it depends on (codec, pixel format, quality): anything it leaves out
+  keeps the previous job's value.
+- `even_dims: true` marks a codec that cannot encode an odd width or
+  height (H.264, H.265, VVC, AV1). The toe then makes the frame size even,
+  one pixel smaller, and reports a warning if that changes a size the
+  user typed (`resolution`).
 - Exactly **one job at a time**: the toe replies `error/busy` if a submit
   arrives while encoding.
 - Unknown `params` keys are ignored (forward compatibility).

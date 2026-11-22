@@ -347,3 +347,70 @@ def test_true_length_zero_alone_also_fails(media):
     rig.run()
 
     assert rig.events("error")[-1]["code"] == "input-error"
+
+
+# ----------------------------------------------------------------------
+# #6 — codecs that cannot encode odd sizes get an even one from vCon
+# (TD 2025.33230: H.264/H.265 silently cropped a pixel, VVC wrote nothing)
+# ----------------------------------------------------------------------
+
+
+def _sized(rig):
+    """(MvO input name, fit mode, fit custom W, H) after the job ran."""
+    f = rig.fit
+    src = rig.movieout.inputs[0].name if rig.movieout.inputs else None
+    return (src, f.par.fit.eval(), f.par.outputresolution.eval(),
+            f.par.resolutionw.eval(), f.par.resolutionh.eval())
+
+
+def _done_warnings(rig):
+    done = rig.events("done")
+    return done[-1].get("warnings", []) if done else None
+
+
+def test_scale_token_on_odd_result_is_evened_with_fill(media):
+    src, out_dir = media
+    rig = Rig(width=1080, height=1350)
+    rig.submit(src, out_dir / "a.mp4", videocodec="h264", even_dims=True,
+               scale="half", fit="fitbest")
+    rig.run()
+    assert _sized(rig) == ("fit", "fill", "custom", 540, 674)
+    assert _done_warnings(rig) == []
+
+
+def test_typed_odd_size_is_evened_and_reported(media):
+    src, out_dir = media
+    rig = Rig()
+    rig.submit(src, out_dir / "a.mp4", videocodec="h264", even_dims=True,
+               resolution="1281x721", fit="fitbest")
+    rig.run()
+    assert _sized(rig) == ("fit", "fitbest", "custom", 1280, 720)
+    warnings = _done_warnings(rig)
+    assert warnings and "1281x721" in warnings[0] and "1280x720" in warnings[0]
+
+
+def test_odd_source_without_resize_is_evened(media):
+    src, out_dir = media
+    rig = Rig(width=1281, height=721)
+    rig.submit(src, out_dir / "a.mp4", videocodec="h264", even_dims=True)
+    rig.run()
+    assert _sized(rig) == ("fit", "fill", "custom", 1280, 720)
+    assert _done_warnings(rig) == []
+
+
+def test_even_source_without_resize_bypasses_the_fit(media):
+    src, out_dir = media
+    rig = Rig(width=1920, height=1080)
+    rig.submit(src, out_dir / "a.mp4", videocodec="h264", even_dims=True)
+    rig.run()
+    assert rig.movieout.inputs[0].name == "moviein"
+
+
+def test_codecs_that_write_odd_sizes_keep_them(media):
+    """NotchLC, ProRes, Hap... wrote 1281x721 exactly: no rounding."""
+    src, out_dir = media
+    rig = Rig()
+    rig.submit(src, out_dir / "a.mov", resolution="1281x721", fit="fill")
+    rig.run()
+    assert _sized(rig)[3:] == (1281, 721)
+    assert _done_warnings(rig) == []
