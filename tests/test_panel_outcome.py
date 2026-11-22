@@ -86,3 +86,34 @@ def test_menus_follow_the_platform(panel, monkeypatch, machine,
     assert panel._subtypes_here("hap") == hap_subs
     expected = "hapr" if machine == "windows" else None
     assert panel._validate_choice("hap", "subtype", "hapr") == expected
+
+
+
+class _MenuWidget:
+    def __init__(self, names):
+        self.par = types.SimpleNamespace(
+            Menunames=types.SimpleNamespace(eval=lambda: " ".join(names)))
+
+
+@pytest.mark.parametrize("machine, baked, expected", [
+    # A toe saved on macOS opened on Windows: CineForm comes back.
+    ("windows", ["notchlc", "hap", "prores", "h264", "h265"],
+     ["notchlc", "hap", "cineform", "prores", "h264", "h265"]),
+    # A toe with the full list opened on macOS: CineForm goes.
+    ("mac", ["notchlc", "hap", "cineform", "prores", "h264", "h265"],
+     ["notchlc", "hap", "prores", "h264", "h265"])])
+def test_menus_are_rebuilt_for_the_opening_machine(panel, monkeypatch,
+                                                   machine, baked, expected):
+    calls = {}
+    monkeypatch.setattr(panel, "_platform", lambda: machine)
+    monkeypatch.setattr(panel, "_platform_menus_done", False)
+    monkeypatch.setattr(panel, "widget",
+                        lambda name: _MenuWidget(baked) if name == "codec_dd" else None)
+    monkeypatch.setattr(panel, "_val",
+                        lambda name: {"container_dd": "mov", "codec_dd": "hap"}.get(name))
+    monkeypatch.setattr(panel, "_set_menu",
+                        lambda w, names, labels, default: calls.update(names=names, default=default))
+    monkeypatch.setattr(panel, "UpdateSubtypes", lambda: calls.update(subtypes=True))
+    panel._platform_menus()
+    assert calls["names"] == expected and calls["default"] == "hap"
+    assert calls["subtypes"] is True
