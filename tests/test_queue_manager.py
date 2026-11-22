@@ -332,3 +332,22 @@ def test_unknown_alpha_warning_mentions_the_flag(queue, bus, make_movie, tmp_pat
     queue.submit(_prores4444(make_movie("n.mov", b"nclc", 24), tmp_path))
     warned = [m["message"] for m in logs if m["level"] == "warning"]
     assert warned and "-alpha" in warned[0]
+
+
+
+@pytest.mark.parametrize("machine, refused", [
+    ("mac", True), ("windows", False), ("other", False)])
+def test_submit_refuses_what_this_platform_cannot_encode(
+        queue, sample_input, tmp_path, monkeypatch, machine, refused):
+    """#16: refused on mac before encoding; never on "other" platforms,
+    where TouchDesigner does not run (mock backend, Linux CI)."""
+    import vcon.queue_manager as qm
+
+    monkeypatch.setattr(qm, "platform_of_current_machine", lambda: machine)
+    spec = JobSpec(input=sample_input, output=tmp_path / "o.mov",
+                   codec="hap", subtype="hapr")
+    if refused:
+        with pytest.raises(CodecError, match="not available on mac"):
+            queue.submit(spec)
+    else:
+        assert queue.submit(spec).spec.extra["td_params"]["videocodectype"] == "hapr"

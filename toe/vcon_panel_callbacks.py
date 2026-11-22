@@ -69,6 +69,36 @@ CODECS = {
              "even_dims": True},
 }
 
+#: Codecs and subtypes Movie File Out cannot write on a platform, so the
+#: menus leave them out (#16). MEASURED on TD 2025.33230, macOS: CineForm
+#: ("Cineform not supported in this OS.") and AV1 ("NVIDIA AV1 codec is
+#: not supported on this OS.") error; Hap R and Hap HDR never start a
+#: recording, with no error. Mirrors platforms / subtype_platforms in
+#: src/vcon/codec_meta.py. Applied when the toe opens on the user's own
+#: machine (_platform_menus), never at build time: the toe is built on
+#: macOS and shipped to Windows too.
+_UNAVAILABLE = {
+    "mac": {"codecs": {"cineform", "av1"}, "subtypes": {"hapr", "haphdr"}},
+}
+
+
+def _platform():
+    if sys.platform == "darwin":
+        return "mac"
+    return "windows" if os.name == "nt" else "other"
+
+
+def _codec_here(codec):
+    return codec not in _UNAVAILABLE.get(_platform(), {}).get("codecs", ())
+
+
+def _subtypes_here(codec):
+    """The codec's subtypes this machine can encode."""
+    gone = _UNAVAILABLE.get(_platform(), {}).get("subtypes", ())
+    return [s for s in CODECS.get(codec, {}).get("subtypes", [])
+            if s not in gone]
+
+
 PRORES_PIXEL_FORMATS = {
     "prores422proxy": ["yuv4228bit", "yuv42210bit", "yuv42212bit"],
     "prores422lt": ["yuv4228bit", "yuv42210bit", "yuv42212bit"],
@@ -493,7 +523,7 @@ def UpdateSubtypes():
         # and grey out — a disabled, visibly-empty control can't offer
         # or keep a stale option.
         if sub_w is not None:
-            subs = list(meta.get("subtypes", []))
+            subs = _subtypes_here(codec)
             try:
                 sub_w.par.display.val = 1 if subs else 0
             except Exception as exc:
@@ -610,8 +640,10 @@ _AUDIO_LABELS = {
 
 
 def _container_codecs(container):
-    """Compatible codecs for a container, or all if unknown."""
-    return _CONTAINER_CODECS.get(container, list(CODECS.keys()))
+    """Compatible codecs for a container (or all if unknown) that this
+    machine can encode."""
+    return [c for c in _CONTAINER_CODECS.get(container, list(CODECS.keys()))
+            if _codec_here(c)]
 
 
 def _container_ext(container):
@@ -1469,7 +1501,7 @@ def _validate_choice(codec, kind, value, allow_empty=True):
     """
     meta = CODECS.get(codec, {})
     if kind == "subtype":
-        legal = list(meta.get("subtypes", []))
+        legal = _subtypes_here(codec)
     else:
         by_sub = meta.get("pixel_formats_by_subtype", {})
         if by_sub:
@@ -1960,6 +1992,38 @@ def _on_job_done(output_path):
     _mark_done(output_path)
 
 
+_platform_menus_done = False
+
+
+def _platform_menus():
+    """Once per session: drop the codecs and subtypes this machine cannot
+    encode from the CODEC and SUBTYPE menus (#16).
+
+    The menus baked into the toe come from the build machine. The module
+    reloads on every .toe open, so this runs once on each user's machine.
+    The selection changes only if it named an unavailable codec.
+    """
+    global _platform_menus_done
+    if _platform_menus_done:
+        return
+    _platform_menus_done = True
+    if not _UNAVAILABLE.get(_platform()):
+        return
+    try:
+        w = widget("codec_dd")
+        if w is None:
+            return
+        names = [c for c in _container_codecs(_val("container_dd") or "mov")
+                 if c in CODECS]
+        if str(w.par.Menunames.eval()).split() != names:
+            cur = _val("codec_dd")
+            _set_menu(w, names, [CODECS[c]["label"] for c in names],
+                      cur if cur in names else names[0])
+        UpdateSubtypes()
+    except Exception as exc:
+        note(f"platform menu update failed: {exc}")
+
+
 def onFrame():
     """Panel-level Execute DAT tick: feed the batch loop + auto-refresh.
 
@@ -1981,6 +2045,7 @@ def onFrame():
     if not _tick_alive:
         _tick_alive = True
         note("panel tick alive (batch feeding + progress active)")
+    _platform_menus()
 
     # 0) one-shot: clear the lister's stale init error — and ONLY that one.
     # ListerExt.Refresh runs while the operator is being CREATED (during

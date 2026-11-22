@@ -19,7 +19,7 @@ from vcon.codec_probe import is_variable_frame_rate, source_has_alpha
 from vcon.errors import InputError, OutputError
 from vcon.events import EventBus
 from vcon.models import Job, JobSpec, JobStatus
-from vcon.registry import Registry
+from vcon.registry import Registry, platform_of_current_machine
 
 
 @dataclass
@@ -63,6 +63,12 @@ class QueueManager:
         spec.validate_paths()
 
         codec = self.registry.get(spec.codec)
+        machine = platform_of_current_machine()
+        if machine != "other":
+            # Refuse before anything encodes: TouchDesigner would start the
+            # job and never write a file (#16). Not on "other" platforms,
+            # where TouchDesigner does not run (mock backend, Linux CI).
+            self.registry.preflight(spec.codec, machine, spec.subtype)
         # Validate codec grammar (subtype/quality) — these raise CodecError
         # on junk values; defaults are validated too so registry changes
         # can't silently admit an unknown default.

@@ -178,7 +178,10 @@ def print_codecs(registry, stream: IO[str]) -> None:
         if row["qualities"]:
             details.append(f"quality: {', '.join(row['qualities'])}")
         if row["subtypes"]:
-            details.append(f"subtypes: {', '.join(row['subtypes'])}")
+            gone = set(row.get("unavailable_subtypes") or ())
+            subs = [s + (" [unavailable here]" if s in gone else "")
+                    for s in row["subtypes"]]
+            details.append(f"subtypes: {', '.join(subs)}")
         speed = _speed_of(row)
         if speed:
             details.append(f"speed: {speed}")

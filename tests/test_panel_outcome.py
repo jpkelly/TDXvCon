@@ -70,3 +70,19 @@ def test_older_controller_falls_back_to_file_existence(panel, tmp_path):
     old = types.SimpleNamespace()               # no last_result attribute
     assert panel._job_outcome(old, _row(tmp_path)) == "done"
     assert panel._job_outcome(old, _row(tmp_path / "..", exists=False)) is None
+
+
+
+# #16: the menus leave out what this machine cannot encode.
+
+@pytest.mark.parametrize("machine, cineform_listed, hap_subs", [
+    ("mac", False, ["hap", "hapq"]),
+    ("windows", True, ["hap", "hapq", "hapr", "haphdr"])])
+def test_menus_follow_the_platform(panel, monkeypatch, machine,
+                                   cineform_listed, hap_subs):
+    monkeypatch.setattr(panel, "_platform", lambda: machine)
+    assert ("cineform" in panel._container_codecs("mov")) is cineform_listed
+    assert ("av1" in panel._container_codecs("mp4")) is cineform_listed
+    assert panel._subtypes_here("hap") == hap_subs
+    expected = "hapr" if machine == "windows" else None
+    assert panel._validate_choice("hap", "subtype", "hapr") == expected

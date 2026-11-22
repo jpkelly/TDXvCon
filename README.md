@@ -63,6 +63,12 @@ The panel and CLI share a TouchDesigner controller. The panel calls it directly;
 the CLI uses a TCP JSON-lines protocol. TouchDesigner encodes video, and FFmpeg
 handles audio post-processing. See the [protocol reference](toe/PROTOCOL.md).
 
+Some codecs cannot be encoded on macOS (measured with TouchDesigner
+2025.33230): CineForm and AV1 (TouchDesigner reports them unsupported on
+macOS), and Hap R and Hap HDR (no file is written). The panel leaves them out
+of its menus there, the CLI refuses them before encoding, and a job that
+TouchDesigner never starts recording fails at once with its reason.
+
 Variable-frame-rate sources, such as phone and screen recordings, are not
 supported. vCon writes the source frames in order at a constant rate, while
 the audio keeps its real timing, so the video drifts against the audio. The
