@@ -74,9 +74,10 @@ def test_set_indexunit_menu_fails_loudly_when_neither_present(ext):
 def test_load_input_uses_verified_indexunit_write(ext):
     """_load_input must route through the menu-verified write, not a literal."""
     indexunit_par = _FakePar(["indices", "frames", "seconds", "fraction"])
+    playmode_par = _FakePar(["locked", "specify", "sequential", "timecodeop"])
     moviepar = SimpleNamespace(
         file=None,
-        playmode=None,
+        playmode=playmode_par,
         indexunit=indexunit_par,
         index=None,
         prereadframes=None,
@@ -90,6 +91,7 @@ def test_load_input_uses_verified_indexunit_write(ext):
     ext.ownerComp = _FakeOwner()
     ext._load_input({"input": "clip.mov"})
     assert indexunit_par.val == "indices"
+    assert playmode_par.val == "specify"
 
 
 def test_build_script_menu_set_strict_prefers_indices():

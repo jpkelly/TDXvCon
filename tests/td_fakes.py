@@ -1,0 +1,264 @@
+"""Minimal TouchDesigner stand-ins for exercising toe/vcon_controller.py.
+
+The controller is plain Python that only touches TD through a small surface:
+operator ``par`` collections, a few TOP/CHOP attributes, the TCPIP DAT's
+``send`` and the ``debug`` builtin. These fakes model exactly that surface,
+including the two TD behaviours the controller's correctness depends on:
+
+- a menu parameter given an unknown token silently falls back to entry 0;
+- Movie File Out starts a NEW file only on a record off→on edge, and an
+  ``addframe`` pulse captures whatever frame its input currently shows.
+
+Menus are the live values read from TouchDesigner 2025.33230 / 2025.33407.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+
+CONTROLLER_PATH = (Path(__file__).resolve().parent.parent
+                   / "toe" / "vcon_controller.py")
+
+PLAYMODE_MENU = ["locked", "specify", "sequential", "timecodeop"]
+INDEXUNIT_MENU = ["indices", "frames", "seconds", "fraction"]
+VIDEOCODEC_MENU = ["rle", "notchlc", "hap", "prores", "cineform", "h264",
+                   "h265"]
+CONTAINER_MENU = ["mov", "mp4", "avi", "mkv"]
+FIT_MENU = ["fill", "fithorz", "fitvert", "fitbest", "fitoutside",
+            "nativeres"]
+FIT_RES_MENU = ["useinput", "eighth", "quarter", "half", "twotimes",
+                "fourtimes", "eighttimes", "custom"]
+
+
+class Par:
+    """One parameter. Menu pars emulate TD's silent fallback to entry 0."""
+
+    def __init__(self, val=None, menu=None, on_set=None, on_pulse=None):
+        self._val = val
+        self.menuNames = list(menu) if menu else []
+        self.writes = []          # every value actually stored, in order
+        self._on_set = on_set
+        self._on_pulse = on_pulse
+        self.owner = None
+        self.name = ""
+
+    @property
+    def val(self):
+        return self._val
+
+    @val.setter
+    def val(self, value):
+        if self.menuNames and value not in self.menuNames:
+            value = self.menuNames[0]          # TD: unknown token -> entry 0
+        old = self._val
+        self._val = value
+        self.writes.append(value)
+        if self._on_set:
+            self._on_set(old, value)
+
+    def eval(self):
+        return self._val
+
+    def pulse(self):
+        if self._on_pulse:
+            self._on_pulse()
+
+
+class Pars:
+    """An operator's ``par`` collection: attribute reads give the Par,
+    attribute writes set its value, unknown names raise like TD."""
+
+    def __init__(self, owner, pars):
+        object.__setattr__(self, "_p", dict(pars))
+        for name, par in pars.items():
+            par.owner, par.name = owner, name
+
+    def __getattr__(self, name):
+        try:
+            return self._p[name]
+        except KeyError:
+            raise AttributeError(f"td.ParCollection has no '{name}'") from None
+
+    def __setattr__(self, name, value):
+        getattr(self, name).val = value
+
+
+class FakeOp:
+    def __init__(self, name, **pars):
+        self.name = name
+        self.path = f"/project1/vcon/{name}"
+        self.par = Pars(self, pars)
+
+
+class FakeMovieIn(FakeOp):
+    """Movie File In: shows source frame ``par.index`` immediately."""
+
+    def __init__(self, frames=10, rate=24.0, width=1920, height=1080):
+        super().__init__(
+            "moviein",
+            file=Par(""),
+            playmode=Par("locked", PLAYMODE_MENU),
+            indexunit=Par("frames", INDEXUNIT_MENU),
+            index=Par(0),
+            prereadframes=Par(30),
+        )
+        self.numImages = frames
+        self.rate = rate
+        self.fileWidth = width
+        self.fileHeight = height
+
+    @property
+    def shown_index(self):
+        return self.par.index.eval()
+
+
+class FakeInfo(FakeOp):
+    """Info CHOP on moviein: ``info['sample_rate'][0]``."""
+
+    def __init__(self, moviein):
+        super().__init__("info")
+        self._moviein = moviein
+
+    def __getitem__(self, chan):
+        if chan == "sample_rate":
+            return [self._moviein.rate]
+        raise KeyError(chan)
+
+
+class Connector:
+    def __init__(self, owner):
+        self.owner = owner
+
+    def connect(self, src):
+        self.owner.inputs = [src]
+
+    def disconnect(self):
+        self.owner.inputs = []
+
+
+class FakeMovieOut(FakeOp):
+    """Movie File Out. ``files`` maps each file started to the source
+    frame indices captured into it. A file starts only on a record off→on
+    edge; it is created on disk at that moment, as TD does."""
+
+    def __init__(self, moviein):
+        self._moviein = moviein
+        self.files = {}
+        self.current = None
+        self.fail_addframe = False
+        super().__init__(
+            "movieout",
+            file=Par(""),
+            record=Par(0, on_set=self._on_record),
+            pause=Par(0),
+            addframe=Par(None, on_pulse=self._on_addframe),
+            fps=Par(60.0),
+            quality=Par(0.5),
+            videocodec=Par("rle", VIDEOCODEC_MENU),
+            videocodectype=Par(None),
+            moviepixelformat=Par(None),
+            moviecontainer=Par("mov", CONTAINER_MENU),
+        )
+        self.inputs = [moviein]
+        self.inputConnectors = [Connector(self)]
+
+    def _on_record(self, old, new):
+        if not old and new:
+            path = self.par.file.eval()
+            self.current = path
+            self.files[path] = []
+            Path(path).write_bytes(b"")
+        elif old and not new:
+            self.current = None
+
+    def _on_addframe(self):
+        if self.fail_addframe:
+            raise RuntimeError("simulated MvO write failure")
+        if self.current is not None and self.par.record.eval():
+            self.files[self.current].append(self._moviein.shown_index)
+
+
+class FakeFit(FakeOp):
+    def __init__(self):
+        super().__init__(
+            "fit",
+            fit=Par("fitbest", FIT_MENU),
+            outputresolution=Par("useinput", FIT_RES_MENU),
+            resolutionw=Par(1280),
+            resolutionh=Par(720),
+        )
+
+
+class FakeTcp(FakeOp):
+    def __init__(self):
+        super().__init__("tcpip")
+        self.sent = []
+
+    def send(self, text, terminator="\n"):
+        self.sent.append(json.loads(text))
+
+
+class FakeComp(FakeOp):
+    """The vCon Base COMP: children by name plus Status/Progress pars."""
+
+    def __init__(self, children):
+        super().__init__("vcon", Status=Par(""), Progress=Par(0.0))
+        self.path = "/project1/vcon"
+        self._children = {c.name: c for c in children}
+
+    def op(self, name):
+        return self._children.get(name)
+
+
+def load_controller_module():
+    """Import toe/vcon_controller.py with TD's ``debug`` builtin stubbed."""
+    spec = importlib.util.spec_from_file_location(
+        "vcon_controller_under_test", CONTROLLER_PATH)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.debug = lambda *args, **kwargs: None
+    # Never launch a real ffmpeg from tests: "" = searched, not found.
+    mod.VconExt._ffmpeg_cache = ""
+    return mod
+
+
+class Rig:
+    """A controller wired to fakes, plus helpers to drive it."""
+
+    def __init__(self, frames=10, rate=24.0):
+        self.mod = load_controller_module()
+        self.moviein = FakeMovieIn(frames=frames, rate=rate)
+        self.info = FakeInfo(self.moviein)
+        self.movieout = FakeMovieOut(self.moviein)
+        self.fit = FakeFit()
+        self.tcp = FakeTcp()
+        self.comp = FakeComp([self.moviein, self.info, self.movieout,
+                              self.fit, self.tcp])
+        self.ext = self.mod.VconExt(self.comp)
+
+    def submit(self, src, dst, **params):
+        self.ext.onReceive(json.dumps({
+            "type": "submit", "id": f"job-{Path(dst).name}",
+            "input": str(src), "output": str(dst),
+            "params": {"videocodec": "notchlc", "fps": "auto", **params},
+        }))
+
+    def run(self, max_ticks=1000):
+        """Tick until the controller returns to idle."""
+        for _ in range(max_ticks):
+            if self.ext.state == "idle":
+                return
+            self.ext.onFrame()
+        raise AssertionError(f"still {self.ext.state} after {max_ticks} ticks")
+
+    def tick_until(self, state, max_ticks=100):
+        for _ in range(max_ticks):
+            if self.ext.state == state:
+                return
+            self.ext.onFrame()
+        raise AssertionError(f"never reached {state}; at {self.ext.state}")
+
+    def events(self, etype):
+        return [m for m in self.tcp.sent if m.get("type") == etype]
