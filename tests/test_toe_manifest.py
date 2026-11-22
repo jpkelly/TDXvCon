@@ -11,6 +11,10 @@ TouchDesigner's toeexpand) and records its SHA-256 in
 transcoder.toe.sources.json. The release check below compares the repo
 sources with those hashes and needs no TouchDesigner.
 
+The shipped toe must also lack /TDMCP, the development-only MCP server that
+lives in the local dev toe. scripts/release_toe.py strips it; the manifest
+records the toe's top-level operators so the release check can confirm it.
+
 It is a release gate, not a per-commit check: between releases the source
 legitimately runs ahead of the toe, and contributors cannot rebuild it. It
 runs when VCON_RELEASE_CHECK=1 (set by CI on tag pushes; see PUBLISHING.md).
@@ -32,12 +36,32 @@ TOE = ROOT / "src" / "vcon" / "data" / "transcoder.toe"
 MANIFEST = TOE.with_name("transcoder.toe.sources.json")
 
 
-def _script():
+def _load(name):
     spec = importlib.util.spec_from_file_location(
-        "toe_manifest", ROOT / "scripts" / "toe_manifest.py")
+        name, ROOT / "scripts" / f"{name}.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def _script():
+    return _load("toe_manifest")
+
+
+def _release():
+    return _load("release_toe")
+
+
+def _fake_expanded(tmp_path, files):
+    """An expanded toe: t.toe.dir/<files> plus the t.toe.toc listing them."""
+    expanded = tmp_path / "t.toe.dir"
+    for rel, body in files.items():
+        path = expanded / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+    (tmp_path / "t.toe.toc").write_text(
+        "".join(f"{rel}\n" for rel in [".build", *files]), encoding="utf-8")
+    return expanded
 
 
 def _expanded_text_file(text: bytes) -> bytes:
@@ -67,6 +91,51 @@ def test_manifest_lists_every_baked_source():
     assert set(m["sources"]) == set(_script().BAKED.values())
 
 
+def test_top_level_lists_one_entry_per_operator(tmp_path):
+    expanded = _fake_expanded(tmp_path, {
+        "project1.n": b"", "project1.parm": b"", "project1/vcon.n": b"",
+        "TDMCP.n": b"", "local.n": b""})
+    assert _script().top_level_in(expanded) == ["TDMCP", "local", "project1"]
+
+
+def test_strip_removes_only_the_dev_component(tmp_path):
+    expanded = _fake_expanded(tmp_path, {
+        "TDMCP.n": b"", "TDMCP.parm": b"Port 13315", "TDMCP.vfs": b"",
+        "TDMCP/View.n": b"", "TDMCP/server/x.text": b"code",
+        "TDMCPlike.n": b"", "project1.n": b"", "project1/vcon.n": b""})
+    removed = _release().strip_components(expanded, ("TDMCP",))
+
+    assert sorted(removed) == ["TDMCP.n", "TDMCP.parm", "TDMCP.vfs",
+                               "TDMCP/View.n", "TDMCP/server/x.text"]
+    left = sorted(str(p.relative_to(expanded)) for p in expanded.rglob("*")
+                  if p.is_file())
+    assert left == ["TDMCPlike.n", "project1.n", "project1/vcon.n"]
+    toc = (tmp_path / "t.toe.toc").read_text(encoding="utf-8").split()
+    assert toc == [".build", "TDMCPlike.n", "project1.n", "project1/vcon.n"]
+
+
+def test_strip_refuses_a_toe_that_still_refers_to_it(tmp_path):
+    """A DAT calling op('/TDMCP') would break once the component is gone."""
+    expanded = _fake_expanded(tmp_path, {
+        "TDMCP.n": b"", "project1/start.text": b"op('/TDMCP').par.Active = 1"})
+    with pytest.raises(RuntimeError, match="project1/start.text"):
+        _release().strip_components(expanded, ("TDMCP",))
+
+
+@pytest.mark.skipif(os.environ.get("VCON_RELEASE_CHECK") != "1",
+                    reason="release gate: set VCON_RELEASE_CHECK=1 "
+                           "(CI sets it on tag pushes)")
+def test_packaged_toe_has_no_dev_server():
+    m = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    assert "top_level" in m, (
+        "the manifest predates the dev-server check. Make the toe with "
+        "scripts/release_toe.py (PUBLISHING.md step 3)")
+    shipped = [n for n in _script().DEV_ONLY if n in m["top_level"]]
+    assert not shipped, (
+        f"transcoder.toe contains the development-only /{shipped[0]} "
+        f"component. Make it with scripts/release_toe.py, which removes it.")
+
+
 @pytest.mark.skipif(os.environ.get("VCON_RELEASE_CHECK") != "1",
                     reason="release gate: set VCON_RELEASE_CHECK=1 "
                            "(CI sets it on tag pushes)")
@@ -74,13 +143,13 @@ def test_packaged_toe_matches_its_source():
     m = json.loads(MANIFEST.read_text(encoding="utf-8"))
     toe_sha = hashlib.sha256(TOE.read_bytes()).hexdigest()
     assert toe_sha == m["toe_sha256"], (
-        "transcoder.toe.sources.json describes a different toe. After "
-        "saving the toe, run: python scripts/toe_manifest.py")
+        "transcoder.toe.sources.json describes a different toe. Make the "
+        "toe with: python scripts/release_toe.py")
     norm = _script().normalized_sha256
     stale = [src for src, digest in m["sources"].items()
              if norm((ROOT / src).read_bytes()) != digest]
     assert not stale, (
         f"transcoder.toe was saved before the latest edits to "
         f"{', '.join(stale)} — it would ship stale logic. Rebuild and save "
-        f"it in TouchDesigner (PUBLISHING.md steps 2-3), then re-run "
-        f"scripts/toe_manifest.py.")
+        f"the dev toe in TouchDesigner, then run scripts/release_toe.py "
+        f"(PUBLISHING.md steps 2-3).")

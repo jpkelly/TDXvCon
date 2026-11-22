@@ -28,6 +28,10 @@ Thumbs.db
 *.nlc.mov
 .vcon-state.json
 
+# Local dev toe (keeps the /TDMCP server; never committed or shipped).
+# TD also writes its backups and crash autosaves into this folder.
+/dev/
+
 # TouchDesigner versioned backups (TD writes transcoder.1.toe etc. alongside)
 src/vcon/data/transcoder.[0-9]*.toe
 # TD crash autosaves (transient — recovery comes from the capture, not these)

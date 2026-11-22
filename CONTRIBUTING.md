@@ -31,13 +31,20 @@ exec(open('/path/to/TDXvCon/toe/build_network.py', encoding='utf-8').read())
 exec(open('/path/to/TDXvCon/toe/build_panel.py', encoding='utf-8').read())
 ```
 
-Builders replace network components and save the project. Work in a development
-copy and retain any unsaved edits before rebuilding. The panel build reads
-`panel_layout_captured.py`; `panel_layout_variant.py` records SCALE-OFF deltas
-used when maintaining the runtime row layouts.
+Work in the local development project `dev/TDXvCon-dev.toe`. The `dev/`
+folder is gitignored, and TouchDesigner also writes its backups and crash
+autosaves there. To start one, copy `src/vcon/data/transcoder.toe` to
+`dev/TDXvCon-dev.toe` and open the copy. The maintainer's dev toe also holds
+`/TDMCP`, an MCP server for AI-assisted development that is never shipped.
+
+Builders replace network components and save the dev toe. They never write
+`src/vcon/data/transcoder.toe`. Keep any unsaved edits before rebuilding. The
+panel build reads `panel_layout_captured.py`; `panel_layout_variant.py`
+records SCALE-OFF deltas used when maintaining the runtime row layouts.
 
 Changes to controller or panel source must be baked into
-`src/vcon/data/transcoder.toe` before release. Pull requests do not need a
+`src/vcon/data/transcoder.toe` before release, by `scripts/release_toe.py`
+(see PUBLISHING.md). Pull requests do not need a
 rebuilt toe: the maintainer rebuilds it at release time, and only release
 tags run the toe check (`VCON_RELEASE_CHECK=1`). Test the saved project without
 access to the author's source paths: linked DATs must retain usable embedded

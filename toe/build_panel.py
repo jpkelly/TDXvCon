@@ -1371,9 +1371,11 @@ except Exception as exc:
 # build_network.py saves, build_panel.py did not, so every panel
 # rebuild, capture bake and hand-tune since the last network build was
 # lost the moment TD reloaded the .toe (JP lost a session's work this
-# way, 2026-09-15).
+# way, 2026-09-15). It saves the local DEV toe; the shipped
+# transcoder.toe is derived from it by scripts/release_toe.py, which
+# removes the /TDMCP development server.
 try:
-    _toe_path = f"{REPO}/src/vcon/data/transcoder.toe"
+    _toe_path = f"{REPO}/dev/TDXvCon-dev.toe"
     project.save(_toe_path)
     print(f"[panel] project saved → {_toe_path}")
 except Exception as exc:
