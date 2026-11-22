@@ -42,6 +42,12 @@ NOTCHLC_QUALITY_VALUES = {
     "best": 1.0,
 }
 
+#: Movie File Out's quality slider for codecs without a named ladder: TD's
+#: own default. The slider is shared by every codec and keeps its value
+#: across jobs, and it does change some of them (MJPEG at 0.1 wrote a third
+#: of the bytes it wrote at 1.0 on TD 2025.33230), so every job sets it.
+DEFAULT_QUALITY = 1.0
+
 
 def platform_of_current_machine() -> str:
     """"darwin" → "mac", "win32" → "windows"; anything else → "other"."""
@@ -171,12 +177,17 @@ class CodecSpec:
         resolved_sub = self.resolve_subtype(subtype)
         if resolved_sub is not None:
             params["videocodectype"] = resolved_sub
+        # Every job sends a COMPLETE Movie File Out state. Movie File Out is
+        # one shared operator: a parameter a job leaves out keeps whatever
+        # the panel or the previous job set (issue #4).
         resolved_q = self.resolve_quality(quality)
         if resolved_q is not None:
             # Named level -> the float MvO's quality slider takes
             # (NotchLC only; other codecs have no ladder).
             params["quality"] = NOTCHLC_QUALITY_VALUES.get(
                 resolved_q, resolved_q)
+        else:
+            params["quality"] = DEFAULT_QUALITY
         if self.default_ext:
             params["moviecontainer"] = self.default_ext
         # Pixel format is CODEC- AND SUBTYPE-SPECIFIC. Only send a value the
@@ -196,7 +207,10 @@ class CodecSpec:
                        if self.name == "prores" else "")
                 )
             params["moviepixelformat"] = alpha_fmt
-        elif alpha is False and fmts:
+        elif fmts:
+            # Opaque: the subtype's first format, which is also the one
+            # TD selects for a fresh Movie File Out. alpha=None means the
+            # caller could not tell, so it encodes without alpha too.
             params["moviepixelformat"] = fmts[0]
         params["fps"] = fps or "auto"
         # Resolution: two mutually-exclusive paths.

@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from vcon.codec_probe import source_has_alpha
 from vcon.errors import InputError, OutputError
 from vcon.events import EventBus
 from vcon.models import Job, JobSpec, JobStatus
@@ -87,7 +88,7 @@ class QueueManager:
             subtype=spec.subtype,
             quality=spec.quality,
             fps=spec.fps,
-            alpha=spec.alpha,
+            alpha=self._resolve_alpha(spec, codec),
             resolution=spec.resolution,
             fit=spec.fit,
             scale=spec.extra.get("scale"),
@@ -103,6 +104,26 @@ class QueueManager:
         )
         self._persist()
         return job
+
+    def _resolve_alpha(self, spec: JobSpec, codec) -> bool | None:
+        """alpha=None means "follow the source": decide it here.
+
+        Nothing downstream can: TouchDesigner loads every movie as RGBA
+        whether or not it has alpha. Without a decision the job sent no
+        pixel format, and Movie File Out kept the previous job's (#4).
+        """
+        if spec.alpha is not None:
+            return spec.alpha
+        if codec.alpha_format_for(codec.resolve_subtype(spec.subtype)) is None:
+            return False            # this codec/subtype cannot carry alpha
+        has_alpha = source_has_alpha(spec.input)
+        if has_alpha is None:
+            self.bus.log(
+                "warning",
+                f"cannot tell whether {spec.input.name} has alpha (its "
+                f"container does not say); encoding without alpha")
+            return False
+        return has_alpha
 
     def _mint_id(self) -> str:
         jid = f"j{self._next_id}"

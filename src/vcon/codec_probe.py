@@ -232,13 +232,13 @@ def _descend(fh, start: int, end: int, kinds: tuple[bytes, ...]):
     return span
 
 
-def _video_frames_in_moov(fh, start: int, end: int) -> int | None:
-    """Sample count of the first VIDEO trak (handler 'vide').
+def _video_stbl(fh, start: int, end: int):
+    """Span of the first VIDEO trak's sample table (``stbl``), or None.
 
     The handler matters: after the audio mux a file holds a sound trak
-    too, and its sample count is not a frame count. ``hdlr`` carries the
-    handler type at body offset 8 in both QuickTime (component subtype)
-    and ISO MP4 (handler_type).
+    too, and it may come first. ``hdlr`` carries the handler type at body
+    offset 8 in both QuickTime (component subtype) and ISO MP4
+    (handler_type).
     """
     for atype, body, body_end in _iter_atoms_fh(fh, start, end):
         if atype != b"trak":
@@ -249,9 +249,15 @@ def _video_frames_in_moov(fh, start: int, end: int) -> int | None:
         hdlr = _child(fh, mdia[0], mdia[1], b"hdlr")
         if hdlr is None or _read_at(fh, hdlr[0] + 8, 4) != b"vide":
             continue
-        stbl = _descend(fh, mdia[0], mdia[1], (b"minf", b"stbl"))
-        if stbl is None:
-            return None
+        return _descend(fh, mdia[0], mdia[1], (b"minf", b"stbl"))
+    return None
+
+
+def _video_frames_in_moov(fh, start: int, end: int) -> int | None:
+    """Sample count of the first video trak (a sound trak's is not a
+    frame count)."""
+    stbl = _video_stbl(fh, start, end)
+    if stbl is not None:
         # stsz / stz2: version+flags(4), size-or-reserved(4), count(4)
         for kind in (b"stsz", b"stz2"):
             box = _child(fh, stbl[0], stbl[1], kind)
@@ -269,7 +275,6 @@ def _video_frames_in_moov(fh, start: int, end: int) -> int | None:
                 if len(table) == 8 * n:
                     return sum(struct.unpack(">I", table[i:i + 4])[0]
                                for i in range(0, 8 * n, 8))
-        return None
     return None
 
 
@@ -290,6 +295,71 @@ def probe_video_frames(path: str | Path) -> int | None:
         for atype, body, body_end in _iter_atoms_fh(fh, 0, file_size):
             if atype == b"moov":
                 return _video_frames_in_moov(fh, body, body_end)
+    return None
+
+
+#: Hap says whether it carries alpha in the fourcc. TouchDesigner writes
+#: depth 24 into Hap's sample entry with or without alpha (2025.33230).
+HAP_ALPHA_FOURCCS = {b"Hap5", b"HapM", b"HapA"}
+HAP_OPAQUE_FOURCCS = {b"Hap1", b"HapY", b"Hap7", b"HapH"}
+
+#: Fourccs whose sample entry cannot show alpha: TouchDesigner writes
+#: NotchLC as depth 24 whether or not the file has alpha (2025.33230).
+ALPHA_UNKNOWN_FOURCCS = NOTCHLC_FOURCCS
+
+#: Offset of the 16-bit ``depth`` field in a QuickTime/ISO visual sample
+#: entry: size(4) format(4) reserved(6) data_ref(2) version/revision/vendor
+#: or pre_defined(16) width(2) height(2) hres(4) vres(4) data_size(4)
+#: frame_count(2) compressor_name(32).
+_DEPTH_AT = 82
+
+
+def video_sample_entry(path: str | Path) -> tuple[bytes, int] | None:
+    """(fourcc, depth) of the first video track's sample entry, or None."""
+    p = Path(path)
+    if not p.exists() or p.stat().st_size < 16:
+        return None
+    file_size = p.stat().st_size
+    with p.open("rb") as fh:
+        for atype, body, body_end in _iter_atoms_fh(fh, 0, file_size):
+            if atype != b"moov":
+                continue
+            stbl = _video_stbl(fh, body, body_end)
+            box = stbl and _child(fh, stbl[0], stbl[1], b"stsd")
+            if not box:
+                return None
+            # stsd: version+flags(4), entry count(4), then the first entry.
+            entry = _read_at(fh, box[0] + 8, _DEPTH_AT + 2)
+            if len(entry) < _DEPTH_AT + 2:
+                return None
+            depth = struct.unpack(">H", entry[_DEPTH_AT:_DEPTH_AT + 2])[0]
+            return entry[4:8], depth
+    return None
+
+
+def source_has_alpha(path: str | Path) -> bool | None:
+    """Whether a movie's video carries alpha: True, False, or None (unknown).
+
+    Read from the video sample entry, without decoding: Hap by its fourcc,
+    other QuickTime/MP4 video by the depth field (32 = alpha, 24 = none),
+    the convention ProRes 4444 and Animation follow. None for NotchLC,
+    whose sample entry looks the same either way, for other containers,
+    and for unreadable files.
+    """
+    found = video_sample_entry(path)
+    if found is None:
+        return None
+    fourcc, depth = found
+    if fourcc in HAP_ALPHA_FOURCCS:
+        return True
+    if fourcc in HAP_OPAQUE_FOURCCS:
+        return False
+    if fourcc in ALPHA_UNKNOWN_FOURCCS:
+        return None
+    if depth == 32:
+        return True
+    if depth == 24:
+        return False
     return None
 
 
