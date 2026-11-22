@@ -55,14 +55,18 @@ CODECS = {
         "default_subtype": "prores4444",   # JP spec
         "qualities": [],
     },
+    # even_dims: the encoder cannot write an odd width or height
+    # (codec_meta.even_dimensions); the controller evens the size (#6).
     "h264": {"label": "H.264", "subtypes": [], "qualities": [],
-              "pixel_formats": ["yuv420", "yuv444p8bit"], "alpha_format": None},
+              "pixel_formats": ["yuv420", "yuv444p8bit"], "alpha_format": None,
+              "even_dims": True},
     "h265": {"label": "H.265", "subtypes": [], "qualities": [],
               "pixel_formats": ["yuv420", "yuv420p10bit", "yuv444p8bit",
                                 "yuv444p10bit"],
-              "alpha_format": None},
+              "alpha_format": None, "even_dims": True},
     "av1": {"label": "AV1", "subtypes": [], "qualities": [],
-             "pixel_formats": ["yuv420", "yuv420p10bit"], "alpha_format": None},
+             "pixel_formats": ["yuv420", "yuv420p10bit"], "alpha_format": None,
+             "even_dims": True},
 }
 
 PRORES_PIXEL_FORMATS = {
@@ -1583,6 +1587,7 @@ def _run_next():
         container=container,
         audio=audio,
         audio_sep=audio_sep_fmt,
+        even_dims=bool(CODECS.get(codec, {}).get("even_dims")),
     )
     if ok:
         nxt["status"] = "running"

@@ -93,6 +93,8 @@ class CodecSpec:
     )
     #: Alpha-capable format per TD subtype token.
     alpha_pixel_format_by_subtype: dict[str, str] = field(default_factory=dict)
+    #: The encoder cannot write odd dimensions (see CodecMeta).
+    even_dimensions: bool = False
 
     # ------------------------------------------------------------------
     def pixel_formats_for(self, resolved_subtype: str | None) -> tuple[str, ...]:
@@ -213,6 +215,10 @@ class CodecSpec:
             # caller could not tell, so it encodes without alpha too.
             params["moviepixelformat"] = fmts[0]
         params["fps"] = fps or "auto"
+        if self.even_dimensions:
+            # The controller makes the size it hands Movie File Out even,
+            # so vCon picks the size rather than the encoder (#6).
+            params["even_dims"] = True
         # Resolution: two mutually-exclusive paths.
         # - resolution WxH (CLI -s): explicit, applied by the toe via the
         #   Fit TOP; "auto" sends nothing so the fit TOP stays bypassed.
@@ -279,6 +285,7 @@ def spec_from_meta(meta: CodecMeta) -> CodecSpec:
             k: tuple(v) for k, v in meta.pixel_formats_by_subtype.items()
         },
         alpha_pixel_format_by_subtype=dict(meta.alpha_pixel_format_by_subtype),
+        even_dimensions=meta.even_dimensions,
         default_ext=meta.container,
         platforms=meta.platforms,
         caveat=meta.caveat,

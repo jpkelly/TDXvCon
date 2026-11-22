@@ -69,6 +69,13 @@ class CodecMeta:
     default_quality: str | None = None
     #: Platforms where encoding works.
     platforms: frozenset[str] = frozenset({"mac", "windows"})
+    #: The encoder cannot write an odd width or height. Measured on TD
+    #: 2025.33230 (macOS) at 1281x721: H.264 and H.265 silently cropped to
+    #: 1280x720 whatever the pixel format; VVC wrote no file. VP8, VP9,
+    #: MPEG-4, MJPEG, ProRes, RLE, GIF, Hap and NotchLC kept 1281x721 (Hap
+    #: needs no multiple of 4). AV1 could not be measured (no AV1 encode on
+    #: that Mac) and is marked as its 4:2:0 encoders need it.
+    even_dimensions: bool = False
 
 
 #: Catalogue keyed by TD token.
@@ -194,6 +201,7 @@ CATALOG: dict[str, CodecMeta] = {
         speed="cpu",
         pixel_formats=("yuv420", "yuv444p8bit"),
         alpha_pixel_format=None,
+        even_dimensions=True,
         platforms=frozenset({"mac", "windows"}),
         caveat="Delivery codec, not a mezzanine — recompresses heavily. "
                "Needs a Commercial/Pro TD licence and NVIDIA hardware on "
@@ -208,6 +216,7 @@ CATALOG: dict[str, CodecMeta] = {
         speed="cpu",
         pixel_formats=("yuv420", "yuv420p10bit", "yuv444p8bit", "yuv444p10bit"),
         alpha_pixel_format=None,
+        even_dimensions=True,
         platforms=frozenset({"mac", "windows"}),
         caveat="Delivery codec. Requires NVIDIA hardware on Windows.",
     ),
@@ -220,6 +229,7 @@ CATALOG: dict[str, CodecMeta] = {
         speed="cpu-slow",
         pixel_formats=("yuv420", "yuv420p10bit"),
         alpha_pixel_format=None,
+        even_dimensions=True,
         platforms=frozenset({"mac", "windows"}),
         caveat="Delivery codec; software encode is slow. NVIDIA hardware "
                "required on Windows.",
@@ -233,6 +243,7 @@ CATALOG: dict[str, CodecMeta] = {
         speed="cpu-slow",
         pixel_formats=("yuv420p10bit",),
         alpha_pixel_format=None,
+        even_dimensions=True,
         recommend=False,
         caveat="Very new and poorly supported by players/editors; software "
                "encode is very slow. Listed for completeness.",

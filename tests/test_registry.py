@@ -409,3 +409,9 @@ def test_td_params_rejects_bad_quality():
 def test_td_params_fps_passthrough():
     spec = next(c for c in BUILTIN_CODECS if c.name == "notchlc")
     assert spec.td_params(fps="30")["fps"] == "30"
+
+def test_only_codecs_that_cannot_encode_odd_sizes_ask_for_even_ones():
+    """#6, measured on TD 2025.33230 at 1281x721: H.264/H.265 cropped to
+    1280x720 and VVC wrote nothing; the rest kept the odd size."""
+    asking = {s.name for s in BUILTIN_CODECS if s.td_params().get("even_dims")}
+    assert asking == {"h264", "h265", "av1", "vvc"}
