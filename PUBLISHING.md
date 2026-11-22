@@ -64,6 +64,13 @@ python scripts/release_toe.py
 VCON_RELEASE_CHECK=1 python -m pytest tests/test_toe_manifest.py
 ```
 
+Pulse the `tcpip` DAT's **Clear** parameter before that save: it keeps the
+protocol messages it received, and saving bakes their job paths into the
+toe. `release_toe.py` refuses a toe that still holds them. It also refuses
+when TouchDesigner's incremental save has written a newer
+`TDXvCon-dev.N.toe` beside the dev toe: pass that file with `--dev`, or save
+over `TDXvCon-dev.toe`.
+
 `release_toe.py` copies the dev toe without `/TDMCP` to
 `src/vcon/data/transcoder.toe`, checks that the copy kept every other
 operator and the same controller and panel text, and records what it contains
