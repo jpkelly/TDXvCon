@@ -179,6 +179,9 @@ class _FakeFfmpeg:
     process log, creates the output on success, exits with ``rc``."""
 
     def __init__(self, rc, log=b""):
+        # A list gives one (rc, log) per call, for the copy-then-fallback
+        # retry; a single value applies to every call.
+        self.results = rc if isinstance(rc, list) else None
         self.rc, self.log = rc, log
         self.calls = []
 
@@ -186,13 +189,16 @@ class _FakeFfmpeg:
         import types
         from pathlib import Path
 
+        rc, log = self.rc, self.log
+        if self.results is not None:
+            rc, log = self.results[min(len(self.calls), len(self.results) - 1)]
         self.calls.append(cmd)
         if stdout is not None:
-            stdout.write(self.log)
+            stdout.write(log)
             stdout.flush()
-        if self.rc == 0:
+        if rc == 0:
             Path(cmd[-1]).write_bytes(b"muxed")
-        return types.SimpleNamespace(poll=lambda: self.rc, kill=lambda: None)
+        return types.SimpleNamespace(poll=lambda: rc, kill=lambda: None)
 
 
 @pytest.fixture
@@ -480,3 +486,103 @@ def test_partial_name_keeps_the_extension_last(media):
     rig = Rig()
     assert rig.mod.partial_path("/x/clip.prores.mov") == "/x/clip.prores.partial.mov"
     assert rig.mod.partial_path("/x/loop.gif") == "/x/loop.partial.gif"
+
+
+# ----------------------------------------------------------------------
+# #7 — 'auto' keeps the source audio, in every track
+# ----------------------------------------------------------------------
+
+
+def _audio_codec(cmd):
+    return cmd[cmd.index("-c:a") + 1]
+
+
+@pytest.mark.parametrize("name, codec", [
+    ("a.mov", "copy"), ("a.mkv", "copy"), ("a.webm", "copy"), ("a.mp4", "aac")])
+def test_auto_audio_copies_except_into_mp4(media, ffmpeg, name, codec):
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)
+    fake = ffmpeg(rig, rc=0)
+    rig.submit(src, out_dir / name)
+    rig.run()
+
+    cmd = fake.calls[0]
+    assert _audio_codec(cmd) == codec
+    assert cmd[cmd.index("-map", cmd.index("0:v:0")) + 1] == "1:a"  # all tracks
+    assert rig.events("done")[-1]["warnings"] == []
+
+
+def test_auto_audio_skips_gif(media, ffmpeg):
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)
+    fake = ffmpeg(rig, rc=0)
+    rig.submit(src, out_dir / "a.gif")
+    rig.run()
+    assert fake.calls == [] and rig.events("done")[-1]["warnings"] == []
+
+
+@pytest.mark.parametrize("name, fallback", [("a.mov", "pcm_s24le"),
+                                            ("a.webm", "libopus")])
+def test_auto_copy_that_fails_is_reencoded_quietly(media, ffmpeg, name, fallback):
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)
+    fake = ffmpeg(rig, rc=[(1, b"opus only supported in MP4.\n"), (0, b"")])
+    out = out_dir / name
+    rig.submit(src, out)
+    rig.run()
+
+    assert [_audio_codec(c) for c in fake.calls] == ["copy", fallback]
+    assert rig.events("done")[-1]["warnings"] == []
+    assert out.read_bytes() == b"muxed"
+
+
+def test_explicit_copy_that_fails_is_reencoded_with_a_warning(media, ffmpeg):
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)
+    ffmpeg(rig, rc=[(1, b"opus only supported in MP4.\n"), (0, b"")])
+    rig.submit(src, out_dir / "a.mov", audio="copy")
+    rig.run()
+
+    warnings = rig.events("done")[-1]["warnings"]
+    assert len(warnings) == 1 and "re-encoded as pcm_s24le" in warnings[0]
+
+
+def test_fallback_that_also_fails_warns_once_and_keeps_video(media, ffmpeg):
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)
+    fake = ffmpeg(rig, rc=1, log=b"Conversion failed!\n")
+    out = out_dir / "a.mov"
+    rig.submit(src, out)
+    rig.run()
+
+    assert len(fake.calls) == 2                       # copy, then one retry
+    warnings = rig.events("done")[-1]["warnings"]
+    assert len(warnings) == 1 and "audio mux failed" in warnings[0]
+    assert out.exists()
+
+
+_TWO_TRACKS = (b"Input #0, mov,mp4, from 'src.mov':\n"
+               b"  Stream #0:0[0x1]: Video: prores\n"
+               b"  Stream #0:1[0x2]: Audio: pcm_s24le, 48000 Hz, stereo\n"
+               b"  Stream #0:2[0x3]: Audio: pcm_s24le, 48000 Hz, mono\n"
+               b"Output #0, wav, to 'a.wav':\n"
+               b"  Stream #0:0: Audio: pcm_s16le\n")
+
+
+@pytest.mark.parametrize("fmt, ext, amap, warned", [
+    ("wav16", ".wav", "0:a:0", True), ("copy", ".mka", "0:a", False)])
+def test_separate_audio_names_its_track_and_warns_on_dropped_ones(
+        media, ffmpeg, fmt, ext, amap, warned):
+    src, out_dir = media
+    rig = Rig(frames=5)                              # silent: no mux step
+    fake = ffmpeg(rig, rc=0, log=_TWO_TRACKS)
+    rig.submit(src, out_dir / "a.mov", audio="none", audio_sep=fmt)
+    rig.run()
+
+    cmd = fake.calls[-1]
+    assert cmd[-1].endswith(ext)
+    assert cmd[cmd.index("-map") + 1] == amap
+    warnings = rig.events("done")[-1]["warnings"]
+    assert bool(warnings) is warned
+    if warned:
+        assert "2 audio tracks" in warnings[0]
