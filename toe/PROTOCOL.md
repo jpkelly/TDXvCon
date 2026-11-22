@@ -56,7 +56,10 @@ fast rather than timing out on connect.
 ```
 
 Abort the named job (if running), discard the partial output file, reply
-with `error/cancelled`.
+with `error/cancelled`. A job records to `<stem>.partial<ext>` and moves it
+to `output` only when it succeeds, after any audio mux. A cancelled or failed
+job deletes its `.partial` file, and a file already at `output` is left
+untouched.
 
 ### ping
 
