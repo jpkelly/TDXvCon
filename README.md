@@ -62,6 +62,15 @@ The panel and CLI share a TouchDesigner controller. The panel calls it directly;
 the CLI uses a TCP JSON-lines protocol. TouchDesigner encodes video, and FFmpeg
 handles audio post-processing. See the [protocol reference](toe/PROTOCOL.md).
 
+Variable-frame-rate sources, such as phone and screen recordings, are not
+supported. vCon writes the source frames in order at a constant rate, while
+the audio keeps its real timing, so the video drifts against the audio. The
+last frame may also be held at the end. Convert such sources to a constant
+rate first, for example
+`ffmpeg -i in.mp4 -fps_mode cfr -r 30 -c:a copy constant.mov`. The CLI warns
+when a QuickTime/MP4 source has a variable frame rate; the panel does not
+check.
+
 This is alpha software. Automated tests cover the Python core and a simulated
 controller, not the panel, GPU encoding, or every platform/codec combination.
 The TCP protocol has no authentication; keep its port (default `7999`)

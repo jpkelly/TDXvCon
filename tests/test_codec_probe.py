@@ -388,3 +388,46 @@ def test_verify_output_still_fails_an_unreadable_quicktime_file(tmp_path):
     ok, note = verify_output(p, expect_fourccs={b"apch"}, retries=1,
                              retry_delay=0)
     assert not ok and "could not read the video codec" in note
+
+
+# ----------------------------------------------------------------------
+# #9 — variable-frame-rate sources are detected from the video's stts
+# ----------------------------------------------------------------------
+
+
+def _mov_with_stts(runs):
+    stts = _atom(b"stts", b"\x00" * 4 + struct.pack(">I", len(runs))
+                 + b"".join(struct.pack(">II", c, d) for c, d in runs))
+    return _mov(_trak(b"soun", 10, table=b"stsz"),
+                _trak_with(b"vide", stts))
+
+
+def _trak_with(handler, box):
+    hdlr = _atom(b"hdlr", b"\x00" * 4 + b"mhlr" + handler + b"\x00" * 12)
+    entry = struct.pack(">I", 16) + b"avc1" + b"\x00" * 8
+    stsd = _atom(b"stsd", b"\x00" * 4 + struct.pack(">I", 1) + entry)
+    stbl = _atom(b"stbl", stsd + box)
+    return _atom(b"trak", _atom(b"mdia", hdlr + _atom(b"minf", stbl)))
+
+
+@pytest.mark.parametrize("runs, expected", [
+    ([(48, 512)], False),                         # constant
+    ([(1407, 1024), (1, 256)], False),            # odd last frame only
+    ([(500, 33), (500, 34)], False),              # ms timescale rounding
+    ([(150, 1000), (150, 3000)], True),           # 30 fps, then 10 fps
+    ([(10, 1000), (1, 2000), (10, 1000), (1, 1000)], True),  # a dropped frame
+])
+def test_variable_frame_rate_from_stts(tmp_path, runs, expected):
+    from vcon.codec_probe import is_variable_frame_rate
+
+    p = tmp_path / "v.mp4"
+    p.write_bytes(_mov_with_stts(runs))
+    assert is_variable_frame_rate(p) is expected
+
+
+def test_variable_frame_rate_unknown_without_a_sample_table(tmp_path):
+    from vcon.codec_probe import is_variable_frame_rate
+
+    p = tmp_path / "plain.mov"
+    p.write_bytes(_mov_with_fourcc(b"nclc"))
+    assert is_variable_frame_rate(p) is None

@@ -289,3 +289,21 @@ def test_no_alpha_overrides_an_alpha_source(queue, make_movie, tmp_path):
     job = queue.submit(_prores4444(make_movie("a.mov", b"ap4h", 32), tmp_path,
                                    alpha=False))
     assert job.spec.extra["td_params"]["moviepixelformat"] == "yuv44410bit"
+
+
+def test_variable_frame_rate_source_warns_at_submit(queue, bus, make_movie, tmp_path):
+    """#9: frames are written in order at a constant rate, so a VFR
+    source's video drifts against its copied audio."""
+    src = make_movie("phone.mov", b"avc1", 24,
+                     stts=[(150, 1000), (150, 3000)])   # 30 fps, then 10 fps
+    logs = _warnings(bus)
+    queue.submit(JobSpec(input=src, output=tmp_path / "o.mov", codec="prores"))
+    warned = [m["message"] for m in logs if m["level"] == "warning"]
+    assert any("phone.mov has a variable frame rate" in w for w in warned)
+
+
+def test_constant_frame_rate_source_does_not_warn(queue, bus, make_movie, tmp_path):
+    src = make_movie("cfr.mov", b"avc1", 24, stts=[(48, 512)])
+    logs = _warnings(bus)
+    queue.submit(JobSpec(input=src, output=tmp_path / "o.mov", codec="prores"))
+    assert not [m for m in logs if "variable frame rate" in m["message"]]
