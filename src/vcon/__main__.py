@@ -164,46 +164,11 @@ def _doctor(renderer: Renderer, port: int = 7999) -> int:
 
 
 def _toe_freshness(toe_path) -> tuple[bool, str]:
-    """Report whether the built toe is newer than the controller source.
+    """Whether the toe holds the current controller and panel source, from
+    its manifest rather than file dates (see vcon.toe_source, #18)."""
+    from vcon.toe_source import toe_freshness
 
-    A stale toe silently ignores fixes made in toe/*.py — the failure mode is
-    baffling ("I fixed that!") because nothing warns you. Timestamps are the
-    only reliable signal: .toe files are compressed binary, so you cannot
-    grep them for expected code.
-
-    Walks up looking for a ``toe/vcon_controller.py`` sibling; when the toe
-    comes from an installed package there is no checkout, so we say so rather
-    than guess.
-    """
-    import datetime
-
-    candidates = []
-    here = toe_path.resolve()
-    for parent in list(here.parents)[:5]:
-        candidates.append(parent / "toe" / "vcon_controller.py")
-    # Also check relative to the package (covers `pip install -e .`)
-    pkg = Path(__file__).resolve().parent
-    for parent in list(pkg.parents)[:5]:
-        candidates.append(parent / "toe" / "vcon_controller.py")
-
-    src = next((c for c in candidates if c.exists()), None)
-    if src is None:
-        return True, "installed package (no sources to compare)"
-
-    toe_m = toe_path.stat().st_mtime
-    src_m = src.stat().st_mtime
-    fmt = "%Y-%m-%d %H:%M:%S"
-    if toe_m < src_m:
-        return False, (
-            f"STALE — toe built "
-            f"{datetime.datetime.fromtimestamp(toe_m):{fmt}}, but "
-            f"{src.name} changed "
-            f"{datetime.datetime.fromtimestamp(src_m):{fmt}}. Rebuild in the "
-            f"TD textport: exec(open('{src.parent}/build_network.py', "
-            f"encoding='utf-8').read())"
-        )
-    return True, (
-        f"up to date (toe built {datetime.datetime.fromtimestamp(toe_m):{fmt}})")
+    return toe_freshness(toe_path)
 
 
 def _probe_controller(port: int) -> tuple[bool, str]:
@@ -235,8 +200,9 @@ def _probe_controller(port: int) -> tuple[bool, str]:
                       f"version reported — rebuild the toe to update)")
     if ctrl_ver != __version__:
         return (False, f"controller is v{ctrl_ver} but vcon is v{__version__} "
-                       f"— the toe is out of date; rebuild it "
-                       f"(exec build_network.py in the TD textport)")
+                       f"— the TouchDesigner project that is open comes from "
+                       f"another release. Close it so vcon opens its own toe, "
+                       f"or install the vcon that matches it")
     return (True, f"controller live on port {port}, v{ctrl_ver} (matches)")
 
 

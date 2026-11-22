@@ -19,7 +19,7 @@ SRC_TOE="${1:-$REPO_TOE_DIR/src/vcon/data/transcoder.toe}"
 
 if [[ ! -f "$SRC_TOE" ]]; then
   echo "error: no toe at $SRC_TOE" >&2
-  echo "Build it first: run toe/build_network.py inside TouchDesigner." >&2
+  echo "Make it first: python scripts/release_toe.py (see PUBLISHING.md, step 3)." >&2
   exit 1
 fi
 

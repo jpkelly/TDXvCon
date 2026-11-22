@@ -114,8 +114,8 @@ class TouchDesignerDriver(Driver):
         toe = self.ctx.toe_path or resolve_toe_path()
         if not toe.exists():
             raise TDProcessError(
-                f"transcoder.toe not found at {toe} — rebuild it by running "
-                f"toe/build_network.py inside TouchDesigner"
+                f"transcoder.toe not found at {toe} — reinstall vcon, or in "
+                f"a source checkout make it with python scripts/release_toe.py"
             )
 
         # Pass the project path and nothing else. TouchDesigner treats any
