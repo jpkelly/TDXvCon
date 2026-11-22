@@ -163,6 +163,7 @@ def resolve_toe_path(flag_toe: Path | None = None) -> Path:
     if dev_toe.exists():
         return dev_toe
     raise ConfigError(
-        "transcoder.toe not found — build it once in TouchDesigner "
-        "(run toe/build_network.py inside TD), or reinstall vcon"
+        "transcoder.toe not found — reinstall vcon (pipx install --force "
+        "tdxvcon); in a source checkout, make it with "
+        "python scripts/release_toe.py (PUBLISHING.md, step 3)"
     )
