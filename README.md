@@ -73,8 +73,10 @@ check.
 
 This is alpha software. Automated tests cover the Python core and a simulated
 controller, not the panel, GPU encoding, or every platform/codec combination.
-The TCP protocol has no authentication; keep its port (default `7999`)
-inaccessible to untrusted clients.
+The TCP protocol has no authentication, so the controller listens on
+`127.0.0.1` (port `7999`) and refuses connections from other machines.
+TDXvCon 1.0.0 listens on every network interface; use a later release on
+shared networks.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for source setup, tests, and project
 rebuilds, and [PUBLISHING.md](PUBLISHING.md) for releases.

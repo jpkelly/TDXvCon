@@ -273,8 +273,8 @@ class FakeMvoInfo(FakeOp):
 
 
 class FakeTcp(FakeOp):
-    def __init__(self):
-        super().__init__("tcpip")
+    def __init__(self, localaddress=""):
+        super().__init__("tcpip", localaddress=Par(localaddress))
         self.sent = []
 
     def send(self, text, terminator="\n"):

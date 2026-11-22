@@ -370,6 +370,10 @@ def build():
     tcpip.nodeY = -120
     menu_set(tcpip.par.mode, ["server", "servertcp"], "tcpip.mode")
     tcpip.par.port = 7999
+    # Listen on loopback only: the protocol has no authentication, and an
+    # empty Local Address listens on every interface (verified: reachable
+    # from the LAN). The CLI connects to 127.0.0.1 (#11).
+    safe_set(tcpip.par, "localaddress", "127.0.0.1")
     # Active ENABLES the connection — without it the DAT never binds the
     # port (docs: Connect page, "Active - This check box enables the
     # connection"). Observed live as ConnectionRefused on 7999.
@@ -766,9 +770,24 @@ def _ctrl():
     return ctrl
 
 
+# Only this machine may drive the encoder: the protocol has no
+# authentication. The server also listens on 127.0.0.1 only; this check
+# covers a Local Address someone widened (#11).
+def _local(ctrl, peer):
+    try:
+        return ctrl.peer_allowed(peer.address)
+    except AttributeError:
+        return True   # a controller from before the check
+
+
 def onConnect(dat, peer):
     try:
-        _ctrl().onConnect()
+        ctrl = _ctrl()
+        if not _local(ctrl, peer):
+            debug(f"vcon: refused connection from {peer.address}")
+            peer.close()
+            return 0
+        ctrl.onConnect()
     except Exception as e:
         debug(f"vcon onConnect failed: {e}")
     return 1  # accept
@@ -776,7 +795,10 @@ def onConnect(dat, peer):
 
 def onReceive(dat, rowIndex, message, bytes, peer):
     try:
-        _ctrl().onReceive(message)
+        ctrl = _ctrl()
+        if not _local(ctrl, peer):
+            return
+        ctrl.onReceive(message)
     except Exception as e:
         debug(f"vcon onReceive failed: {e}")
 

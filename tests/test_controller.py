@@ -633,3 +633,62 @@ def test_a_file_that_never_finishes_fails_after_the_timeout(media):
     err = rig.events("error")[-1]
     assert err["code"] == "output-error" and "still writing" in err["message"]
     assert not rig.events("done")
+
+
+# ----------------------------------------------------------------------
+# #11 — only this machine may drive the encoder
+# ----------------------------------------------------------------------
+
+
+def test_controller_binds_an_open_tcp_server_to_loopback():
+    rig = Rig()
+    rig.ext.onInitTD()
+    assert rig.tcp.par.localaddress.eval() == "127.0.0.1"
+
+
+def test_controller_keeps_an_address_set_on_purpose():
+    rig = Rig()
+    rig.tcp.par.localaddress.val = "10.0.0.5"
+    rig.ext.onInitTD()
+    assert rig.tcp.par.localaddress.eval() == "10.0.0.5"
+
+
+@pytest.mark.parametrize("address, allowed", [
+    ("127.0.0.1", True), ("::1", True), ("::ffff:127.0.0.1", True),
+    ("192.168.1.20", False), ("10.0.0.5", False), ("", False)])
+def test_peer_allowed(address, allowed):
+    assert Rig().ext.peer_allowed(address) is allowed
+
+
+def test_callbacks_refuse_and_ignore_remote_peers():
+    """The callbacks DAT text from build_network.py, run against fakes."""
+    import importlib.util
+    import types
+
+    spec = importlib.util.spec_from_file_location(
+        "build_network_under_test",
+        Path(__file__).resolve().parent.parent / "toe" / "build_network.py")
+    build = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(build)
+
+    rig = Rig()
+    calls = []
+    rig.ext.onConnect = lambda: calls.append("connect")
+    rig.ext.onReceive = lambda m: calls.append(m)
+    ns = {"parent": lambda: types.SimpleNamespace(
+              ext=types.SimpleNamespace(Vcon=rig.ext)),
+          "debug": lambda *a, **k: None}
+    exec(build.TCP_CALLBACKS_SRC, ns)
+
+    closed = []
+    remote = types.SimpleNamespace(address="192.168.1.20",
+                                   close=lambda: closed.append(True))
+    local = types.SimpleNamespace(address="127.0.0.1", close=lambda: None)
+
+    assert ns["onConnect"](None, remote) == 0 and closed == [True]
+    ns["onReceive"](None, 0, '{"type": "ping"}', b"", remote)
+    assert calls == []
+
+    assert ns["onConnect"](None, local) == 1
+    ns["onReceive"](None, 0, '{"type": "ping"}', b"", local)
+    assert calls == ["connect", '{"type": "ping"}']
