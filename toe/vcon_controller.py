@@ -704,16 +704,24 @@ class VconExt:
         self.state = "loading"
         self._set_progress(0.0)
         self._set_status(f"loading {os.path.basename(job['input'])}")
-        self._load_input(job)
+        try:
+            self._load_input(job)
+        except Exception as exc:
+            # Never leave the job parked in 'loading' on a setup error.
+            self._fail(f"could not set up input ({type(exc).__name__}: "
+                       f"{exc})", "input-error")
 
     def _load_input(self, job):
         moviein = self.moviein
         moviein.par.file = job["input"]
-        # VERIFIED LIVE (JP's TD, 2026-09-13):
+        # VERIFIED LIVE (JP's TD, 2026-09-13; again on 2025.33230/33407):
         #   playmode menu = ['locked','specify','sequential','timecodeop']
         #   indexunit menu = ['indices','frames','seconds','fraction']
         #   (older builds used 'index' instead of 'indices'; both accepted)
-        moviein.par.playmode = "specify"   # "Specify Index"
+        # An unknown token silently falls back to menu entry 0, so both
+        # writes are menu-verified rather than plain assignments.
+        self._menu_verified_write(moviein.par.playmode, "playmode",
+                                  "specify")   # "Specify Index"
         # 'indices'/'index' = the movie's OWN frame number. 'frames' counts
         # TIMELINE frames and rescales by the project rate, so a 24fps movie
         # in a 60fps project advanced 0.4 frames per step — every source
