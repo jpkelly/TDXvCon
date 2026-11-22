@@ -367,3 +367,24 @@ def test_source_has_alpha_on_real_prores(tmp_path, pix_fmt, expected):
          "-c:v", "prores_ks", "-profile:v", "4444", "-pix_fmt", pix_fmt,
          str(out)], check=True)
     assert source_has_alpha(out) is expected
+
+
+@pytest.mark.parametrize("head, kind", [
+    (b"\x1a\x45\xdf\xa3" + b"\x00" * 60, "Matroska/WebM"),
+    (b"GIF89a" + b"\x00" * 60, "GIF")])
+def test_verify_output_passes_containers_it_cannot_parse(tmp_path, head, kind):
+    """WebM/MKV/GIF hold no QuickTime atoms: every CLI vp8/vp9/gif job
+    failed with "could not read the video codec" on a good file."""
+    p = tmp_path / "out.bin"
+    p.write_bytes(head)
+    ok, note = verify_output(p, expect_notchlc=False,
+                             expect_fourccs={b"vp09"}, retries=1)
+    assert ok and kind in note
+
+
+def test_verify_output_still_fails_an_unreadable_quicktime_file(tmp_path):
+    p = tmp_path / "out.mov"
+    p.write_bytes(b"\x00\x00\x00\x10mdat" + b"\x00" * 8)   # no moov yet
+    ok, note = verify_output(p, expect_fourccs={b"apch"}, retries=1,
+                             retry_delay=0)
+    assert not ok and "could not read the video codec" in note
