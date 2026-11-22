@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from vcon.codec_probe import source_has_alpha
+from vcon.codec_probe import is_variable_frame_rate, source_has_alpha
 from vcon.errors import InputError, OutputError
 from vcon.events import EventBus
 from vcon.models import Job, JobSpec, JobStatus
@@ -93,6 +93,17 @@ class QueueManager:
             fit=spec.fit,
             scale=spec.extra.get("scale"),
         )
+        if is_variable_frame_rate(spec.input):
+            # vCon writes source frames in order at a constant rate, while
+            # the audio is copied with its real timing (#9, reproduced: a
+            # 20 s source with 300 frames came out as frames 0-299 in 10 s,
+            # then the last frame held for 10 s).
+            self.bus.log(
+                "warning",
+                f"{spec.input.name} has a variable frame rate: its video will "
+                f"drift against the audio. Convert it to a constant rate "
+                f"first, e.g. ffmpeg -i {spec.input.name} -fps_mode cfr "
+                f"-r 30 -c:a copy constant.mov")
         job = Job(spec=spec, id=job_id)
         self._jobs[job_id] = job
         self.bus.job_event(

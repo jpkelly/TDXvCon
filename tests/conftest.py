@@ -59,15 +59,21 @@ def video_sample_entry_bytes(fourcc: bytes, depth: int) -> bytes:
     return struct.pack(">I", 8 + len(body)) + fourcc + body
 
 
-def movie_bytes(fourcc: bytes, depth: int, *, audio_first: bool = False) -> bytes:
-    """A minimal .mov whose video track has the given sample entry."""
-    def trak(handler: bytes, entry: bytes) -> bytes:
+def movie_bytes(fourcc: bytes, depth: int, *, audio_first: bool = False,
+                stts: list[tuple[int, int]] | None = None) -> bytes:
+    """A minimal .mov whose video track has the given sample entry and,
+    optionally, frame-duration runs ``stts`` [(count, duration), ...]."""
+    def trak(handler: bytes, entry: bytes, extra: bytes = b"") -> bytes:
         hdlr = _atom(b"hdlr", b"\x00" * 4 + b"mhlr" + handler + b"\x00" * 12)
         stsd = _atom(b"stsd", b"\x00" * 4 + struct.pack(">I", 1) + entry)
-        minf = _atom(b"minf", _atom(b"stbl", stsd))
+        minf = _atom(b"minf", _atom(b"stbl", stsd + extra))
         return _atom(b"trak", _atom(b"mdia", hdlr + minf))
 
-    traks = [trak(b"vide", video_sample_entry_bytes(fourcc, depth))]
+    table = b""
+    if stts:
+        table = _atom(b"stts", b"\x00" * 4 + struct.pack(">I", len(stts))
+                      + b"".join(struct.pack(">II", c, d) for c, d in stts))
+    traks = [trak(b"vide", video_sample_entry_bytes(fourcc, depth), table)]
     if audio_first:
         audio = struct.pack(">I", 16) + b"lpcm" + b"\x00" * 8
         traks.insert(0, trak(b"soun", audio))

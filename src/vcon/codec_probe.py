@@ -363,6 +363,52 @@ def source_has_alpha(path: str | Path) -> bool | None:
     return None
 
 
+def video_frame_durations(path: str | Path) -> list[tuple[int, int]] | None:
+    """The video track's ``stts`` table: (frame count, duration) runs, in
+    the track's timescale. None if the file has no readable video track."""
+    p = Path(path)
+    if not p.exists() or p.stat().st_size < 16:
+        return None
+    file_size = p.stat().st_size
+    with p.open("rb") as fh:
+        for atype, body, body_end in _iter_atoms_fh(fh, 0, file_size):
+            if atype != b"moov":
+                continue
+            stbl = _video_stbl(fh, body, body_end)
+            box = stbl and _child(fh, stbl[0], stbl[1], b"stts")
+            if not box:
+                return None
+            head = _read_at(fh, box[0], 8)
+            if len(head) < 8:
+                return None
+            n = struct.unpack(">I", head[4:8])[0]
+            table = _read_at(fh, box[0] + 8, 8 * n)
+            if len(table) < 8 * n:
+                return None
+            return [struct.unpack(">II", table[i:i + 8])
+                    for i in range(0, 8 * n, 8)]
+    return None
+
+
+def is_variable_frame_rate(path: str | Path, tolerance: float = 1.1) -> bool | None:
+    """Whether a movie's frames have different durations (#9).
+
+    True when the longest frame lasts more than ``tolerance`` times the
+    shortest. A last run of one frame is ignored: muxers often give the
+    final frame its own duration. None when the file has no QuickTime/MP4
+    sample table to read.
+    """
+    runs = video_frame_durations(path)
+    if not runs:
+        return None
+    if len(runs) > 1 and runs[-1][0] == 1:
+        runs = runs[:-1]
+    deltas = [delta for count, delta in runs if count and delta]
+    if not deltas:
+        return None
+    return max(deltas) > tolerance * min(deltas)
+
+
 def verify_frame_count(path: str | Path, expected: int) -> tuple[bool, str]:
     """Check the output's video frame count; returns (ok, human message).
 
