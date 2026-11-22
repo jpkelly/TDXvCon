@@ -235,3 +235,57 @@ def test_done_from_older_controller_checks_total_frames(queue, sample_spec):
                           "path": str(job.spec.output), "total_frames": 48,
                           "seconds": 1.0})
     assert job.status == JobStatus.FAILED
+
+
+# ----------------------------------------------------------------------
+# #4: alpha=None ("follow source") is decided at submit, from the input
+# ----------------------------------------------------------------------
+
+
+def _warnings(bus):
+    from vcon.events import LOG
+
+    seen = []
+    bus.subscribe(LOG, lambda e: seen.append(e.data))
+    return seen
+
+
+def _prores4444(src, tmp_path, name="out.mov", alpha=None):
+    return JobSpec(input=src, output=tmp_path / name, codec="prores",
+                   subtype="4444", alpha=alpha)
+
+
+def test_follow_source_keeps_alpha_from_an_alpha_source(queue, bus, make_movie, tmp_path):
+    logs = _warnings(bus)
+    job = queue.submit(_prores4444(make_movie("a.mov", b"ap4h", 32), tmp_path))
+    assert job.spec.extra["td_params"]["moviepixelformat"] == "yuva444412bit"
+    assert not [m for m in logs if m["level"] == "warning"]
+
+
+def test_follow_source_opaque_source_gets_the_opaque_format(queue, make_movie, tmp_path):
+    job = queue.submit(_prores4444(make_movie("o.mov", b"ap4h", 24), tmp_path))
+    assert job.spec.extra["td_params"]["moviepixelformat"] == "yuv44410bit"
+
+
+def test_follow_source_unknown_encodes_opaque_and_warns(queue, bus, make_movie, tmp_path):
+    logs = _warnings(bus)
+    job = queue.submit(_prores4444(make_movie("n.mov", b"nclc", 24), tmp_path))
+    assert job.spec.extra["td_params"]["moviepixelformat"] == "yuv44410bit"
+    warned = [m["message"] for m in logs if m["level"] == "warning"]
+    assert warned and "n.mov" in warned[0]
+
+
+def test_follow_source_ignores_alpha_a_codec_cannot_carry(queue, bus, make_movie, tmp_path):
+    """An alpha source into H.264 is not an error, nor worth a warning."""
+    logs = _warnings(bus)
+    spec = JobSpec(input=make_movie("a.mov", b"ap4h", 32),
+                   output=tmp_path / "o.mp4", codec="h264")
+    job = queue.submit(spec)
+    assert job.spec.extra["td_params"]["moviepixelformat"] == "yuv420"
+    assert not [m for m in logs if m["level"] == "warning"]
+
+
+def test_no_alpha_overrides_an_alpha_source(queue, make_movie, tmp_path):
+    job = queue.submit(_prores4444(make_movie("a.mov", b"ap4h", 32), tmp_path,
+                                   alpha=False))
+    assert job.spec.extra["td_params"]["moviepixelformat"] == "yuv44410bit"

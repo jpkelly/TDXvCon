@@ -309,3 +309,61 @@ def test_hap_fourcc_names_match_the_variants_td_writes():
     assert KNOWN_FOURCCS[b"Hap5"] == "Hap Alpha"
     assert KNOWN_FOURCCS[b"HapY"] == "Hap Q"
     assert KNOWN_FOURCCS[b"HapM"] == "Hap Q Alpha"
+
+
+# ----------------------------------------------------------------------
+# Source alpha (issue #4): "follow source" needs to know, before the job
+# starts, whether the input carries alpha.
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("fourcc, depth, expected", [
+    (b"ap4h", 32, True),      # ProRes 4444 with alpha (ffmpeg and TD)
+    (b"ap4h", 24, False),
+    (b"rle ", 32, True),      # QuickTime Animation follows the same rule
+    (b"avc1", 24, False),
+    (b"Hap5", 24, True),      # Hap: the fourcc decides; TD writes depth 24
+    (b"HapM", 24, True),
+    (b"Hap1", 24, False),
+    (b"HapY", 24, False),
+    (b"nclc", 24, None),      # NotchLC: TD writes 24 with or without alpha
+    (b"ap4h", 0, None),       # a depth that follows no convention
+])
+def test_source_has_alpha_from_sample_entry(make_movie, fourcc, depth, expected):
+    from vcon.codec_probe import source_has_alpha
+
+    assert source_has_alpha(make_movie("s.mov", fourcc, depth)) is expected
+
+
+def test_source_has_alpha_reads_the_video_track_not_the_first(make_movie):
+    from vcon.codec_probe import video_sample_entry
+
+    p = make_movie("av.mov", b"ap4h", 32, audio_first=True)
+    assert video_sample_entry(p) == (b"ap4h", 32)
+
+
+def test_source_has_alpha_unknown_for_other_files(tmp_path):
+    from vcon.codec_probe import source_has_alpha
+
+    junk = tmp_path / "clip.webm"
+    junk.write_bytes(b"\x1aE\xdf\xa3" + b"\x00" * 64)
+    assert source_has_alpha(junk) is None
+    assert source_has_alpha(tmp_path / "missing.mov") is None
+
+
+@pytest.mark.skipif(__import__("shutil").which("ffmpeg") is None,
+                    reason="needs ffmpeg to make real movie files")
+@pytest.mark.parametrize("pix_fmt, expected", [
+    ("yuva444p10le", True), ("yuv444p10le", False)])
+def test_source_has_alpha_on_real_prores(tmp_path, pix_fmt, expected):
+    import subprocess
+
+    from vcon.codec_probe import source_has_alpha
+
+    out = tmp_path / f"{pix_fmt}.mov"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+         "-i", "testsrc2=size=160x120:rate=24", "-frames:v", "4",
+         "-c:v", "prores_ks", "-profile:v", "4444", "-pix_fmt", pix_fmt,
+         str(out)], check=True)
+    assert source_has_alpha(out) is expected

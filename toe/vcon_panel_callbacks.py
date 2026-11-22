@@ -1542,7 +1542,9 @@ def _run_next():
     note(f"  output: {nxt['output']!r}")
     note(f"  exists already: {os.path.exists(nxt['output'])}")
     quality = _quality_value()   # 0-1 float straight to MvO
-    fmt = _validate_choice(codec, "format", _val("format_dd"))
+    # Never send "no pixel format": MvO would keep the previous job's (#4).
+    fmt = _validate_choice(codec, "format", _val("format_dd"),
+                           allow_empty=False)
     # FPS per MODE: SOURCE -> 'auto' (the controller re-resolves from
     # each loaded movie's sample_rate, so batch files with different
     # rates each encode at their own); CUSTOM -> the field's value
@@ -1554,8 +1556,11 @@ def _run_next():
     res, scale = _res_value()
     if fps in ("", "keep", "auto"):
         fps = "auto"
-    if codec != "notchlc":
-        quality = None          # only NotchLC has a quality slider in MvO
+    # Send QUALITY for every codec, not just NotchLC: MvO's quality slider
+    # is shared by all codecs and keeps its value between jobs, and it
+    # changes MJPEG too (0.1 wrote a third of the bytes of 1.0, TD
+    # 2025.33230). Sent per job, the panel value wins over whatever a CLI
+    # job left behind (#4).
     container = _td_container(codec)
     audio = _audio_value()
     audio_sep = bool(_val("audio_sep_t"))

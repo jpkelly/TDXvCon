@@ -381,8 +381,23 @@ def test_td_params_alpha_emits_pixel_format():
     spec = next(c for c in BUILTIN_CODECS if c.name == "notchlc")
     with_alpha = spec.td_params(alpha=True)
     assert "moviepixelformat" in with_alpha
-    # alpha=None means "follow source" — no pixel format forced
-    assert "moviepixelformat" not in spec.td_params(alpha=None)
+    # Every job sends a pixel format (#4): opaque unless alpha is True.
+    # The queue manager turns "follow source" into True or False first.
+    assert spec.td_params(alpha=None)["moviepixelformat"] == "rgb"
+    assert spec.td_params(alpha=False)["moviepixelformat"] == "rgb"
+
+
+def test_td_params_always_send_pixel_format_and_quality():
+    """Movie File Out is shared: anything a job leaves out keeps the
+    previous job's value (#4). Every codec sends both."""
+    from vcon.registry import DEFAULT_QUALITY
+
+    for spec in BUILTIN_CODECS:
+        params = spec.td_params()
+        if spec.pixel_formats_for(spec.resolve_subtype(None)):
+            assert "moviepixelformat" in params, spec.name
+        expected = 0.862 if spec.name == "notchlc" else DEFAULT_QUALITY
+        assert params["quality"] == expected, spec.name
 
 
 def test_td_params_rejects_bad_quality():
