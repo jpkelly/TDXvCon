@@ -8,6 +8,8 @@ decode/encode, codec menus beyond the captured ones, or the panel.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from td_fakes import Rig
@@ -32,7 +34,7 @@ def test_job_writes_every_source_frame_once(media):
     rig.submit(src, out)
     rig.run()
 
-    assert rig.movieout.files[str(out)] == list(range(12))
+    assert rig.movieout.files[rig.mod.partial_path(str(out))] == list(range(12))
     done = rig.events("done")
     assert len(done) == 1 and done[0]["path"] == str(out)
     assert rig.movieout.par.record.eval() == 0
@@ -112,8 +114,9 @@ def test_job_after_a_failure_starts_its_own_file(media):
     rig.submit(src, second)
     rig.run()
 
-    assert rig.movieout.files[str(second)] == list(range(20))
-    assert len(rig.movieout.files[str(first)]) < 20
+    partial = rig.mod.partial_path
+    assert rig.movieout.files[partial(str(second))] == list(range(20))
+    assert len(rig.movieout.files[partial(str(first))]) < 20
 
 
 class _FakeProc:
@@ -333,7 +336,7 @@ def test_unopenable_input_fails_instead_of_encoding_placeholder(media):
     err = rig.events("error")[-1]
     assert err["code"] == "input-error"
     assert "could not open the input" in err["message"]
-    assert str(out) not in rig.movieout.files       # recording never began
+    assert rig.mod.partial_path(str(out)) not in rig.movieout.files  # never began
     assert rig.ext.last_result["ok"] is False
 
 
@@ -414,3 +417,66 @@ def test_codecs_that_write_odd_sizes_keep_them(media):
     rig.run()
     assert _sized(rig)[3:] == (1281, 721)
     assert _done_warnings(rig) == []
+
+
+# ----------------------------------------------------------------------
+# #8 — only a finished job leaves a file at the output name
+# ----------------------------------------------------------------------
+
+
+def test_finished_job_moves_its_partial_to_the_output_name(media):
+    src, out_dir = media
+    rig = Rig(frames=12)
+    out = out_dir / "clip.notchlc.mov"
+    rig.submit(src, out)
+    rig.run()
+
+    assert out.exists()
+    assert not Path(rig.mod.partial_path(str(out))).exists()
+    assert rig.ext.last_result["output"] == str(out)
+
+
+def test_cancel_leaves_no_file_at_either_name(media):
+    src, out_dir = media
+    rig = Rig(frames=50)
+    out = out_dir / "clip.notchlc.mov"
+    rig.submit(src, out)
+    rig.tick_until("encoding")
+    for _ in range(5):
+        rig.ext.onFrame()
+    partial = Path(rig.mod.partial_path(str(out)))
+    assert partial.exists() and not out.exists()   # recording under .partial
+
+    rig.ext.Cancel()
+
+    assert not partial.exists() and not out.exists()
+    assert rig.events("error")[-1]["code"] == "cancelled"
+
+
+def test_cancelled_reencode_keeps_the_existing_output(media):
+    """With -y the old file used to be overwritten from the first frame."""
+    src, out_dir = media
+    rig = Rig(frames=50)
+    out = out_dir / "clip.notchlc.mov"
+    out.write_bytes(b"the earlier, complete encode")
+    rig.submit(src, out)
+    rig.tick_until("encoding")
+    rig.ext.Cancel()
+
+    assert out.read_bytes() == b"the earlier, complete encode"
+
+
+def test_failed_job_removes_its_partial(media):
+    src, out_dir = media
+    rig = Rig(frames=20)
+    out = out_dir / "a.mov"
+    _fail_mid_encode(rig, src, out)
+
+    assert not Path(rig.mod.partial_path(str(out))).exists()
+    assert not out.exists()
+
+
+def test_partial_name_keeps_the_extension_last(media):
+    rig = Rig()
+    assert rig.mod.partial_path("/x/clip.prores.mov") == "/x/clip.prores.partial.mov"
+    assert rig.mod.partial_path("/x/loop.gif") == "/x/loop.partial.gif"

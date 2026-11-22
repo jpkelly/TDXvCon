@@ -60,6 +60,14 @@ IDLE_QUIT_SECONDS = 300  # safety net: exit TD when idle this long
 _ENCODE_SHARE = 0.92
 
 
+def partial_path(output):
+    """Where a job records until it succeeds: ``clip.partial.mov`` for
+    ``clip.mov``. The real extension stays last, so TD and ffmpeg still
+    pick the container from it (#8)."""
+    stem, ext = os.path.splitext(output)
+    return f"{stem}.partial{ext}"
+
+
 class VconExt:
     """The transcoder controller.
 
@@ -615,6 +623,10 @@ class VconExt:
             debug(f"vCon: could not stop recording: {exc}")
         self._kill_mux()
         self._kill_extract()
+        # A job that did not finish leaves nothing behind: its recording is
+        # still under the .partial name (PROTOCOL: cancel discards it).
+        if self.job and self._remove_quietly(self.job.get("partial")):
+            debug(f"vCon: removed partial {self.job['partial']}")
         self.job = None
         self.frame = 0
         self.total = 0
@@ -870,8 +882,15 @@ class VconExt:
                 return
 
         movieout = self.movieout
-        debug(f"vCon: MvO file <- {self.job['output']!r}")
-        movieout.par.file = self.job["output"]
+        # Record under a .partial name; only a job that succeeds moves it
+        # to the output name. A cancelled or failed encode then never
+        # leaves a truncated movie that plays like a finished one (#8),
+        # and an existing file at the output name survives until then.
+        partial = partial_path(self.job["output"])
+        self._remove_quietly(partial)          # a leftover from a crash
+        self.job["partial"] = partial
+        debug(f"vCon: MvO file <- {partial!r}")
+        movieout.par.file = partial
         self._plan_frame_rate(moviein)
         # Stop-frame recording, per the documented sequence:
         #   record = 1  (start recording)
@@ -1028,7 +1047,7 @@ class VconExt:
         if self.job is None:
             self.state = "idle"
             return
-        out = self.job["output"]
+        out = self.job.get("partial") or self.job["output"]
         # Movie File Out finalizes on its own schedule — a large file can
         # still be flushing several frames after record=0. Reporting
         # "size=0" here (and skipping the mux) meant the file simply
@@ -1038,7 +1057,7 @@ class VconExt:
                 self._set_status("finalizing file…")
                 return   # stay in "finishing"; _tick calls back next frame
             # Never report success for a file that does not exist.
-            self._fail(f"output file was not written: {out}",
+            self._fail(f"output file was not written: {self.job['output']}",
                        "output-error")
             return
         seconds = getattr(self, "seconds_taken", 0.0) or round(
@@ -1395,7 +1414,18 @@ class VconExt:
         self._maybe_extract_audio(out, note)
 
     def _maybe_extract_audio(self, video_output, note=""):
-        """Run separate audio extraction if audio_sep was requested."""
+        """Run separate audio extraction if audio_sep was requested.
+
+        Reached once the video, audio mux included, is finished: first move
+        it from its .partial name to the output name.
+        """
+        try:
+            video_output = self._promote_output(video_output)
+        except OSError as exc:
+            self._fail(f"the encode finished but could not be renamed to "
+                       f"{self.job['output']} ({exc}); it is kept as "
+                       f"{video_output}", "output-error")
+            return
         sep = (self.job.get("params") or {}).get("audio_sep")
         if not sep:
             self._job_complete(video_output, note)
@@ -1464,6 +1494,28 @@ class VconExt:
                 pass
             self._sep = None
             self._job_complete(video_output, note + ", sep audio failed")
+
+    def _promote_output(self, video_output):
+        """Rename the finished .partial file to the job's output name."""
+        out = self.job["output"]
+        if video_output != out:
+            os.replace(video_output, out)
+            self.job.pop("partial", None)   # nothing left to clean up
+            debug(f"vCon: {os.path.basename(video_output)} -> "
+                  f"{os.path.basename(out)}")
+        return out
+
+    @staticmethod
+    def _remove_quietly(path):
+        """Delete a file if it exists. A file TD still holds open may
+        refuse (Windows); it then stays, under its .partial name."""
+        try:
+            if path and os.path.exists(path):
+                os.remove(path)
+                return True
+        except Exception as exc:
+            debug(f"vCon: could not remove {path}: {exc}")
+        return False
 
     def _cancel(self, job_id):
         if self.job and self.job["id"] == job_id and self.state in (
