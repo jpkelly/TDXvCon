@@ -73,7 +73,7 @@ def strip_components(expanded: Path, names: tuple[str, ...]) -> list[str]:
             path.unlink()
     toc.write_text("".join(e + "\n" for e in kept), encoding="utf-8")
 
-    leftovers = [str(p.relative_to(expanded)) for p in expanded.rglob("*")
+    leftovers = [p.relative_to(expanded).as_posix() for p in expanded.rglob("*")
                  if p.is_file()
                  and any(n.encode() in p.read_bytes() for n in names)]
     if leftovers:
@@ -87,8 +87,33 @@ def received_messages(expanded: Path) -> list[str]:
     """DATs whose saved table holds protocol messages. A TCP/IP DAT keeps
     the lines it received, and saving bakes them (with the job paths they
     name) into the toe."""
-    return sorted(str(f.relative_to(expanded)) for f in expanded.rglob("*.fifo")
+    return sorted(f.relative_to(expanded).as_posix() for f in expanded.rglob("*.fifo")
                   if b'{"type"' in f.read_bytes())
+
+
+#: Panel widgets whose saved value is the maintainer's own choice, not a
+#: default to ship: a personal destination folder, and SCALE, which would
+#: resize a new user's first encode. Their Value0 lines are dropped, which
+#: is how TouchDesigner stores a parameter left at its default (the 1.0.0
+#: toe had no scaled_t line: SCALE off). An empty destination writes next
+#: to the source. Users' own choices live in panel_settings.json.
+RESET_WIDGETS = ("project1/vcon/panel/destination.parm",
+                 "project1/vcon/panel/scaled_t.parm")
+
+
+def reset_widget_values(expanded: Path) -> list[str]:
+    """Drop the saved Value0 of RESET_WIDGETS; returns the widgets reset."""
+    reset = []
+    for rel in RESET_WIDGETS:
+        path = expanded / rel
+        if not path.is_file():
+            continue
+        lines = path.read_bytes().split(b"\n")
+        kept = [line for line in lines if not line.startswith(b"Value0 ")]
+        if len(kept) != len(lines):
+            path.write_bytes(b"\n".join(kept))
+            reset.append(Path(rel).stem)
+    return reset
 
 
 def make_release(dev: Path, out: Path, toeexpand: str) -> dict:
@@ -107,6 +132,7 @@ def make_release(dev: Path, out: Path, toeexpand: str) -> dict:
                 f"(job paths from this machine). Pulse the TCP/IP DAT's "
                 f"Clear parameter in TouchDesigner, save, and run again.")
         removed = strip_components(dev_dir, tm.DEV_ONLY)
+        reset = reset_widget_values(dev_dir)
 
         # toecollapse writes <name>.toe from <name>.toe.dir + <name>.toe.toc.
         (work / "dev" / "t.toe").unlink()
@@ -129,7 +155,8 @@ def make_release(dev: Path, out: Path, toeexpand: str) -> dict:
 
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(built, out)
-    return {"removed": removed, "top_level": top, "hashes": hashes}
+    return {"removed": removed, "top_level": top, "hashes": hashes,
+            "reset": reset}
 
 
 def newer_saves(dev: Path) -> list[Path]:
@@ -169,6 +196,8 @@ def main() -> int:
                           tm.find_toeexpand(args.toeexpand))
     print(f"removed {len(result['removed'])} toc entries; top level now: "
           f"{', '.join(result['top_level'])}")
+    if result["reset"]:
+        print(f"reset to defaults: {', '.join(result['reset'])}")
     print(f"wrote {args.out}")
 
     stale = [src for src, digest in result["hashes"].items()
