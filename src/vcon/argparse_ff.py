@@ -83,7 +83,11 @@ _OUTPUT_FLAGS = {
     "-resolution": "resolution",
     "-fit": "fit",
     "-no-alpha": "no_alpha",
+    "-alpha": "alpha",
 }
+
+#: Output options that take no value.
+_SWITCHES = {"-no-alpha", "-alpha"}
 
 
 def _flag_needs_value(flag: str) -> bool:
@@ -190,7 +194,7 @@ def parse_args(argv: list[str]) -> ParsedArgs:
 
         if tok in _OUTPUT_FLAGS:
             key = _OUTPUT_FLAGS[tok]
-            if tok == "-no-alpha":
+            if tok in _SWITCHES:
                 pending_output_opts[key] = True
                 i += 1
                 continue
@@ -204,6 +208,8 @@ def parse_args(argv: list[str]) -> ParsedArgs:
             raise ParseError(f"unknown option: {tok} (see vcon -h)")
         out = {"output": Path(tok)}
         out.update(pending_output_opts)
+        if out.get("alpha") and out.get("no_alpha"):
+            raise ParseError(f"-alpha and -no-alpha both given for {tok}")
         pending_output_opts = {}
         p.outputs.append(out)
         i += 1
@@ -288,7 +294,11 @@ output options (apply to the output that follows — like ffmpeg):
   -s,  -resolution WxH     output resolution ("auto" keeps the source size)
   -fit MODE                rescale mode (default fitbest): fill|fithorz|fitvert|fitbest|fitoutside
                             (aliases: stretch, fitwidth, fitheight, best, cover)
+  -alpha                   force alpha on, e.g. for a NotchLC source, whose
+                            alpha vCon cannot detect (fails if the codec can't
+                            carry alpha; see -codecs)
   -no-alpha                force alpha off even if the source has it
+                            (default: follow the source)
 
 global options:
   -i INPUT                 input file (one per run)

@@ -51,7 +51,9 @@ def _build_specs(p: ParsedArgs) -> list[JobSpec]:
         subtype = out.get("subtype")
         quality = out.get("quality")
         fps = out.get("fps", "auto")
-        alpha = None
+        alpha = None             # follow the source (decided at submit)
+        if out.get("alpha"):
+            alpha = True
         if out.get("no_alpha"):
             alpha = False
         resolution = out.get("resolution", "auto")

@@ -307,3 +307,28 @@ def test_constant_frame_rate_source_does_not_warn(queue, bus, make_movie, tmp_pa
     logs = _warnings(bus)
     queue.submit(JobSpec(input=src, output=tmp_path / "o.mov", codec="prores"))
     assert not [m for m in logs if "variable frame rate" in m["message"]]
+
+
+def test_alpha_flag_keeps_alpha_the_source_cannot_show(queue, bus, make_movie, tmp_path):
+    """#15: NotchLC sources look the same with or without alpha; -alpha
+    (alpha=True) forces it, with no "cannot tell" warning."""
+    logs = _warnings(bus)
+    job = queue.submit(_prores4444(make_movie("n.mov", b"nclc", 24), tmp_path,
+                                   alpha=True))
+    assert job.spec.extra["td_params"]["moviepixelformat"] == "yuva444412bit"
+    assert not [m for m in logs if m["level"] == "warning"]
+
+
+def test_alpha_flag_on_a_codec_without_alpha_fails_before_encoding(
+        queue, make_movie, tmp_path):
+    spec = JobSpec(input=make_movie("a.mov", b"ap4h", 32),
+                   output=tmp_path / "o.mp4", codec="h264", alpha=True)
+    with pytest.raises(CodecError, match="cannot encode alpha"):
+        queue.submit(spec)
+
+
+def test_unknown_alpha_warning_mentions_the_flag(queue, bus, make_movie, tmp_path):
+    logs = _warnings(bus)
+    queue.submit(_prores4444(make_movie("n.mov", b"nclc", 24), tmp_path))
+    warned = [m["message"] for m in logs if m["level"] == "warning"]
+    assert warned and "-alpha" in warned[0]
