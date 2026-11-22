@@ -74,9 +74,9 @@ supported. vCon writes the source frames in order at a constant rate, while
 the audio keeps its real timing, so the video drifts against the audio. The
 last frame may also be held at the end. Convert such sources to a constant
 rate first, for example
-`ffmpeg -i in.mp4 -fps_mode cfr -r 30 -c:a copy constant.mov`. The CLI warns
-when a QuickTime/MP4 source has a variable frame rate; the panel does not
-check.
+`ffmpeg -i in.mp4 -fps_mode cfr -r 30 -c:a copy constant.mov`. vCon warns
+when a QuickTime/MP4 source has a variable frame rate: the CLI before it
+encodes, the panel with a warning row.
 
 This is alpha software. Automated tests cover the Python core and a simulated
 controller, not the panel, GPU encoding, or every platform/codec combination.

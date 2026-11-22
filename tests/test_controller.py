@@ -765,3 +765,47 @@ def test_movie_file_out_error_text_is_cleaned(raw, clean):
     rig = Rig()
     rig.movieout.error_text = raw
     assert rig.ext._mvo_errors() == clean
+
+
+# ----------------------------------------------------------------------
+# #17 — panel jobs warn about variable-frame-rate sources too
+# ----------------------------------------------------------------------
+
+_VFR = [(150, 1000), (150, 3000)]          # 30 fps for 5 s, then 10 fps
+
+
+def test_panel_job_with_vfr_source_warns(make_movie, tmp_path):
+    rig = Rig(frames=10)
+    src = make_movie("phone.mov", b"avc1", 24, stts=_VFR)
+    rig.ext.Transcode(str(src), str(tmp_path / "out.mov"), codec="notchlc")
+    rig.run()
+    warnings = rig.events("done")[-1]["warnings"]
+    assert any("phone.mov has a variable frame rate" in w for w in warnings)
+
+
+def test_cli_job_is_not_warned_twice(make_movie, tmp_path):
+    """The CLI already warned at submit (queue_manager)."""
+    rig = Rig(frames=10)
+    src = make_movie("phone.mov", b"avc1", 24, stts=_VFR)
+    rig.submit(src, tmp_path / "out.mov")
+    rig.run()
+    assert rig.events("done")[-1]["warnings"] == []
+
+
+def test_constant_rate_panel_job_does_not_warn(make_movie, tmp_path):
+    rig = Rig(frames=10)
+    src = make_movie("cfr.mov", b"avc1", 24, stts=[(48, 512)])
+    rig.ext.Transcode(str(src), str(tmp_path / "out.mov"), codec="notchlc")
+    rig.run()
+    assert rig.events("done")[-1]["warnings"] == []
+
+
+@pytest.mark.parametrize("runs", [
+    [(48, 512)], [(1407, 1024), (1, 256)], [(500, 33), (500, 34)],
+    _VFR, [(10, 1000), (1, 2000), (10, 1000), (1, 1000)], None])
+def test_controller_vfr_check_agrees_with_the_cli(make_movie, runs):
+    """The toe cannot import vcon.codec_probe; its copy must agree."""
+    from vcon.codec_probe import is_variable_frame_rate as cli_check
+
+    src = make_movie("v.mov", b"avc1", 24, stts=runs)
+    assert Rig().mod.is_variable_frame_rate(str(src)) == cli_check(src)
