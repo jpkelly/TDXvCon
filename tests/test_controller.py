@@ -211,7 +211,9 @@ def ffmpeg(monkeypatch):
     def install(rig, rc, log=b""):
         fake = _FakeFfmpeg(rc, log)
         monkeypatch.setattr(subprocess, "Popen", fake)
-        rig.mod.VconExt._ffmpeg_cache = "/fake/ffmpeg"
+        from td_fakes import ffmpeg_report
+        monkeypatch.setattr(rig.mod.VconExt, "FFmpegStatus",
+                            lambda self, **kwargs: ffmpeg_report("/fake/ffmpeg"))
         state["fake"] = fake
         return fake
 
@@ -809,3 +811,72 @@ def test_controller_vfr_check_agrees_with_the_cli(make_movie, runs):
 
     src = make_movie("v.mov", b"avc1", 24, stts=runs)
     assert Rig().mod.is_variable_frame_rate(str(src)) == cli_check(src)
+
+
+def test_pending_ffmpeg_validation_waits_without_finishing_job(media, monkeypatch):
+    from td_fakes import ffmpeg_report
+
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)
+    ready = False
+    monkeypatch.setattr(rig.mod.VconExt, 'FFmpegStatus',
+                        lambda self, **kw: ffmpeg_report() if ready else {'state': 'checking'})
+    rig.submit(src, out_dir / 'a.mov', audio='aac')
+    rig.tick_until('finishing')
+    for _ in range(10):
+        rig.ext.onFrame()
+    assert rig.ext.state == 'finishing'
+    assert not rig.events('done')
+    ready = True
+    rig.run()
+    assert 'ffmpeg not found' in rig.events('done')[-1]['warnings'][0]
+
+
+def test_cancel_works_while_checking_ffmpeg(media, monkeypatch):
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)
+    monkeypatch.setattr(rig.mod.VconExt, 'FFmpegStatus',
+                        lambda self, **kw: {'state': 'checking'})
+    rig.submit(src, out_dir / 'a.mov', audio='aac')
+    rig.tick_until('finishing')
+    for _ in range(5):
+        rig.ext.onFrame()
+    rig.ext.Cancel()
+    assert rig.ext.state == 'idle'
+    assert rig.ext.last_result['code'] == 'cancelled'
+    assert not rig.events('done')
+
+
+def test_unavailable_encoder_preserves_video_with_specific_warning(media, ffmpeg, monkeypatch):
+    from td_fakes import ffmpeg_report
+
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)
+    fake = ffmpeg(rig, rc=0)
+    report = ffmpeg_report('/fake/ffmpeg')
+    report['encoders'] -= {'aac'}
+    monkeypatch.setattr(rig.mod.VconExt, 'FFmpegStatus', lambda self, **kw: report)
+    out = out_dir / 'a.mp4'
+    rig.submit(src, out, audio='aac')
+    rig.run()
+    assert out.exists()
+    assert not fake.calls
+    assert 'missing encoder aac' in rig.events('done')[-1]['warnings'][0]
+
+
+def test_unavailable_sidecar_encoder_does_not_disable_mux(media, ffmpeg, monkeypatch):
+    from td_fakes import ffmpeg_report
+
+    src, out_dir = media
+    rig = Rig(frames=5, has_audio=True)
+    fake = ffmpeg(rig, rc=0)
+    report = ffmpeg_report('/fake/ffmpeg')
+    report['encoders'] -= {'pcm_s24be'}
+    monkeypatch.setattr(rig.mod.VconExt, 'FFmpegStatus', lambda self, **kw: report)
+    out = out_dir / 'a.mov'
+    rig.submit(src, out, audio='aac', audio_sep='aiff24')
+    rig.run()
+    assert out.read_bytes() == b'muxed'
+    assert len(fake.calls) == 1
+    assert 'separate audio not exported: FFmpeg missing encoder pcm_s24be' in (
+        rig.events('done')[-1]['warnings'][0])

@@ -311,6 +311,19 @@ class FakeComp(FakeOp):
         return self._children.get(name)
 
 
+def ffmpeg_report(path=None):
+    """A validated fake, or a completed search with nothing installed."""
+    return {
+        "state": "ready" if path else "missing", "path": path,
+        "version": "test" if path else None,
+        "error": "" if path else "ffmpeg not found", "failures": (),
+        "muxers": frozenset(("mov", "mp4", "matroska", "webm", "avi",
+                             "wav", "aiff", "ipod", "mp3")),
+        "encoders": frozenset(("pcm_s16le", "pcm_s24le", "pcm_s16be",
+                               "pcm_s24be", "aac", "alac", "libmp3lame", "libopus")),
+    }
+
+
 def load_controller_module():
     """Import toe/vcon_controller.py with TD's ``debug`` builtin stubbed."""
     spec = importlib.util.spec_from_file_location(
@@ -318,8 +331,8 @@ def load_controller_module():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     mod.debug = lambda *args, **kwargs: None
-    # Never launch a real ffmpeg from tests: "" = searched, not found.
-    mod.VconExt._ffmpeg_cache = ""
+    # Never start real discovery/probes from simulated encode tests.
+    mod.VconExt.FFmpegStatus = lambda self, **kwargs: ffmpeg_report()
     return mod
 
 

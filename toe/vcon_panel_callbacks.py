@@ -157,6 +157,8 @@ _showing_activity = False  # OUTPUT field is showing live job status
 _install = None            # background audio-support install, or None
 _health_check_frame = -999 # last frame we ran the ffmpeg check
 _health_ok = True          # cached ffmpeg status for the help button
+_health_state = "checking"
+_show_recheck_result = False
 _ROW_H = 22                # lister row height in px (measured, JP)
 _BLANK = "---"             # FPS/OUTPUT placeholder: nothing to show
 _lister_errs_cleared = False  # one-shot: stale init error on the lister
@@ -2196,26 +2198,19 @@ def _vcon_libs_dir():
     return os.path.join(_vcon_data_dir(), "pylibs")
 
 
+def _ffmpeg_status(refresh=False):
+    """Use the same discovery, validation and cache as actual audio jobs."""
+    return ext().FFmpegStatus(
+        refresh=refresh, audio=_audio_value(),
+        extension=_container_ext(_val("container_dd") or "mov"),
+        audio_sep=(_val("audio_sep_dd") or "wav16")
+        if _val("audio_sep_t") else None)
+
+
 def _ffmpeg_binary():
-    """The ffmpeg binary vCon can currently use, or None."""
-    import glob
-    import shutil
-    try:
-        import imageio_ffmpeg
-        return imageio_ffmpeg.get_ffmpeg_exe()
-    except Exception:
-        pass
-    home = os.path.expanduser("~")
-    for pat in (
-            f"{_vcon_libs_dir()}/imageio_ffmpeg/binaries/ffmpeg-*",
-            f"{home}/.local/pipx/venvs/*/lib/python*/site-packages/"
-            "imageio_ffmpeg/binaries/ffmpeg-*",
-            f"{home}/Library/Python/*/lib/python/site-packages/"
-            "imageio_ffmpeg/binaries/ffmpeg-*"):
-        for cand in sorted(glob.glob(pat), reverse=True):
-            if os.path.isfile(cand):
-                return cand
-    return shutil.which("ffmpeg")
+    """Compatibility for the audio diagnostic script; only validated paths."""
+    report = _ffmpeg_status()
+    return report.get("path") if report["state"] == "ready" else None
 
 
 def _python_for_pip():
@@ -2323,25 +2318,6 @@ def _latest_release(timeout=2.0):
         return None
 
 
-def _ffmpeg_version():
-    """Version string of the ffmpeg vCon would use, or None."""
-    exe = _ffmpeg_binary()
-    if not exe:
-        return None
-    try:
-        import subprocess
-        out = subprocess.run([exe, "-version"], capture_output=True,
-                             timeout=10).stdout.decode("utf-8", "replace")
-        first = out.splitlines()[0] if out else ""
-        # "ffmpeg version 7.1 Copyright ..." -> "7.1"
-        parts = first.split()
-        if len(parts) >= 3 and parts[0] == "ffmpeg":
-            return parts[2]
-        return first[:40] or None
-    except Exception:
-        return None
-
-
 def ShowSetupDialog():
     """SETUP button: a modal dialog with live status + actions.
 
@@ -2349,12 +2325,13 @@ def ShowSetupDialog():
     where they are looking, instead of the textport they may never open.
     Falls back to textport output if messageBox is unavailable.
     """
-    exe = _ffmpeg_binary()
+    support = _ffmpeg_status()
+    exe = support.get("path")
     dest = _vcon_libs_dir()
     py = _python_for_pip() or ("py" if os.name == "nt" else "python3")
-    ready = exe is not None
+    ready = support["state"] == "ready"
     cli_ver = _cli_version()
-    ff_ver = _ffmpeg_version()
+    ff_ver = support.get("version")
     toe_ver = _toe_version()
     latest = _latest_release()
     lines = []
@@ -2368,14 +2345,22 @@ def ShowSetupDialog():
             "",
         ]
     lines += [
-        "AUDIO SUPPORT:  " + ("READY" if ready else "NOT INSTALLED"),
+        "AUDIO SUPPORT:  " + {
+            "ready": "READY", "missing": "NOT INSTALLED",
+            "invalid": "UNUSABLE", "unsupported": "UNSUPPORTED SELECTION",
+            "checking": "CHECKING",
+        }[support["state"]],
         "",
     ]
-    if ready:
-        lines += [f"ffmpeg: {exe}"]
-    else:
+    if exe:
+        lines += [f"ffmpeg: {exe}", f"Source: {support.get('source', 'unknown')}"]
+    if support.get("sidecar_path"):
+        lines.append(f"Separate audio ffmpeg: {support['sidecar_path']}")
+    if not ready:
+        lines += [support["error"], ""]
+    if support["state"] in ("missing", "invalid", "unsupported"):
         lines += [
-            "Encodes will be VIDEO ONLY until this is installed.",
+            "The selected audio operation is unavailable.",
             "",
             "TouchDesigner's frame-by-frame recording cannot write",
             "audio, so vCon muxes the source audio in afterwards with",
@@ -2398,6 +2383,8 @@ def ShowSetupDialog():
         "vCon also finds ffmpeg from:",
         "  - pipx install tdxvcon   (the vCon command-line tool)",
         "  - any system ffmpeg on PATH",
+        "  - Homebrew / MacPorts (macOS)",
+        "  - WinGet / Chocolatey / Scoop standard locations (Windows)",
         "",
         "--- Command-line usage ---",
         "Install the CLI:  pipx install tdxvcon",
@@ -2408,15 +2395,18 @@ def ShowSetupDialog():
         "--- Versions ---",
         f"  vCon (this .toe) : {toe_ver}",
         f"  vcon CLI tool    : {cli_ver or 'not installed'}",
-        f"  ffmpeg           : {ff_ver or 'not installed'}",
+        f"  ffmpeg           : {ff_ver or support['state']}",
     ]
     if latest is not None:
         lines += [f"  latest on PyPI   : {latest}"]
+    if support.get("failures"):
+        lines += ["", "Copies that could not run:", *support["failures"]]
     msg = "\n".join(lines)
     manual_cmd = (f'"{py}" -m pip install --upgrade '
                   f'--target "{dest}" imageio-ffmpeg')
-    buttons = (["Re-check", "Copy Command", "Close"] if ready
-               else ["Install Now", "Copy Command", "Close"])
+    buttons = ["Re-check", "Copy Command", "Close"]
+    if support["state"] in ("missing", "invalid", "unsupported"):
+        buttons.insert(0, "Install Now")
     try:
         choice = ui.messageBox("vCon — Setup & Help", msg, buttons=buttons)
     except TypeError:
@@ -2430,12 +2420,14 @@ def ShowSetupDialog():
         # No messageBox at all (headless): textport is the fallback.
         note(msg)
         return
-    if choice == 0:
-        if ready:
-            AudioSupportStatus()
-        else:
-            InstallAudioSupport()
-    elif choice == 1:
+    action = buttons[choice] if 0 <= choice < len(buttons) else "Close"
+    if action == "Re-check":
+        AudioSupportStatus()
+    elif action == "Install Now":
+        # Use the report the user acted on. A timed background refresh
+        # must not turn their Install click into a no-op.
+        InstallAudioSupport(support=support)
+    elif action == "Copy Command":
         try:
             ui.clipboard = manual_cmd
             note("manual install command copied to the clipboard:")
@@ -2452,14 +2444,13 @@ def ShowSetupDialog():
 
 
 def AudioSupportStatus():
-    """Report whether audio muxing is ready, and how to fix it if not."""
-    exe = _ffmpeg_binary()
-    if exe:
-        note(f"audio support: READY — ffmpeg at {exe}")
-        return True
-    note("audio support: NOT INSTALLED — encodes will be video-only.")
-    note("  Press the SETUP button on the panel for instructions.")
-    return False
+    """Force a fresh check, including retrying unchanged failed binaries."""
+    global _health_check_frame, _health_state, _show_recheck_result
+    _show_recheck_result = True
+    _ffmpeg_status(refresh=True)
+    _health_check_frame = -999
+    _health_state = "checking"
+    note("Checking audio support…")
 
 
 def ShowAudioSetupHelp():
@@ -2476,12 +2467,12 @@ def ShowAudioSetupHelp():
     note("Run that in Terminal (macOS) or cmd/PowerShell (Windows).")
     note("Alternatives that vCon also detects automatically:")
     note("  • pipx install tdxvcon      (the vCon command-line tool)")
-    note("  • a system ffmpeg on PATH   (brew install ffmpeg, etc.)")
+    note("  • a system ffmpeg on PATH or a standard package-manager location")
     note("Then click CHECK AUDIO, or restart TouchDesigner.")
     note("-" * 64)
 
 
-def InstallAudioSupport():
+def InstallAudioSupport(support=None):
     """One-click audio support: pip-install imageio-ffmpeg in the background.
 
     Non-blocking — pip downloads ~30MB and would freeze TD's UI if run
@@ -2492,9 +2483,12 @@ def InstallAudioSupport():
     if _install is not None:
         note("audio install: already running — watch the OUTPUT field")
         return
-    exe = _ffmpeg_binary()
-    if exe:
-        note(f"audio support already installed — ffmpeg at {exe}")
+    support = support or _ffmpeg_status()
+    if support["state"] == "checking":
+        note("FFmpeg check is running — reopen Setup & Help when it finishes.")
+        return
+    if support["state"] == "ready":
+        note(f"audio support already installed — ffmpeg at {support['path']}")
         return
     py = _python_for_pip()
     if py is None:
@@ -2540,15 +2534,25 @@ def _update_health_button():
     every 60 frames. The pulse uses absTime.frame so it runs without
     any extra CHOP or timer.
     """
-    global _health_check_frame, _health_ok
+    global _health_check_frame, _health_ok, _health_state, _show_recheck_result
     w = widget("help_b")
     if w is None:
         return
     frame = absTime.frame
-    if frame - _health_check_frame >= 60 or _health_check_frame < 0:
+    if (frame - _health_check_frame >= 60 or _health_check_frame < 0
+            or _health_state == "checking"):
         _health_check_frame = frame
-        _health_ok = _ffmpeg_binary() is not None
-    if _health_ok:
+        support = _ffmpeg_status()
+        _health_state = support["state"]
+        _health_ok = _health_state == "ready"
+        if _show_recheck_result and _health_state != "checking":
+            _show_recheck_result = False
+            ShowSetupDialog()
+    if _health_state == "checking":
+        w.par.Buttonofffacecolorr.val = 0.35
+        w.par.Buttonofffacecolorg.val = 0.35
+        w.par.Buttonofffacecolorb.val = 0.35
+    elif _health_ok:
         w.par.Buttonofffacecolorr.val = 0.0
         w.par.Buttonofffacecolorg.val = 0.3666667
         w.par.Buttonofffacecolorb.val = 0.5
@@ -2586,10 +2590,15 @@ def _install_tick():
         inst["log"].close()
     except Exception:
         pass
-    _install = None
     if rc == 0:
-        exe = _ffmpeg_binary()
-        if exe:
+        support = _ffmpeg_status(refresh=not inst.get("verifying", False))
+        inst["verifying"] = True
+        if support["state"] == "checking":
+            _set_output_text("Validating installed audio support…")
+            return
+        _install = None
+        exe = support.get("path")
+        if support["state"] == "ready":
             note("-" * 64)
             note("AUDIO SUPPORT INSTALLED")
             note(f"  ffmpeg: {exe}")
@@ -2605,11 +2614,12 @@ def _install_tick():
             except Exception:
                 pass
         else:
-            note("audio install: pip succeeded but no ffmpeg binary was "
-                 "found afterwards.")
+            note(f"audio install: pip succeeded but validation failed: {support['error']}")
+            _set_output_text("Audio validation failed — see Setup & Help")
             ShowAudioSetupHelp()
         PreviewOutput()
         return
+    _install = None
     tail = ""
     try:
         with open(inst["log_path"], "r", errors="replace") as fh:

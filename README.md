@@ -31,7 +31,26 @@ Audio muxing and separate audio export require FFmpeg. Click **?** to open
 **Setup & Help**, then **Install Now** if audio support is missing. This downloads
 `imageio-ffmpeg` into vCon's user data folder and requires an available Python
 interpreter with pip. The dialog also provides a manual install command.
-An existing FFmpeg executable on TouchDesigner's `PATH` can be used instead.
+vCon also finds existing FFmpeg installations, even when TouchDesigner was
+opened from the Finder with a minimal `PATH`. The panel and encoder share
+one search. Each audio operation uses the first copy in this order that
+supports its container and codec:
+
+1. `IMAGEIO_FFMPEG_EXE`, then the binary in an importable `imageio-ffmpeg` package.
+2. vCon's downloaded copy, pipx environments, and user Python packages.
+3. The current Python environment's binary, then FFmpeg on `PATH`.
+4. Standard package-manager locations: Homebrew (`/opt/homebrew/bin` and
+   `/usr/local/bin`) and MacPorts (`/opt/local/bin`) on macOS; WinGet,
+   Chocolatey, and Scoop on Windows.
+
+Validation runs in the background: FFmpeg must successfully report its
+version, output muxers, and audio encoders. **Setup & Help** shows its version,
+source, path, or the reason it could not be used. Capabilities are checked
+against the selected container and audio mode, including separate audio
+export. A missing encoder only prevents operations that need it.
+Results are cached by binary path and file metadata; replacing a binary,
+finishing an installation, or choosing **Re-check** triggers validation again.
+If audio cannot be produced, the video is kept and the job reports a warning.
 
 Choose the desired **AUDIO** mode before starting: the shipped default is
 no audio. FFmpeg is not bundled in the project.

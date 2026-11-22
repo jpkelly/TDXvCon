@@ -63,6 +63,233 @@ _ENCODE_SHARE = 0.92
 
 
 # ---------------------------------------------------------------------
+# FFmpeg discovery and validation, shared with the panel (#21, #22).
+# Kept in this embedded DAT: the standalone toe cannot import vcon.
+# Only the main thread touches TD; discovery/probes run in a worker.
+# ---------------------------------------------------------------------
+
+
+def _ffmpeg_candidates():
+    """Yield (source, path) in deterministic automatic-discovery order."""
+    import glob
+    import shutil
+
+    override = os.environ.get("IMAGEIO_FFMPEG_EXE")
+    if override:
+        yield "imageio environment", shutil.which(override) or override
+    # Inspect the package directory instead of get_ffmpeg_exe(): that
+    # function runs its own probes without our timeout or cache.
+    try:
+        import imageio_ffmpeg
+        package = os.path.dirname(imageio_ffmpeg.__file__)
+        for path in sorted(glob.glob(os.path.join(package, "binaries", "ffmpeg-*"))):
+            yield "Python package", path
+    except ImportError:
+        pass
+    home = os.path.expanduser("~")
+    if sys.platform == "darwin":
+        data = os.path.join(home, "Library", "Application Support", "vCon")
+    elif os.name == "nt":
+        data = os.path.join(os.environ.get("LOCALAPPDATA") or home, "vCon")
+    else:
+        data = os.path.join(home, ".local", "share", "vCon")
+    patterns = [
+        ("vCon download", f"{data}/pylibs/imageio_ffmpeg/binaries/ffmpeg-*"),
+        ("pipx", f"{home}/.local/pipx/venvs/*/lib/python*/site-packages/"
+         "imageio_ffmpeg/binaries/ffmpeg-*"),
+        ("pipx", f"{home}/.local/share/pipx/venvs/*/lib/python*/site-packages/"
+         "imageio_ffmpeg/binaries/ffmpeg-*"),
+        ("user Python", f"{home}/Library/Python/*/lib/python/site-packages/"
+         "imageio_ffmpeg/binaries/ffmpeg-*"),
+        ("user Python", f"{home}/.local/lib/python*/site-packages/"
+         "imageio_ffmpeg/binaries/ffmpeg-*"),
+    ]
+    for source, pattern in patterns:
+        for path in sorted(glob.glob(pattern), reverse=True):
+            yield source, path
+    # Preserve imageio's conda fallback without delegating validation.
+    yield "Python environment", os.path.join(
+        sys.prefix, "Library", "bin", "ffmpeg.exe") if os.name == "nt" else (
+            os.path.join(sys.prefix, "bin", "ffmpeg"))
+    found = shutil.which("ffmpeg")
+    if found:
+        yield "PATH", found
+    if sys.platform == "darwin":
+        yield "Homebrew", "/opt/homebrew/bin/ffmpeg"
+        yield "Homebrew", "/usr/local/bin/ffmpeg"
+        yield "MacPorts", "/opt/local/bin/ffmpeg"
+    elif os.name == "nt":
+        for source, variable, parts in (
+                ("WinGet", "LOCALAPPDATA", ("Microsoft", "WinGet", "Links")),
+                ("Chocolatey", "ProgramData", ("chocolatey", "bin")),
+                ("Scoop", "USERPROFILE", ("scoop", "shims"))):
+            base = os.environ.get(variable)
+            if base:
+                yield source, os.path.join(base, *parts, "ffmpeg.exe")
+
+
+def _ffmpeg_probe(path):
+    """Run bounded checks; a path existing alone never means READY."""
+    import subprocess
+
+    outputs = []
+    for option in ("-version", "-muxers", "-encoders"):
+        try:
+            proc = subprocess.run(
+                [path, "-hide_banner", option], stdin=subprocess.DEVNULL,
+                capture_output=True, text=True, errors="replace", timeout=2,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        except subprocess.TimeoutExpired:
+            raise ValueError(f"{option} timed out after 2 seconds") from None
+        if proc.returncode:
+            detail = (proc.stderr or proc.stdout).strip()[-300:]
+            raise ValueError(f"{option} exited {proc.returncode}: {detail}")
+        outputs.append(proc.stdout)
+    first = outputs[0].splitlines()[0] if outputs[0] else ""
+    if not first.startswith("ffmpeg version "):
+        raise ValueError("-version did not identify an FFmpeg executable")
+    muxers, encoders = set(), set()
+    for line in outputs[1].splitlines():
+        fields = line.split()
+        if len(fields) >= 2 and fields[0] == "E" and fields[1] != "=":
+            muxers.update(fields[1].split(","))
+    for line in outputs[2].splitlines():
+        fields = line.split()
+        if (len(fields) >= 2 and len(fields[0]) == 6
+                and fields[0].startswith("A") and fields[1] != "="):
+            encoders.add(fields[1])
+    if not muxers or not encoders:
+        raise ValueError("FFmpeg reported no output muxers or audio encoders")
+    return {"state": "ready", "path": path, "version": first.split()[2],
+            "muxers": frozenset(muxers), "encoders": frozenset(encoders),
+            "error": ""}
+
+
+class _FFmpegDiscovery:
+    """Nonblocking discovery with stat-keyed success AND failure caching.
+
+    status() is called on TD's main thread. The worker owns the probe
+    cache and publishes a result; it never accesses TD operators.
+    """
+
+    def __init__(self):
+        self._cache = {}
+        self._thread = None
+        self._reply = None
+        self._result = None
+        self._checked_at = float("-inf")
+        self._generation = 0
+
+    def _scan(self, generation):
+        failures, ready, seen = [], [], set()
+        result = {"state": "missing", "path": None, "version": None,
+                  "error": "ffmpeg not found", "muxers": frozenset(),
+                  "encoders": frozenset()}
+        try:
+            for source, candidate in _ffmpeg_candidates():
+                path = os.path.realpath(os.path.expanduser(candidate))
+                if path in seen:
+                    continue
+                seen.add(path)
+                if not os.path.isfile(path):
+                    continue
+                try:
+                    stat = os.stat(path)
+                    key = (generation, path, stat.st_mtime_ns, stat.st_size,
+                           stat.st_mode)
+                    if key not in self._cache:
+                        try:
+                            if not os.access(path, os.X_OK):
+                                raise ValueError("file is not executable")
+                            report = _ffmpeg_probe(path)
+                        except (OSError, ValueError) as exc:
+                            report = {**result, "state": "invalid", "path": path,
+                                      "error": str(exc)}
+                        # Keep only the latest fingerprint for each path.
+                        self._cache = {k: v for k, v in self._cache.items()
+                                       if k[1] != path and k[0] == generation}
+                        self._cache[key] = report
+                    report = {**self._cache[key], "source": source}
+                except OSError as exc:
+                    report = {**result, "state": "invalid", "path": path,
+                              "error": str(exc), "source": source}
+                if report["state"] == "ready":
+                    ready.append(report)
+                    continue
+                failures.append(f"{source}: {path}: {report['error']}")
+            if ready:
+                result = {**ready[0], "alternatives": tuple(ready[1:])}
+            elif failures:
+                result = {**result, "state": "invalid", "error": failures[0]}
+        except Exception as exc:
+            result = {**result, "state": "invalid", "error": str(exc)}
+        self._reply = (generation, {**result, "failures": tuple(failures)})
+
+    def status(self, refresh=False):
+        import threading
+
+        if refresh:
+            # A recheck/install also retries cached execution failures,
+            # e.g. after a user removes an OS security block.
+            self._generation += 1
+            self._result = None
+            self._checked_at = float("-inf")
+        if self._thread is not None and not self._thread.is_alive():
+            self._thread.join()
+            generation, result = self._reply
+            if generation == self._generation:
+                self._result = result
+                self._checked_at = time.monotonic()
+            self._thread = None
+        if self._thread is None and time.monotonic() - self._checked_at >= 1:
+            self._thread = threading.Thread(
+                target=self._scan, args=(self._generation,), daemon=True)
+            self._thread.start()
+        if self._result is None:
+            return {"state": "checking", "path": None, "version": None,
+                    "error": "Checking FFmpeg…", "failures": ()}
+        return dict(self._result)
+
+
+_FFMPEG_MUXERS = {".mov": "mov", ".mp4": "mp4", ".mkv": "matroska",
+                  ".webm": "webm", ".avi": "avi"}
+_FFMPEG_ENCODERS = {"mp3": "libmp3lame", "opus": "libopus"}
+_AUDIO_EXPORT = {
+    "wav16": ("wav", "pcm_s16le"), "wav24": ("wav", "pcm_s24le"),
+    "aiff16": ("aiff", "pcm_s16be"), "aiff24": ("aiff", "pcm_s24be"),
+    "aac": ("ipod", "aac"), "mp3": ("mp3", "libmp3lame"),
+    "copy": ("matroska", None),
+}
+
+
+def _ffmpeg_missing(report, audio="none", extension=".mov", audio_sep=None):
+    """Missing capabilities for an operation, including sidecar audio."""
+    muxers, encoders = set(), set()
+    if audio != "none":
+        muxers.add(_FFMPEG_MUXERS.get(extension, extension.lstrip(".")))
+        if audio != "copy":
+            encoders.add(_FFMPEG_ENCODERS.get(audio, audio))
+    if audio_sep:
+        muxer, encoder = _AUDIO_EXPORT.get(audio_sep, _AUDIO_EXPORT["wav16"])
+        muxers.add(muxer)
+        if encoder:
+            encoders.add(encoder)
+    return ([f"muxer {m}" for m in sorted(muxers - report["muxers"])]
+            + [f"encoder {e}" for e in sorted(encoders - report["encoders"])])
+
+
+def _select_ffmpeg(report, audio="none", extension=".mov", audio_sep=None):
+    if report["state"] != "ready":
+        return report
+    for candidate in (report, *report.get("alternatives", ())):
+        if not _ffmpeg_missing(candidate, audio, extension, audio_sep):
+            return {**candidate, "failures": report.get("failures", ())}
+    missing = _ffmpeg_missing(report, audio, extension, audio_sep)
+    return {**report, "state": "unsupported",
+            "error": "FFmpeg missing " + ", ".join(missing)}
+
+
+# ---------------------------------------------------------------------
 # Variable frame rate (#17). TouchDesigner reports a VFR movie as constant
 # rate (numImages = duration x nominal rate), so the movie's own sample
 # table is read. Mirrors vcon.codec_probe.is_variable_frame_rate, which
@@ -196,6 +423,7 @@ class VconExt:
         #: short of what was asked (e.g. audio mux failed → video-only).
         #: Sent in `done` and kept in last_result.
         self._warnings = []
+        self._audio_support = None
         #: Set by onDestroyTD so a re-inited (replaced) extension stops
         #: driving the network. See the docs' re-init gotcha.
         self._destroyed = False
@@ -854,9 +1082,13 @@ class VconExt:
             return
         self.job = job
         self._warnings = []
+        self._audio_support = None
         self._loading_ticks = 0
         self._paused = False   # a fresh job always starts unpaused
         self.state = "loading"
+        params = job["params"]
+        if params.get("audio", "auto") != "none" or params.get("audio_sep"):
+            self.FFmpegStatus()
         self._set_progress(0.0)
         self._set_status(f"loading {os.path.basename(job['input'])}")
         try:
@@ -1220,6 +1452,15 @@ class VconExt:
                        + (f" (TouchDesigner: {err})" if err else ""),
                        "output-error")
             return
+        params = self.job.get("params") or {}
+        audio = self._audio_plan(params.get("audio", "auto"),
+                                 os.path.splitext(out)[1].lower())[0]
+        if (audio != "none" or params.get("audio_sep")) and self._audio_support is None:
+            report = self.FFmpegStatus()
+            if report["state"] == "checking":
+                self._set_status("checking audio support…")
+                return  # keep polling; cancel still works while checking
+            self._audio_support = report
         seconds = getattr(self, "seconds_taken", 0.0) or round(
             time.time() - self.t0, 3)
         # The addframe pulses actually issued. (Movie File Out exposes no
@@ -1399,68 +1640,33 @@ class VconExt:
     # Audio mux (post-encode, via ffmpeg subprocess)
     # ------------------------------------------------------------------
 
-    #: Cached ffmpeg path (None = not yet searched, "" = searched, absent)
-    _ffmpeg_cache = None
+    _ffmpeg_discovery = None
 
-    def _find_ffmpeg(self):
-        """Locate an ffmpeg binary across install layouts.
-
-        TD's embedded Python can't see pip packages installed elsewhere,
-        so the search widens from "importable" to "findable on disk":
-          1. import imageio_ffmpeg  (TD's Python has it)
-          2. pipx venvs and user site-packages (normal user installs)
-          3. system ffmpeg on PATH
-        Result is cached — this runs once per session, not per job.
-        """
+    def FFmpegStatus(self, refresh=False, audio=None, extension=".mov",
+                     audio_sep=None):
+        """Shared panel/controller report; never blocks TouchDesigner's UI."""
         cls = type(self)
-        if cls._ffmpeg_cache is not None:
-            return cls._ffmpeg_cache or None
+        if cls._ffmpeg_discovery is None:
+            cls._ffmpeg_discovery = _FFmpegDiscovery()
+        report = cls._ffmpeg_discovery.status(refresh=refresh)
+        if report["state"] == "ready" and audio is not None:
+            codec = self._audio_plan(audio, extension)[0]
+            mux = _select_ffmpeg(report, codec, extension)
+            if mux["state"] != "ready" or not audio_sep:
+                return mux
+            sidecar = _select_ffmpeg(report, audio_sep=audio_sep)
+            if sidecar["state"] != "ready" or codec == "none":
+                return sidecar
+            if sidecar["path"] != mux["path"]:
+                return {**mux, "sidecar_path": sidecar["path"]}
+            return mux
+        return report
 
-        found = ""
-        try:
-            import imageio_ffmpeg
-            found = imageio_ffmpeg.get_ffmpeg_exe()
-        except Exception:
-            pass
-
-        if not found:
-            import glob
-            home = os.path.expanduser("~")
-            # vCon's own package folder, written by the panel's
-            # "INSTALL AUDIO" button (no admin rights required).
-            if sys.platform == "darwin":
-                vcon_libs = os.path.expanduser(
-                    "~/Library/Application Support/vCon/pylibs")
-            elif os.name == "nt":
-                vcon_libs = os.path.join(
-                    os.environ.get("LOCALAPPDATA") or home,
-                    "vCon", "pylibs")
-            else:
-                vcon_libs = os.path.expanduser("~/.local/share/vCon/pylibs")
-            patterns = [
-                f"{vcon_libs}/imageio_ffmpeg/binaries/ffmpeg-*",
-                f"{home}/.local/pipx/venvs/*/lib/python*/site-packages/"
-                "imageio_ffmpeg/binaries/ffmpeg-*",
-                f"{home}/Library/Python/*/lib/python/site-packages/"
-                "imageio_ffmpeg/binaries/ffmpeg-*",
-                f"{home}/.local/lib/python*/site-packages/"
-                "imageio_ffmpeg/binaries/ffmpeg-*",
-            ]
-            for pat in patterns:
-                for cand in sorted(glob.glob(pat), reverse=True):
-                    if os.path.isfile(cand) and os.access(cand, os.X_OK):
-                        found = cand
-                        break
-                if found:
-                    break
-
-        if not found:
-            import shutil
-            found = shutil.which("ffmpeg") or ""
-
-        cls._ffmpeg_cache = found
-        debug(f"vCon: ffmpeg {'found at ' + found if found else 'NOT FOUND'}")
-        return found or None
+    def _find_ffmpeg(self, audio="none", extension=".mov", audio_sep=None):
+        """Select a binary for this mux, retry, or sidecar from the job snapshot."""
+        report = _select_ffmpeg(self._audio_support, audio, extension, audio_sep)
+        self._ffmpeg_error = report["error"]
+        return report["path"] if report["state"] == "ready" else None
 
     #: ffmpeg audio arguments per audio choice (panel audio_dd tokens).
     _AUDIO_ARGS = {
@@ -1520,13 +1726,13 @@ class VconExt:
         if audio == "none":
             debug("vCon: audio=none — skipping mux (video only)")
             return False
-        ffmpeg = self._find_ffmpeg()
+        ffmpeg = self._find_ffmpeg(audio=audio, extension=ext)
         if ffmpeg is None:
             # Asked-for audio (or auto with audio in the source) that cannot
             # be delivered is a warning, not silence.
             if self._audio_requested() or self._source_has_audio() is not False:
-                self._warn("audio not muxed: ffmpeg not found — output is "
-                           "video-only (install imageio-ffmpeg or ffmpeg)")
+                self._warn(f"audio not muxed: {self._ffmpeg_error} — output is "
+                           "video-only (see Setup & Help)")
             return False
         aargs = self._AUDIO_ARGS.get(audio, self._AUDIO_ARGS["pcm_s24le"])
         # Temp name keeps the real extension — ffmpeg infers the
@@ -1724,9 +1930,9 @@ class VconExt:
         if not sep:
             self._job_complete(video_output, note)
             return
-        ffmpeg = self._find_ffmpeg()
+        ffmpeg = self._find_ffmpeg(audio_sep=sep)
         if ffmpeg is None:
-            self._warn("separate audio not exported: ffmpeg not found")
+            self._warn(f"separate audio not exported: {self._ffmpeg_error}")
             self._job_complete(video_output, note + ", no sep audio")
             return
         src = self.job.get("input", "")
