@@ -251,6 +251,27 @@ class FakeFit(FakeOp):
         return self._size()[1]
 
 
+class FakeMvoInfo(FakeOp):
+    """Info CHOP on Movie File Out. ``active_records`` stays 1 for
+    ``flush_cooks`` cooks after record goes 0, as VP9/VVC did live while
+    the file was still being written (None = forever)."""
+
+    def __init__(self, movieout, flush_cooks=0):
+        super().__init__("mvo_info")
+        self._movieout = movieout
+        self.flush_left = flush_cooks
+
+    def cook(self, force=False):
+        if not self._movieout.par.record.eval() and self.flush_left:
+            self.flush_left -= 1
+
+    def __getitem__(self, chan):
+        if chan == "active_records":
+            busy = self._movieout.par.record.eval() or self.flush_left != 0
+            return [1.0 if busy else 0.0]
+        raise KeyError(chan)
+
+
 class FakeTcp(FakeOp):
     def __init__(self):
         super().__init__("tcpip")
@@ -288,7 +309,7 @@ class Rig:
     """A controller wired to fakes, plus helpers to drive it."""
 
     def __init__(self, frames=10, rate=24.0, has_audio=False,
-                 width=1920, height=1080):
+                 width=1920, height=1080, flush_cooks=None):
         self.mod = load_controller_module()
         self.moviein = FakeMovieIn(frames=frames, rate=rate,
                                    width=width, height=height,
@@ -297,8 +318,13 @@ class Rig:
         self.movieout = FakeMovieOut(self.moviein)
         self.fit = FakeFit(self.moviein)
         self.tcp = FakeTcp()
-        self.comp = FakeComp([self.moviein, self.info, self.movieout,
-                              self.fit, self.tcp])
+        children = [self.moviein, self.info, self.movieout, self.fit,
+                    self.tcp]
+        # mvo_info only when asked for: toes built before it have none.
+        if flush_cooks is not None:
+            self.mvo_info = FakeMvoInfo(self.movieout, flush_cooks)
+            children.append(self.mvo_info)
+        self.comp = FakeComp(children)
         self.ext = self.mod.VconExt(self.comp)
 
     def submit(self, src, dst, **params):
