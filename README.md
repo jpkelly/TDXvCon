@@ -37,7 +37,7 @@ one search. Each audio operation uses the first copy in this order that
 supports its container and codec:
 
 1. `IMAGEIO_FFMPEG_EXE`, then the binary in an importable `imageio-ffmpeg` package.
-2. vCon’s downloaded copy, shared TDTools and LTCfileGen copies, then pipx environments and user Python packages.
+2. vCon’s downloaded copy, copies shared by TDTools and [LTC File Generator](https://github.com/jpkelly/TDXLTCfileGen), then pipx environments and user Python packages.
 3. The current Python environment's binary, then FFmpeg on `PATH`.
 4. Standard package-manager locations: Homebrew (`/opt/homebrew/bin` and
    `/usr/local/bin`) and MacPorts (`/opt/local/bin`) on macOS; WinGet,
@@ -52,7 +52,7 @@ in Setup & Help and on the help button.
 Sharing is on by default. vCon looks under the per-user data directory
 (`~/Library/Application Support` on macOS, `%LOCALAPPDATA%` on Windows,
 `~/.local/share` on Linux), in each of `vCon`, `TDTools`, and `LTCfileGen`
-under `pylibs/imageio_ffmpeg/binaries/ffmpeg-*`. Other tools can find
+(LTC File Generator's folder) under `pylibs/imageio_ffmpeg/binaries/ffmpeg-*`. Other tools can find
 vCon’s download there. **Turn sharing off** excludes shared tool folders
 and automatically discovered user Python packages. Install Now always
 writes to vCon’s own folder.
