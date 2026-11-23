@@ -897,3 +897,121 @@ def test_panel_job_waits_for_install_before_audio(media, ffmpeg):
     rig.ext.audio_install_pending = False
     rig.run()
     assert out.read_bytes() == b'muxed'
+
+
+# ----------------------------------------------------------------------
+# #27 — the project runs at ENCODE_COOK_RATE while frames are written
+# ----------------------------------------------------------------------
+
+
+def test_encode_runs_at_120_fps_and_restores_the_project_rate(media):
+    src, out_dir = media
+    rig = Rig(frames=12)
+    rig.submit(src, out_dir / "a.mov")
+    assert rig.ext.state == "loading"
+    assert rig.project.cookRate == 60.0        # loading runs at the old rate
+    rig.tick_until("encoding")
+    assert rig.project.cookRate == 120.0
+    assert rig.comp.storage[rig.mod.VconExt.COOK_RATE_KEY] == 60.0
+    rig.tick_until("finishing")
+    assert rig.project.cookRate == 60.0        # flush waits count frames
+    rig.run()
+    assert rig.events("done")
+    assert rig.movieout.files[rig.mod.partial_path(str(out_dir / "a.mov"))] \
+        == list(range(12))
+    assert rig.project.rates == [120.0, 60.0]
+    assert rig.comp.storage == {}
+
+
+@pytest.mark.parametrize("start, raised", [
+    (30.0, True),
+    (120.0, False),
+    (240.0, False),      # already faster: left alone
+])
+def test_only_slower_rates_are_raised(media, start, raised):
+    src, out_dir = media
+    rig = Rig(frames=5, cook_rate=start)
+    rig.submit(src, out_dir / "a.mov")
+    rig.tick_until("encoding")
+    rig.ext.onFrame()
+    assert rig.project.cookRate == (120.0 if raised else start)
+    rig.run()
+    assert rig.project.cookRate == start
+    assert rig.project.rates == ([120.0, start] if raised else [])
+
+
+def test_cancel_and_failure_restore_the_rate(media):
+    src, out_dir = media
+    rig = Rig(frames=20)
+    rig.submit(src, out_dir / "a.mov")
+    rig.tick_until("encoding")
+    rig.ext.onFrame()
+    rig.ext.Cancel()
+    assert rig.ext.state == "idle" and rig.project.cookRate == 60.0
+
+    _fail_mid_encode(rig, src, out_dir / "b.mov")
+    assert rig.events("error")[-1]["code"] == "encode-error"
+    assert rig.project.cookRate == 60.0
+    assert rig.comp.storage == {}
+
+
+def test_pause_restores_the_rate_and_resume_raises_it(media):
+    src, out_dir = media
+    rig = Rig(frames=20)
+    rig.submit(src, out_dir / "a.mov")
+    rig.tick_until("encoding")
+    rig.ext.onFrame()
+    rig.ext.Pause()
+    assert rig.project.cookRate == 60.0
+    rig.ext.Resume()
+    assert rig.project.cookRate == 120.0
+    rig.run()
+    assert rig.project.cookRate == 60.0
+    assert rig.events("done")
+
+
+def test_a_rate_the_user_set_during_the_encode_is_kept(media):
+    src, out_dir = media
+    rig = Rig(frames=20)
+    rig.submit(src, out_dir / "a.mov")
+    rig.tick_until("encoding")
+    rig.ext.onFrame()
+    rig.project.cookRate = 30.0
+    rig.run()
+    assert rig.project.cookRate == 30.0
+    assert rig.comp.storage == {}
+
+
+def test_destroy_mid_encode_restores_the_rate(media):
+    src, out_dir = media
+    rig = Rig(frames=20)
+    rig.submit(src, out_dir / "a.mov")
+    rig.tick_until("encoding")
+    rig.ext.onFrame()
+    rig.ext.onDestroyTD()
+    assert rig.project.cookRate == 60.0
+
+
+def test_a_new_instance_restores_a_rate_left_raised(media):
+    # The instance that raised the rate died without onDestroyTD (or the
+    # toe was saved mid-encode): the next one puts the stored rate back.
+    src, out_dir = media
+    rig = Rig(frames=20, cook_rate=50.0)
+    rig.submit(src, out_dir / "a.mov")
+    rig.tick_until("encoding")
+    rig.ext.onFrame()
+    assert rig.project.cookRate == 120.0
+
+    fresh = rig.mod.VconExt(rig.comp)
+    fresh.onInitTD()
+    assert rig.project.cookRate == 50.0
+    assert rig.comp.storage == {}
+
+
+def test_no_project_object_still_encodes(media):
+    src, out_dir = media
+    rig = Rig(frames=5)
+    del rig.mod.project
+    rig.submit(src, out_dir / "a.mov")
+    rig.run()
+    assert rig.events("done")

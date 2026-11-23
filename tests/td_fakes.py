@@ -306,9 +306,40 @@ class FakeComp(FakeOp):
         super().__init__("vcon", Status=Par(""), Progress=Par(0.0))
         self.path = "/project1/vcon"
         self._children = {c.name: c for c in children}
+        self.storage = {}
 
     def op(self, name):
         return self._children.get(name)
+
+    # COMP storage, as TD documents it: store / fetch / unstore.
+    def store(self, key, value):
+        self.storage[key] = value
+        return value
+
+    def fetch(self, key, default=None, search=True, storeDefault=False):
+        return self.storage.get(key, default)
+
+    def unstore(self, keys1, *morekeys):
+        for key in (keys1, *morekeys):
+            self.storage.pop(key, None)
+
+
+class FakeProject:
+    """TD's ``project`` global: only the FPS (cookRate) is modelled.
+    ``rates`` lists every value written, in order."""
+
+    def __init__(self, cook_rate=60.0):
+        self._rate = float(cook_rate)
+        self.rates = []
+
+    @property
+    def cookRate(self):
+        return self._rate
+
+    @cookRate.setter
+    def cookRate(self, value):
+        self._rate = float(value)
+        self.rates.append(self._rate)
 
 
 def ffmpeg_report(path=None):
@@ -340,8 +371,11 @@ class Rig:
     """A controller wired to fakes, plus helpers to drive it."""
 
     def __init__(self, frames=10, rate=24.0, has_audio=False,
-                 width=1920, height=1080, flush_cooks=None):
+                 width=1920, height=1080, flush_cooks=None,
+                 cook_rate=60.0):
         self.mod = load_controller_module()
+        self.project = FakeProject(cook_rate)
+        self.mod.project = self.project
         self.moviein = FakeMovieIn(frames=frames, rate=rate,
                                    width=width, height=height,
                                    has_audio=has_audio)

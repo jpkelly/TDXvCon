@@ -61,6 +61,21 @@ IDLE_QUIT_SECONDS = 300  # safety net: exit TD when idle this long
 #: the remainder, so a job's bar rises monotonically across both phases.
 _ENCODE_SHARE = 0.92
 
+#: Project FPS while frames are written (#27). One frame is written per
+#: TouchDesigner frame, so the project rate caps the encode speed: 1200
+#: frames of 1080p60 Hap took 20.5 s at the shipped toe's 60 FPS and 13.2 s
+#: at 120 (TD 2025.33230, 120 Hz Mac, frame-exact). Per #27 the loop
+#: follows the display refresh, so 240 or 1000 ran no faster than 120.
+ENCODE_COOK_RATE = 120
+
+
+def _project():
+    """TouchDesigner's ``project`` object, or None outside TouchDesigner."""
+    try:
+        return project   # noqa: F821  (a TouchDesigner global)
+    except NameError:
+        return None
+
 
 # ---------------------------------------------------------------------
 # FFmpeg discovery and validation, shared with the panel (#21, #22).
@@ -504,6 +519,9 @@ class VconExt:
         #: and how far the source advances per written output frame.
         self._src_total = 0
         self._src_step = 1.0
+        #: The project FPS that _raise_cook_rate replaced, until it is put
+        #: back; None while the project runs at its own rate.
+        self._saved_cook_rate = None
         #: ORPHAN-CLEANUP ARMING. True only when this TouchDesigner process
         #: was LAUNCHED BY vCon (the front-end sets VCON_LAUNCHED=1 in the
         #: subprocess environment). A session the user opened themselves
@@ -643,6 +661,7 @@ class VconExt:
         initialization").
         """
         self._bind_loopback()
+        self._restore_leftover_cook_rate()
         self._set_status("idle — listening on port {}".format(self.port))
 
     #: Where the TCP server listens. The protocol has no authentication,
@@ -689,6 +708,7 @@ class VconExt:
                 self.movieout.par.record = 0
         except Exception:
             pass
+        self._restore_cook_rate()
         self._kill_mux()
         self._kill_extract()
         self.job = None
@@ -1034,6 +1054,7 @@ class VconExt:
                 movieout.par.record = 0
         except Exception as exc:
             debug(f"vCon: could not stop recording: {exc}")
+        self._restore_cook_rate()
         self._kill_mux()
         self._kill_extract()
         # A job that did not finish leaves nothing behind: its recording is
@@ -1319,6 +1340,8 @@ class VconExt:
         debug(f"vCon: MvO file <- {partial!r}")
         movieout.par.file = partial
         self._plan_frame_rate(moviein)
+        # Faster frame loop while frames are written (see ENCODE_COOK_RATE).
+        self._raise_cook_rate()
         # Stop-frame recording, per the documented sequence:
         #   record = 1  (start recording)
         #   pause  = 1  (stop realtime advancement)
@@ -1411,6 +1434,81 @@ class VconExt:
               f"{self._src_total} source frames -> {out_frames} output "
               f"frames ({duration:.1f}s preserved)")
 
+    #: COMP storage key for the project FPS to put back. Storage outlives
+    #: an extension re-init and is saved with the toe, so the rate is
+    #: still restored if the instance that raised it never could.
+    COOK_RATE_KEY = "vcon_saved_cook_rate"
+
+    def _raise_cook_rate(self):
+        """Run the project at ENCODE_COOK_RATE while frames are written.
+        Only ever raises: a rate at or above it is left alone."""
+        if self._saved_cook_rate is not None:
+            return   # already raised (resume after pause, say)
+        proj = _project()
+        if proj is None:
+            return
+        try:
+            rate = float(proj.cookRate)
+        except Exception as exc:
+            debug(f"vCon: could not read the project FPS: {exc}")
+            return
+        if rate >= ENCODE_COOK_RATE:
+            return
+        try:
+            proj.cookRate = ENCODE_COOK_RATE
+        except Exception as exc:
+            debug(f"vCon: could not raise the project FPS: {exc}")
+            return
+        self._saved_cook_rate = rate
+        try:
+            self.ownerComp.store(self.COOK_RATE_KEY, rate)
+        except Exception:
+            pass   # no storage (tests): the instance attribute still works
+        debug(f"vCon: project FPS {rate:g} -> {ENCODE_COOK_RATE} "
+              f"while encoding")
+
+    def _restore_cook_rate(self):
+        """Put back the project FPS that _raise_cook_rate replaced.
+
+        A rate the user changed during the encode is theirs: it is left
+        as it is, and only the record of the old one is dropped.
+        """
+        rate = self._saved_cook_rate
+        self._saved_cook_rate = None
+        try:
+            self.ownerComp.unstore(self.COOK_RATE_KEY)
+        except Exception:
+            pass
+        if rate is None:
+            return
+        proj = _project()
+        if proj is None:
+            return
+        try:
+            if abs(float(proj.cookRate) - ENCODE_COOK_RATE) < 1e-6:
+                proj.cookRate = rate
+                debug(f"vCon: project FPS back to {rate:g}")
+        except Exception as exc:
+            debug(f"vCon: could not restore the project FPS {rate:g}: {exc}")
+
+    def _restore_leftover_cook_rate(self):
+        """At init, put back a rate a previous instance raised and never
+        restored: a re-init mid-encode, or a toe saved while encoding."""
+        if self._saved_cook_rate is not None or self.state != "idle":
+            return
+        try:
+            rate = self.ownerComp.fetch(self.COOK_RATE_KEY, None,
+                                        search=False)
+        except Exception:
+            return
+        if rate is None:
+            return
+        try:
+            self._saved_cook_rate = float(rate)
+        except (TypeError, ValueError):
+            self._saved_cook_rate = None
+        self._restore_cook_rate()
+
     def _encode_tick(self):
         """Write one frame. Called once per TD frame while encoding."""
         if self.state != "encoding":
@@ -1474,6 +1572,9 @@ class VconExt:
         self._finishing_ticks = 0
         self._finish_t0 = time.time()
         self.seconds_taken = round(time.time() - self.t0, 3)
+        # The flush, mux and extract waits count frames or poll; they run
+        # at the project's own rate.
+        self._restore_cook_rate()
         debug(f"vCon: finishing — record=0, {self.frame}/{self.total} "
               f"frames written, output={self.job['output']!r}")
         try:
@@ -2146,6 +2247,7 @@ class VconExt:
         if self.state == "encoding" and (job_id == "*" or
                 (self.job and self.job.get("id") == job_id)):
             self._paused = True
+            self._restore_cook_rate()   # nothing is written while paused
             self._set_status(f"paused at frame {self.frame}/{self.total}")
             self._send({"type": "paused", "id": (self.job or {}).get("id", "?"),
                         "frame": self.frame, "total_frames": self.total})
@@ -2159,6 +2261,8 @@ class VconExt:
         if self._paused and (job_id == "*" or
                 (self.job and self.job.get("id") == job_id)):
             self._paused = False
+            if self.state == "encoding":
+                self._raise_cook_rate()
             self._set_status(f"encoding {self.frame}/{self.total}")
             self._send({"type": "resumed", "id": (self.job or {}).get("id", "?"),
                         "frame": self.frame, "total_frames": self.total})
