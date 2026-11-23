@@ -102,6 +102,15 @@ The panel and CLI share a TouchDesigner controller. The panel calls it directly;
 the CLI uses a TCP JSON-lines protocol. TouchDesigner encodes video, and FFmpeg
 handles audio post-processing. See the [protocol reference](toe/PROTOCOL.md).
 
+vCon writes one video frame per TouchDesigner frame, so the project FPS limits
+encoding speed. While it writes frames, vCon runs the project at 120 FPS, then
+restores the previous rate when the encode finishes, pauses, is cancelled, or
+fails. This also applies to a project that has the vCon component embedded.
+A rate of 120 or higher is left unchanged. On a Mac with a 120 Hz
+display, 1080p encodes ran 1.2 to 1.7 times faster than at 60 FPS, depending on
+the codec. Sources that are slow to decode, such as 4K 10-bit HEVC, gained
+nothing. On a 60 Hz display the gain may be small.
+
 Some codecs cannot be encoded on macOS (measured with TouchDesigner
 2025.33230): CineForm and AV1 (TouchDesigner reports them unsupported on
 macOS), and Hap R and Hap HDR (no file is written). The panel leaves them out
